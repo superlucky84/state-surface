@@ -1,0 +1,8 @@
+{
+  "name": "state-surface",
+  "version": "0.1.0",
+  "private": true,
+  "description": "StateSurface reference implementation",
+  "type": "module",
+  "license": "UNLICENSED"
+}

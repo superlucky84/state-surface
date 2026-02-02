@@ -319,12 +319,12 @@ This keeps:
 
 ---
 
-## 7. Nested States
+## 7. No Nested States
 
-### 7.1 Logical, Not Structural Nesting
+### 7.1 No Structural Nesting
 
-* Parent and child states are independent
-* Activation is based solely on `activeStates`
+* `<h-state>` elements **must not be nested**
+* Nesting implies structural coupling, which this model rejects
 * **Multiple states may be active simultaneously**
 * The DOM reflects **all active states at once**
 
