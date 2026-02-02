@@ -33,6 +33,11 @@ This document exists to **freeze the core ideas of the project** so they are not
 
 **StateSurface is a state–layout mapping runtime.**
 
+Implementation baseline:
+
+* Backend: **Express-based**
+* Frontend: **Lithent-based** rendering engine (from `skills/lithent`)
+
 * The **server owns state**
 * The **client owns DOM projection**
 * HTML declares **existence conditions**, not behavior
