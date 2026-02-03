@@ -22,17 +22,17 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 
 **P1 — Update accuracy**
 * [x] Clear change-detection rule (server sends `changed`/`removed` per stream)
-* [ ] Data comparison strategy defined (shallow/deep/version/hash)
-* [ ] Removal policy for inactive states (focus/local state/events)
+* [x] Data comparison strategy defined (no client compare) — Assumed by design
+* [x] Removal policy for inactive states (default unmount, optional visibility)
 
 **P2 — Stream/queue handling**
-* [ ] Queue backpressure policy (drop/merge/priority)
-* [ ] `done` / `error` frame handling defined
-* [ ] Frame ordering assumptions stated
+* [x] Queue backpressure policy (merge partials, full supersedes)
+* [x] `done` / `error` frame handling defined
+* [x] Frame ordering assumptions stated
 
 **P3 — Module/bundling**
-* [ ] Template loading strategy decided (prebundle vs lazy)
-* [ ] Fallback when template load fails
+* [x] Template loading strategy decided (prebundle in v1)
+* [x] Fallback when template load fails (error template)
 * [ ] Stable template ↔ module mapping in Vite
 
 **P4 — Performance/observability**
@@ -152,7 +152,7 @@ A transition:
 * Is executed on the server
 * Emits a **stream of state frames**
 
-> **Each frame declares the complete UI state at that moment**
+> **Full frames declare the complete UI state; partial frames declare changes**
 
 ---
 
@@ -188,8 +188,14 @@ A transition emits a **sequence of frames**:
 
 ```ts
 type StateFrame =
-  | { type: "state"; states: Record<string, any> }
-  | { type: "error"; message: string }
+  | {
+      type: "state";
+      states: Record<string, any>;
+      full?: boolean;
+      changed?: string[];
+      removed?: string[];
+    }
+  | { type: "error"; message?: string; template?: string; data?: any }
   | { type: "done" }
 ```
 
@@ -197,12 +203,13 @@ type StateFrame =
 
 * Frames describe **what is**, not what to do
 * The client **never computes state**
-* **Each frame replaces the previous state entirely**
+* **Full frames replace state; partial frames merge by template key**
 * **State and data flow together**
 * **Views are bound to data at the frame level**
 * Frames are **processed as a FIFO queue**
 * The **last frame** becomes the final `activeStates`
 * Updates are **data-only**; templates are already on the client
+* The **first frame is always a full snapshot**
 
 ---
 
@@ -328,17 +335,45 @@ The stream defines the entire flow.**
 
 ---
 
-### 5.3 Frame Queue (Sequential Processing)
+### 5.3 Full vs Partial Frames
+
+* **Full frame**: `states` includes **all active templates**
+* **Partial frame**: `states` includes **only changed templates**
+* Partial frames **merge by template key**
+* `removed` lists templates that must be unmounted
+* **The first frame in a stream must be full**
+* If `full` is omitted, it is treated as **true**
+
+Client apply rule:
+
+```js
+if (frame.full) {
+  activeStates = frame.states
+} else {
+  for (const key in frame.states) activeStates[key] = frame.states[key]
+  for (const key of frame.removed || []) delete activeStates[key]
+}
+```
+
+---
+
+### 5.4 Frame Queue (Sequential Processing)
 
 An action produces **a queue of StateFrames**.
 
 * Frames are processed **in order**
-* Each frame **fully replaces** `activeStates`
+* **Full frames** replace `activeStates`
+* **Partial frames** merge by template key
 * When the queue ends, the **last frame is the final state**
+* **No skippable frames** in v1
+* If the queue lags, **merge consecutive partial frames** (last write wins)
+* When a **full frame** arrives, it **supersedes any pending partials**
+
+Partial merging is a **delayed apply** strategy to keep UI responsive.
 
 ---
 
-### 5.4 Change Detection (Stateless Streams)
+### 5.5 Change Detection (Stateless Streams)
 
 The server is **stateless across requests** and stateful **only within a stream**.
 
@@ -360,6 +395,33 @@ Example:
   "removed": []
 }
 ```
+
+---
+
+### 5.6 Error and Done Frames
+
+Errors are **user-defined**. The server decides what to send in an error frame.
+
+If an error template exists in the layout, it can be rendered; otherwise the
+stream ends.
+
+```json
+{ "type": "error", "template": "system:error", "data": { "message": "..." } }
+```
+
+Client handling:
+
+* If `template` is present **and** a matching `<h-state>` exists, render it as a
+  **full frame**:
+  `{ states: { "system:error": { ...data } }, full: true }`
+* Otherwise, **stop processing** and surface the error (log/callback)
+
+`done` indicates **end of stream**. The client should:
+
+* Flush remaining queued frames
+* Ignore any frames received after `done`
+
+**Ordering assumption:** HTTP stream order is preserved; no reordering logic is required.
 
 ---
 
@@ -392,6 +454,7 @@ Rules:
 
 * State active → element exists in DOM
 * State inactive → element removed
+* **Default policy: unmount inactive templates**
 
 This keeps:
 
@@ -408,6 +471,7 @@ This keeps:
 
 * Hide/show instead of mount/unmount
 * Intended for animations or local state preservation
+* Use only when focus/scroll/local state must survive
 
 ---
 
@@ -568,6 +632,28 @@ This guarantees a stable UI immediately after hydration.
 
 ---
 
+### 6.8 Template Loading Strategy (v1)
+
+Templates are **prebundled** into the client build.
+
+* No runtime template fetching
+* A **template registry** maps `name → module`
+* SSR uses the same registry (Vite SSR in dev, built modules in prod)
+* Lazy loading is **out of scope for v1**
+
+---
+
+### 6.9 Template Load Fallback
+
+If a template module is missing or fails to load:
+
+* Render the **error template** (if defined in layout)
+* Otherwise, leave the `<h-state>` empty and log the issue
+
+This keeps failures localized to a single template.
+
+---
+
 ## 7. No Nested States
 
 ### 7.1 No Structural Nesting
@@ -612,7 +698,8 @@ Rules:
 
 ### 8.2 Data Scope
 
-Each frame carries **complete data for all active states**.
+Full frames carry **complete data for all active states**.
+Partial frames carry **data only for changed templates**.
 
 ```ts
 yield {
@@ -659,6 +746,7 @@ The client runtime:
 * **Processes frames sequentially (queue)**
 * Hydrates **per `<h-state>`**, not per page
 * Updates **only changed templates**
+* Handles `error` and `done` frames
 
 ---
 
@@ -669,6 +757,7 @@ class StateSurface {
   activeStates = {}
   frameQueue = []
   instances = {}
+  maxQueue = 20
 
   async transition(name, params) {
     const res = await fetch(`/transition/${name}`, {
@@ -694,25 +783,75 @@ class StateSurface {
 
   flushQueue() {
     while (this.frameQueue.length > 0) {
-      const frame = this.frameQueue.shift()
-      this.sync(frame.states)
+      if (this.frameQueue.length > this.maxQueue) {
+        this.dropToNextFull()
+      }
+
+      let frame = this.frameQueue.shift()
+      if (frame.type !== "state") continue
+
+      if (frame.full === false) {
+        frame = this.coalescePartials(frame)
+      }
+
+      this.applyFrame(frame)
     }
   }
 
-  sync(nextStates) {
+  dropToNextFull() {
+    const idx = this.frameQueue.findIndex(
+      f => f.type === "state" && f.full !== false
+    )
+    if (idx > 0) this.frameQueue = this.frameQueue.slice(idx)
+  }
+
+  coalescePartials(first) {
+    let merged = { ...first }
+    while (
+      this.frameQueue[0] &&
+      this.frameQueue[0].type === "state" &&
+      this.frameQueue[0].full === false
+    ) {
+      const next = this.frameQueue.shift()
+      merged = {
+        type: "state",
+        full: false,
+        states: { ...merged.states, ...next.states },
+        removed: [
+          ...new Set([...(merged.removed || []), ...(next.removed || [])])
+        ],
+        changed: [
+          ...new Set([...(merged.changed || []), ...(next.changed || [])])
+        ]
+      }
+    }
+    return merged
+  }
+
+  applyFrame(frame) {
+    if (frame.full !== false) {
+      const removed = Object.keys(this.activeStates).filter(
+        key => !(key in frame.states)
+      )
+      this.sync(frame.states, Object.keys(frame.states), removed)
+      return
+    }
+
+    const nextStates = { ...this.activeStates, ...frame.states }
+    for (const key of frame.removed || []) delete nextStates[key]
+    this.sync(nextStates, frame.changed || Object.keys(frame.states), frame.removed)
+  }
+
+  sync(nextStates, changedKeys, removedKeys) {
     const prevStates = this.activeStates
 
     // remove inactive templates
-    for (const key in prevStates) {
-      if (!(key in nextStates)) this.unmount(key)
-    }
+    for (const key of removedKeys || []) this.unmount(key)
 
     // update changed templates
-    for (const key in nextStates) {
-      if (prevStates[key] !== nextStates[key]) {
-        if (!this.instances[key]) this.hydrate(key, nextStates[key])
-        else this.update(key, nextStates[key])
-      }
+    for (const key of changedKeys || []) {
+      if (!this.instances[key]) this.hydrate(key, nextStates[key])
+      else this.update(key, nextStates[key])
     }
 
     this.activeStates = nextStates
