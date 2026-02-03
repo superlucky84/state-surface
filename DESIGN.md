@@ -72,6 +72,12 @@ Implementation baseline:
 * Backend: **Express-based**
 * Frontend: **Lithent-based** rendering engine (from `skills/lithent`)
 
+Design intent:
+
+* Inspired by **HTML_Template_Sigma**-style block replacement
+* **If/logic minimized** in templates; state drives composition
+* `<h-state>` anchors map **state → template → data**
+
 * The **server owns state**
 * The **client owns DOM projection**
 * HTML declares **existence conditions**, not behavior
