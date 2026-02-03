@@ -168,6 +168,7 @@ type StateFrame =
 * **Views are bound to data at the frame level**
 * Frames are **processed as a FIFO queue**
 * The **last frame** becomes the final `activeStates`
+* Updates are **data-only**; templates are already on the client
 
 ---
 
@@ -351,6 +352,16 @@ This keeps:
 
 ---
 
+### 6.4 Hydration Boundaries
+
+`<h-state>` is the smallest hydration unit.
+
+* **Do not hydrate the whole page**
+* **Each active `<h-state>` is hydrated independently**
+* After hydration, updates are **data-driven re-renders** of that template
+
+---
+
 ## 7. No Nested States
 
 ### 7.1 No Structural Nesting
@@ -440,6 +451,8 @@ The client runtime:
 * Projects data
 * Applies minimal DOM changes
 * **Processes frames sequentially (queue)**
+* Hydrates **per `<h-state>`**, not per page
+* Updates **only changed templates**
 
 ---
 
@@ -449,6 +462,7 @@ The client runtime:
 class StateSurface {
   activeStates = {}
   frameQueue = []
+  instances = {}
 
   async transition(name, params) {
     const res = await fetch(`/transition/${name}`, {
@@ -475,9 +489,27 @@ class StateSurface {
   flushQueue() {
     while (this.frameQueue.length > 0) {
       const frame = this.frameQueue.shift()
-      this.activeStates = frame.states
-      this.sync()
+      this.sync(frame.states)
     }
+  }
+
+  sync(nextStates) {
+    const prevStates = this.activeStates
+
+    // remove inactive templates
+    for (const key in prevStates) {
+      if (!(key in nextStates)) this.unmount(key)
+    }
+
+    // update changed templates
+    for (const key in nextStates) {
+      if (prevStates[key] !== nextStates[key]) {
+        if (!this.instances[key]) this.hydrate(key, nextStates[key])
+        else this.update(key, nextStates[key])
+      }
+    }
+
+    this.activeStates = nextStates
   }
 }
 ```
@@ -495,6 +527,8 @@ sync() {
 }
 ```
 
+* Hydration is applied **per `<h-state>` root**
+* After hydration, updates are **patches on that root**
 * No component API exposed
 * Lithent is invisible
 * **Just a DOM diff utility**
