@@ -17,10 +17,11 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] `<h-state>` roots are stable anchors across SSR/CSR (`name` is the anchor)
 * [x] SSR HTML and CSR VDOM structure match exactly (including text nodes) — Assumed by design
 * [x] Initial hydration set matches the SSR state set (bootstrapped from server)
-* [ ] First frame update does not cause remount/flicker
+* [x] Hydration mismatch fallback defined (SSR hash → client render)
+* [x] First post-hydration frame (first user action) does not cause remount/flicker
 
 **P1 — Update accuracy**
-* [ ] Clear change-detection rule (server-sent changed list vs client compare)
+* [x] Clear change-detection rule (server sends `changed`/`removed` per stream)
 * [ ] Data comparison strategy defined (shallow/deep/version/hash)
 * [ ] Removal policy for inactive states (focus/local state/events)
 
@@ -337,6 +338,31 @@ An action produces **a queue of StateFrames**.
 
 ---
 
+### 5.4 Change Detection (Stateless Streams)
+
+The server is **stateless across requests** and stateful **only within a stream**.
+
+* Each request produces a self-contained stream
+* The server tracks **previous frame** only inside that stream
+* It emits `changed` / `removed` keys per frame
+* The client updates **only those keys**
+
+Example:
+
+```json
+{
+  "type": "state",
+  "states": {
+    "page:article:view": { "article": { "id": 1 } },
+    "panel:comments:open": { "comments": [] }
+  },
+  "changed": ["page:article:view"],
+  "removed": []
+}
+```
+
+---
+
 ## 6. View Model
 
 ### 6.1 `<h-state>` Elements
@@ -496,6 +522,49 @@ for (const el of document.querySelectorAll('h-state[name]')) {
   hydration(buildVDOM(key, activeStates[key]), el)
 }
 ```
+
+---
+
+### 6.6 Hydration Mismatch Fallback (SSR Hash)
+
+If hydration cannot be trusted, fall back to **client render** for that `<h-state>`.
+
+Server embeds a hash of the SSR HTML for each anchor:
+
+```html
+<h-state name="page:article:view" data-ssr-hash="7e3a...">...</h-state>
+```
+
+Client compares the expected HTML hash and decides:
+
+```js
+const expected = renderToString(buildVDOM(key, activeStates[key]))
+const expectedHash = hash(expected)
+const ssrHash = el.getAttribute('data-ssr-hash')
+
+if (ssrHash && expectedHash !== ssrHash) {
+  el.innerHTML = ''
+  render(buildVDOM(key, activeStates[key]), el)
+} else {
+  hydration(buildVDOM(key, activeStates[key]), el)
+}
+```
+
+This keeps failure recovery **scoped to the `<h-state>` root**.
+
+---
+
+### 6.7 First Post-Hydration Frame
+
+After hydration, **no automatic state change occurs**.
+
+The first state frame is expected to arrive **only after user interaction**.
+At that moment:
+
+* Only changed `<h-state>` roots update
+* Unchanged roots are untouched (no remount/flicker)
+
+This guarantees a stable UI immediately after hydration.
 
 ---
 
