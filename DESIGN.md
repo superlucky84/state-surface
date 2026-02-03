@@ -88,22 +88,23 @@ The runtime only operates **within a page lifetime**.
 
 ## 3. State Model
 
-### 3.1 State Is a Set, Not a Single Value
+### 3.1 State Is a Map, Not a Single Value
 
-The current UI condition is represented as a **set of active state names**:
+The current UI condition is represented as a **map of template → data**:
 
 ```js
-activeStates = new Set([
-  "page:article:view",
-  "panel:comments:open"
-])
+activeStates = {
+  "page:article:view": { articleId: 1 },
+  "panel:comments:open": { articleId: 1, page: 1 }
+}
 ```
 
 States:
 
-* Are opaque strings
+* Are opaque template names
 * Have no hierarchy semantics
 * Are matched by **exact name only**
+* Carry **data bound to each template**
 
 ---
 
@@ -153,7 +154,7 @@ A transition emits a **sequence of frames**:
 
 ```ts
 type StateFrame =
-  | { type: "state"; states: string[]; data?: any }
+  | { type: "state"; states: Record<string, any> }
   | { type: "error"; message: string }
   | { type: "done" }
 ```
@@ -165,6 +166,8 @@ type StateFrame =
 * **Each frame replaces the previous state entirely**
 * **State and data flow together**
 * **Views are bound to data at the frame level**
+* Frames are **processed as a FIFO queue**
+* The **last frame** becomes the final `activeStates`
 
 ---
 
@@ -178,22 +181,29 @@ Frames arrive in sequence, and the UI constructs itself progressively.
 async function* articleTransition(articleId) {
   yield {
     type: "state",
-    states: ["page:article", "loading"],
-    data: { articleId }
+    states: {
+      "page:article": { articleId },
+      "loading": { articleId }
+    }
   }
 
   const article = await db.getArticle(articleId)
   yield {
     type: "state",
-    states: ["page:article", "content:loaded"],
-    data: { article }
+    states: {
+      "page:article": { articleId },
+      "content:loaded": { article }
+    }
   }
 
   const comments = await db.getComments(articleId)
   yield {
     type: "state",
-    states: ["page:article", "content:loaded", "comments:loaded"],
-    data: { article, comments }
+    states: {
+      "page:article": { articleId },
+      "content:loaded": { article },
+      "comments:loaded": { comments }
+    }
   }
 
   yield { type: "done" }
@@ -236,24 +246,29 @@ async function* articleTransition(articleId) {
 async function* searchTransition(query) {
   yield {
     type: "state",
-    states: ["search:input"],
-    data: { query }
+    states: {
+      "search:input": { query }
+    }
   }
 
   const cached = cache.get(query)
   if (cached) {
     yield {
       type: "state",
-      states: ["search:input", "results:cached"],
-      data: { query, results: cached }
+      states: {
+        "search:input": { query },
+        "results:cached": { results: cached }
+      }
     }
   }
 
   const live = await api.search(query)
   yield {
     type: "state",
-    states: ["search:input", "results:live"],
-    data: { query, results: live }
+    states: {
+      "search:input": { query },
+      "results:live": { results: live }
+    }
   }
 }
 ```
@@ -278,6 +293,16 @@ The stream defines the entire flow.**
 
 ---
 
+### 5.3 Frame Queue (Sequential Processing)
+
+An action produces **a queue of StateFrames**.
+
+* Frames are processed **in order**
+* Each frame **fully replaces** `activeStates`
+* When the queue ends, the **last frame is the final state**
+
+---
+
 ## 6. View Model
 
 ### 6.1 `<h-state>` Elements
@@ -298,6 +323,8 @@ Rules:
 * No `for`
 * No expressions
 * No JS
+* `name` must match a **template key** in `activeStates`
+* The template uses **only the data bound to its own key**
 
 ---
 
@@ -373,16 +400,15 @@ Each frame carries **complete data for all active states**.
 ```ts
 yield {
   type: "state",
-  states: ["page:article", "panel:comments"],
-  data: {
-    article: {...},
-    comments: [...]
+  states: {
+    "page:article": { article: {...} },
+    "panel:comments": { comments: [...] }
   }
 }
 ```
 
 **Binding rule:**
-State name → data key (by convention)
+Template name → bound data (by convention)
 
 ---
 
@@ -413,7 +439,7 @@ The client runtime:
 * Selects matching `<h-state>` fragments
 * Projects data
 * Applies minimal DOM changes
-* **Processes frames sequentially**
+* **Processes frames sequentially (queue)**
 
 ---
 
@@ -421,8 +447,8 @@ The client runtime:
 
 ```js
 class StateSurface {
-  activeStates = new Set()
-  currentData = {}
+  activeStates = {}
+  frameQueue = []
 
   async transition(name, params) {
     const res = await fetch(`/transition/${name}`, {
@@ -440,10 +466,17 @@ class StateSurface {
       const frame = JSON.parse(decoder.decode(value))
 
       if (frame.type === "state") {
-        this.activeStates = new Set(frame.states)
-        this.currentData = frame.data || {}
-        this.sync()
+        this.frameQueue.push(frame)
+        this.flushQueue()
       }
+    }
+  }
+
+  flushQueue() {
+    while (this.frameQueue.length > 0) {
+      const frame = this.frameQueue.shift()
+      this.activeStates = frame.states
+      this.sync()
     }
   }
 }
