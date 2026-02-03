@@ -8,6 +8,39 @@ Within a page, **DOM structure is synchronized to server-driven state streams.**
 
 ---
 
+## 0. Implementation Risks (Priority Checklist)
+
+Checked = design decision locked (still requires implementation validation).
+Assumed by design = baseline requirement inherited from SSR + hydration.
+
+**P0 — Core correctness**
+* [x] `<h-state>` roots are stable anchors across SSR/CSR (`name` is the anchor)
+* [x] SSR HTML and CSR VDOM structure match exactly (including text nodes) — Assumed by design
+* [x] Initial hydration set matches the SSR state set (bootstrapped from server)
+* [ ] First frame update does not cause remount/flicker
+
+**P1 — Update accuracy**
+* [ ] Clear change-detection rule (server-sent changed list vs client compare)
+* [ ] Data comparison strategy defined (shallow/deep/version/hash)
+* [ ] Removal policy for inactive states (focus/local state/events)
+
+**P2 — Stream/queue handling**
+* [ ] Queue backpressure policy (drop/merge/priority)
+* [ ] `done` / `error` frame handling defined
+* [ ] Frame ordering assumptions stated
+
+**P3 — Module/bundling**
+* [ ] Template loading strategy decided (prebundle vs lazy)
+* [ ] Fallback when template load fails
+* [ ] Stable template ↔ module mapping in Vite
+
+**P4 — Performance/observability**
+* [ ] `<h-state>` update frequency within budget
+* [ ] Debug/tracing hooks for frame flow
+* [ ] Optional dev UI to inspect `activeStates`
+
+---
+
 ## 0. Purpose of This Document
 
 This document exists to **freeze the core ideas of the project** so they are not lost or diluted over time.
@@ -359,6 +392,110 @@ This keeps:
 * **Do not hydrate the whole page**
 * **Each active `<h-state>` is hydrated independently**
 * After hydration, updates are **data-driven re-renders** of that template
+
+---
+
+### 6.5 Example: Layout + Templates (SSR → Hydration)
+
+Page layout **declares `<h-state>` anchors only**:
+
+```tsx
+export default function Layout() {
+  return (
+    <html>
+      <body>
+        <header class="site-header">StateSurface</header>
+
+        <main class="page">
+          <h-state name="page:article:view"></h-state>
+          <h-state name="panel:comments:open"></h-state>
+        </main>
+
+        <footer class="site-footer">©2026</footer>
+      </body>
+    </html>
+  )
+}
+```
+
+Template modules render **inside** each `<h-state>`:
+
+```tsx
+export function ArticleView({ article }) {
+  return (
+    <article>
+      <h1>{article.title}</h1>
+      <p>{article.body}</p>
+    </article>
+  )
+}
+```
+
+Server fills anchors using template → data:
+
+```js
+const html = renderLayout()
+const states = {
+  "page:article:view": { article },
+  "panel:comments:open": { comments }
+}
+
+const filled = fillHState(html, states)
+```
+
+fillHState sketch (HTML parser-based):
+
+```js
+function fillHState(html, states) {
+  const dom = parseHTML(html)
+
+  for (const el of dom.querySelectorAll('h-state[name]')) {
+    const key = el.getAttribute('name')
+    const data = states[key]
+
+    if (!data) {
+      el.innerHTML = ''
+      continue
+    }
+
+    const Comp = templates[key]
+    const inner = renderToString(h(Comp, data))
+    el.innerHTML = inner
+  }
+
+  return serializeHTML(dom)
+}
+```
+
+Initial state bootstrapping:
+
+* The server **embeds the initial `activeStates`** in HTML
+* The client **hydrates from that exact payload**
+* After hydration, new states are applied **only in browser memory**
+
+Example:
+
+```html
+<script id="__STATE__" type="application/json">
+{"page:article:view":{"article":{"title":"..."}}}
+</script>
+```
+
+```js
+const initialStates = JSON.parse(
+  document.getElementById('__STATE__').textContent
+)
+stateSurface.hydrate(initialStates)
+```
+
+Client hydrates **per `<h-state>` root**:
+
+```js
+for (const el of document.querySelectorAll('h-state[name]')) {
+  const key = el.getAttribute('name')
+  hydration(buildVDOM(key, activeStates[key]), el)
+}
+```
 
 ---
 

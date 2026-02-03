@@ -4,5 +4,8 @@
   "private": true,
   "description": "StateSurface reference implementation",
   "type": "module",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "ctxbin": "^1.1.0"
+  }
 }
