@@ -48,6 +48,11 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] `__STATE__` injection safety (JSON escaping/XSS rules)
 * [x] Error template key convention (`system:error`)
 
+**P6 — Implementation Clarity (must lock before coding)**
+* [x] NDJSON frame schema fixed (required vs optional fields)
+* [ ] Full/partial and changed/removed precedence rule fixed
+* [ ] `system:error` anchor policy fixed (required vs recommended)
+
 ---
 
 ## 0. Purpose of This Document
@@ -358,6 +363,16 @@ The stream defines the entire flow.**
 * `removed` lists templates that must be unmounted
 * **The first frame in a stream must be full**
 * If `full` is omitted, it is treated as **true**
+
+Schema rules (NDJSON state frames, v1):
+
+* `type` is required and must be `"state"`
+* `states` is required and must be an object
+* `full` is optional (default `true`)
+* If `full === false`, at least one of `changed` or `removed` is required
+* If `full === false` and `changed` exists, changed keys must exist in `states`
+* If `full === false`, `removed` keys must not exist in `states`
+* `removed` may be empty; delete-only partials are valid (`states` can be `{}`)
 
 Client apply rule:
 
