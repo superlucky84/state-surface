@@ -44,9 +44,9 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] Frame transport format (NDJSON)
 * [x] SSR `<h-state>` filling strategy (HTML parser)
 * [x] SSR hash canonicalization (sha256 + normalized HTML)
-* [ ] Transition concurrency policy (abort previous vs parallel)
-* [ ] `__STATE__` injection safety (JSON escaping/XSS rules)
-* [ ] Error template key convention (e.g. `system:error`)
+* [x] Transition concurrency policy (abort previous)
+* [x] `__STATE__` injection safety (JSON escaping/XSS rules)
+* [x] Error template key convention (`system:error`)
 
 ---
 
@@ -420,6 +420,11 @@ Errors are **user-defined**. The server decides what to send in an error frame.
 If an error template exists in the layout, it can be rendered; otherwise the
 stream ends.
 
+Error template key convention (v1):
+
+* Reserved key: **`system:error`**
+* Recommended anchor in layout: `<h-state name="system:error"></h-state>`
+
 ```json
 { "type": "error", "template": "system:error", "data": { "message": "..." } }
 ```
@@ -437,6 +442,16 @@ Client handling:
 * Ignore any frames received after `done`
 
 **Ordering assumption:** HTTP stream order is preserved; no reordering logic is required.
+
+---
+
+### 5.7 Transition Concurrency
+
+Concurrency policy is **abort previous**.
+
+* Starting a new transition cancels the previous in-flight stream
+* Only the latest user intent continues to update UI
+* Canceled streams must not apply further frames
 
 ---
 
@@ -591,6 +606,26 @@ const initialStates = JSON.parse(
   document.getElementById('__STATE__').textContent
 )
 stateSurface.hydrate(initialStates)
+```
+
+`__STATE__` injection safety (v1):
+
+* Serialize with `JSON.stringify`
+* Escape `<`, `>`, `&`, `\u2028`, `\u2029` before embedding in HTML
+* Read with `textContent` and parse with `JSON.parse`
+* Do not include secrets/tokens in `__STATE__`
+
+Example:
+
+```js
+function safeStateJSON(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")
+}
 ```
 
 Client hydrates **per `<h-state>` root**:
