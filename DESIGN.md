@@ -41,7 +41,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] Optional dev UI to inspect `activeStates` (simple overlay)
 
 **P5 — Implementation Details (must decide before coding)**
-* [ ] Frame transport format (NDJSON vs SSE vs chunked JSON)
+* [x] Frame transport format (NDJSON)
 * [ ] SSR `<h-state>` filling strategy (parser vs string replace)
 * [ ] SSR hash canonicalization (hash algorithm + normalization rules)
 * [ ] Transition concurrency policy (abort previous vs parallel)
@@ -175,6 +175,7 @@ A transition:
 ### 4.1 Default Transport
 
 * HTTP `POST` + `ReadableStream`
+* **NDJSON** (`application/x-ndjson`)
 * One stream per transition
 * Streams are ephemeral
 
