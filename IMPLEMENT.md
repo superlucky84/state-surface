@@ -30,6 +30,14 @@ If context is lost, read in order:
 - pnpm: `10.13.1`
 - Required scripts: `dev`, `build`, `test`
 
+## Optional Library Policy (fp-pack)
+
+- fp-pack may be used to improve readability in pure data-transform paths.
+- Prefer fp-pack in `shared/frameOps.*` (normalize/merge/precedence/apply helpers).
+- Keep SSR/hydration boundary code explicit (avoid over-abstracted chains).
+- Avoid excessive point-free style; favor named functions with clear intent.
+- If a transform becomes harder to read with fp-pack, use plain JS instead.
+
 ## Work Phases
 
 ### Phase 0: Repo/Foundation
