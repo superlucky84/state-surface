@@ -1,13 +1,14 @@
 # StateSurface Implementation Tracker
 
 This document turns `DESIGN.md` into an executable implementation plan.
-If context is lost, read `DESIGN.md` first, then this file.
+If context is lost, read in order: `DESIGN.md` -> `PROTOCOL.md` -> this file.
 
 ## How To Use This File
 
 - Keep checklist items updated (`[ ]` -> `[x]`) as work lands.
 - Add commit hashes in "Progress Log" after each meaningful step.
 - If design changes, update `DESIGN.md` first, then sync this file.
+- If frame contract changes, update `PROTOCOL.md` and sync checklists.
 - Do not delete completed items; keep history visible.
 
 ## Locked Design Snapshot (from DESIGN.md)
@@ -22,17 +23,25 @@ If context is lost, read `DESIGN.md` first, then this file.
 - Template loading is prebundle v1 + static registry.
 - Error template key convention is `system:error` (recommended anchor).
 
+## Execution Baseline
+
+- Node.js: latest stable (at implementation time)
+- pnpm: `10.13.1`
+- Required scripts: `dev`, `build`, `test`
+
 ## Work Phases
 
 ### Phase 0: Repo/Foundation
 
 - [ ] Create runtime folder structure (`server/`, `client/`, `shared/`).
-- [ ] Add scripts in `package.json` (`dev`, `build`, `start`, `test` as needed).
+- [ ] Add scripts in `package.json` (`dev`, `build`, `test`).
+- [ ] Pin pnpm version usage to `10.13.1` in docs/setup notes.
 - [ ] Add base lint/format setup (minimal, non-blocking).
 - [ ] Smoke check: `dev` command starts without immediate runtime errors.
 
 ### Phase 1: Shared Protocol Contracts
 
+- [ ] Keep `PROTOCOL.md` as the single protocol contract reference.
 - [ ] Implement `StateFrame` runtime validator (not just TS type).
 - [ ] Enforce locked NDJSON schema rules:
   - [ ] `full` default `true`

@@ -58,6 +58,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 ## 0. Purpose of This Document
 
 This document exists to **freeze the core ideas of the project** so they are not lost or diluted over time.
+Protocol-level examples and validation cases are documented in `PROTOCOL.md`.
 
 ### This is **not**:
 
@@ -218,6 +219,8 @@ type StateFrame =
   | { type: "error"; message?: string; template?: string; data?: any }
   | { type: "done" }
 ```
+
+For concrete valid/invalid payload samples, see `PROTOCOL.md`.
 
 **Important principles:**
 
