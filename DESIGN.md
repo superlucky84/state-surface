@@ -40,6 +40,14 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] Debug/tracing hooks for frame flow (single optional hook)
 * [x] Optional dev UI to inspect `activeStates` (simple overlay)
 
+**P5 — Implementation Details (must decide before coding)**
+* [ ] Frame transport format (NDJSON vs SSE vs chunked JSON)
+* [ ] SSR `<h-state>` filling strategy (parser vs string replace)
+* [ ] SSR hash canonicalization (hash algorithm + normalization rules)
+* [ ] Transition concurrency policy (abort previous vs parallel)
+* [ ] `__STATE__` injection safety (JSON escaping/XSS rules)
+* [ ] Error template key convention (e.g. `system:error`)
+
 ---
 
 ## 0. Purpose of This Document
