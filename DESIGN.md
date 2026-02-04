@@ -43,7 +43,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 **P5 — Implementation Details (must decide before coding)**
 * [x] Frame transport format (NDJSON)
 * [x] SSR `<h-state>` filling strategy (HTML parser)
-* [ ] SSR hash canonicalization (hash algorithm + normalization rules)
+* [x] SSR hash canonicalization (sha256 + normalized HTML)
 * [ ] Transition concurrency policy (abort previous vs parallel)
 * [ ] `__STATE__` injection safety (JSON escaping/XSS rules)
 * [ ] Error template key convention (e.g. `system:error`)
@@ -613,6 +613,14 @@ Server embeds a hash of the SSR HTML for each anchor:
 ```html
 <h-state name="page:article:view" data-ssr-hash="7e3a...">...</h-state>
 ```
+
+Hash canonicalization rules (v1):
+
+* Algorithm: **sha256**
+* Normalize whitespace (collapse runs, trim edges)
+* Sort attributes by key before hashing
+* Exclude HTML comments from hash input
+* Exclude dynamic attributes (e.g. nonce/timestamps) from hash input
 
 Client compares the expected HTML hash and decides:
 
