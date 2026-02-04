@@ -33,11 +33,11 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 **P3 — Module/bundling**
 * [x] Template loading strategy decided (prebundle in v1)
 * [x] Fallback when template load fails (error template)
-* [ ] Stable template ↔ module mapping in Vite
+* [x] Stable template ↔ module mapping in Vite (static registry)
 
 **P4 — Performance/observability**
-* [ ] `<h-state>` update frequency within budget
-* [ ] Debug/tracing hooks for frame flow
+* [x] `<h-state>` update frequency within budget
+* [x] Debug/tracing hooks for frame flow (single optional hook)
 * [ ] Optional dev UI to inspect `activeStates`
 
 ---
@@ -660,6 +660,21 @@ This keeps failures localized to a single template.
 
 ---
 
+### 6.10 Template Registry (Static)
+
+Template names map to modules via a **static registry** shared by SSR and CSR.
+
+```ts
+export const templates = {
+  "page:article:view": ArticleView,
+  "panel:comments:open": CommentsPanel
+}
+```
+
+This registry is the **single source of template mapping truth**.
+
+---
+
 ## 7. No Nested States
 
 ### 7.1 No Structural Nesting
@@ -753,6 +768,7 @@ The client runtime:
 * Hydrates **per `<h-state>`**, not per page
 * Updates **only changed templates**
 * Handles `error` and `done` frames
+* Exposes a **single debug hook** for frame flow
 
 ---
 
@@ -764,6 +780,7 @@ class StateSurface {
   frameQueue = []
   instances = {}
   maxQueue = 20
+  frameBudgetMs = 33
 
   async transition(name, params) {
     const res = await fetch(`/transition/${name}`, {
@@ -782,13 +799,25 @@ class StateSurface {
 
       if (frame.type === "state") {
         this.frameQueue.push(frame)
-        this.flushQueue()
+        this.scheduleFlush()
       }
     }
   }
 
+  scheduleFlush() {
+    if (this.flushScheduled) return
+    this.flushScheduled = true
+    requestAnimationFrame(() => {
+      this.flushScheduled = false
+      this.flushQueue()
+    })
+  }
+
   flushQueue() {
+    const start = performance.now()
     while (this.frameQueue.length > 0) {
+      if (performance.now() - start > this.frameBudgetMs) break
+
       if (this.frameQueue.length > this.maxQueue) {
         this.dropToNextFull()
       }
@@ -886,6 +915,27 @@ sync() {
 
 ---
 
+### 9.3 Debug/Tracing Hook
+
+A single optional hook is exposed for **frame flow logging**.
+
+```js
+stateSurface.trace = event => {
+  // forward to server logs or console
+  console.log(event)
+}
+```
+
+Recommended events:
+
+* `received` (queue size)
+* `applied` (full/partial)
+* `merged` (partial coalesced)
+* `dropped` (queue trimmed)
+* `error` / `done`
+
+---
+
 ## 10. Composition & Customization
 
 ### 10.1 States as Extension Points
@@ -896,6 +946,19 @@ Examples:
 
 * `page:article:view + role:admin`
 * `page:article:view + mode:editing`
+
+---
+
+### 10.3 Performance Budget
+
+Default update budget (v1):
+
+* **Target 30fps** (≈33ms per frame)
+* Apply at most **one queue flush per animation frame**
+* Merge partials when queue grows; full frames supersede
+* Raise budget only for lightweight templates
+
+This keeps update cost predictable while preserving responsiveness.
 
 ---
 
