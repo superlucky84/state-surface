@@ -42,7 +42,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 
 **P5 — Implementation Details (must decide before coding)**
 * [x] Frame transport format (NDJSON)
-* [ ] SSR `<h-state>` filling strategy (parser vs string replace)
+* [x] SSR `<h-state>` filling strategy (HTML parser)
 * [ ] SSR hash canonicalization (hash algorithm + normalization rules)
 * [ ] Transition concurrency policy (abort previous vs parallel)
 * [ ] `__STATE__` injection safety (JSON escaping/XSS rules)
