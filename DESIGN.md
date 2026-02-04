@@ -38,7 +38,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 **P4 — Performance/observability**
 * [x] `<h-state>` update frequency within budget
 * [x] Debug/tracing hooks for frame flow (single optional hook)
-* [ ] Optional dev UI to inspect `activeStates`
+* [x] Optional dev UI to inspect `activeStates` (simple overlay)
 
 ---
 
@@ -933,6 +933,16 @@ Recommended events:
 * `merged` (partial coalesced)
 * `dropped` (queue trimmed)
 * `error` / `done`
+
+---
+
+### 9.4 Dev Overlay (Optional)
+
+A minimal debug overlay can render the current `activeStates`.
+
+* Toggled by query flag (e.g. `?debug=1`)
+* Shows active template keys and current data snapshot
+* Disabled by default in production builds
 
 ---
 
