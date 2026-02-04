@@ -51,7 +51,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 **P6 — Implementation Clarity (must lock before coding)**
 * [x] NDJSON frame schema fixed (required vs optional fields)
 * [x] Full/partial and changed/removed precedence rule fixed
-* [ ] `system:error` anchor policy fixed (required vs recommended)
+* [x] `system:error` anchor policy fixed (recommended)
 
 ---
 
@@ -444,6 +444,7 @@ stream ends.
 Error template key convention (v1):
 
 * Reserved key: **`system:error`**
+* Anchor policy: **recommended**, not required
 * Recommended anchor in layout: `<h-state name="system:error"></h-state>`
 
 ```json
