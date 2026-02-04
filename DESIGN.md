@@ -50,7 +50,7 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 
 **P6 — Implementation Clarity (must lock before coding)**
 * [x] NDJSON frame schema fixed (required vs optional fields)
-* [ ] Full/partial and changed/removed precedence rule fixed
+* [x] Full/partial and changed/removed precedence rule fixed
 * [ ] `system:error` anchor policy fixed (required vs recommended)
 
 ---
@@ -373,6 +373,12 @@ Schema rules (NDJSON state frames, v1):
 * If `full === false` and `changed` exists, changed keys must exist in `states`
 * If `full === false`, `removed` keys must not exist in `states`
 * `removed` may be empty; delete-only partials are valid (`states` can be `{}`)
+
+Precedence rules (v1):
+
+* If `full !== false`, treat the frame as full and ignore `changed`/`removed`
+* If `full === false`, apply `removed` first, then apply `changed` via `states`
+* A key cannot exist in both `removed` and `changed`; if it does, frame is invalid
 
 Client apply rule:
 
