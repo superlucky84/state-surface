@@ -1,7 +1,8 @@
 # StateSurface Implementation Tracker
 
 This document turns `DESIGN.md` into an executable implementation plan.
-If context is lost, read in order: `DESIGN.md` -> `PROTOCOL.md` -> this file.
+If context is lost, read in order:
+`DESIGN.md` -> `PROTOCOL.md` -> `BOOTSTRAP.md` -> this file.
 
 ## How To Use This File
 
