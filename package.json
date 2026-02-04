@@ -6,6 +6,6 @@
   "type": "module",
   "license": "UNLICENSED",
   "devDependencies": {
-    "ctxbin": "^1.1.0"
+    "ctxbin": "^1.1.1"
   }
 }

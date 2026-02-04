@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       ctxbin:
-        specifier: ^1.1.0
-        version: 1.1.0
+        specifier: ^1.1.1
+        version: 1.1.1
 
 packages:
 
@@ -18,8 +18,8 @@ packages:
     resolution: {integrity: sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ==}
     engines: {node: '>=10'}
 
-  ctxbin@1.1.0:
-    resolution: {integrity: sha512-RooATDbZsN/GvGYVRnmbBwCWtP7y8XCU/3/F/lkBbixsrD9tVvq49tPkiTZNaZ5M3oyKC6vzyxjzVGh+qGgObw==}
+  ctxbin@1.1.1:
+    resolution: {integrity: sha512-dOO0EAd+XgQYAqBVs9nRN6ATTkC1N2EzNes3VyzMge5FAHow4NTmUrKYhhvKEw7N72g0MS/SjjVevM54hI/UmA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -47,7 +47,7 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
-    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
@@ -56,7 +56,7 @@ snapshots:
 
   chownr@2.0.0: {}
 
-  ctxbin@1.1.0:
+  ctxbin@1.1.1:
     dependencies:
       tar: 6.2.1
 
