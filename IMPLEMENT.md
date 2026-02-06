@@ -30,6 +30,25 @@ If context is lost, read in order:
 - pnpm: `10.13.1`
 - Required scripts: `dev`, `build`, `test`
 
+## Reference Projects
+
+Two sibling directories contain working code to reference during implementation:
+
+### `../lithent` — Lithent library source
+- SSR path: `renderToString` (recursive WDom→HTML), `hydration` (attach DOM + bind events)
+- Hydration calls `render(wDom, el, null, true)` — skips DOM creation, only attaches events
+- JSX runtime at `lithent/jsx-runtime` — exports `jsx`/`jsxs`/`Fragment`
+- Vite plugin at `packages/lithentVite` — sets `esbuild.jsx: 'automatic'`, `jsxImportSource: 'lithent'`
+
+### `../blog` — Vite + Lithent SSR prototype
+- Dev: `createViteServer({ server: { middlewareMode: 'ssr' } })` → `vite.ssrLoadModule()`
+- SSR: `renderToString(h(Layout, props))` → `<!DOCTYPE html>` prefix → inject script before `</body>`
+- Hydration: `hydration(h(Layout, props), document.documentElement)`
+- Data: `globalThis.pagedata` set on server, read on client at hydration time
+- Prod: pre-built modules loaded via dynamic `import()` from `dist/`
+
+Use these as ground truth for Vite config, SSR render flow, and hydration wiring.
+
 ## Optional Library Policy (fp-pack)
 
 - fp-pack may be used to improve readability in pure data-transform paths.
@@ -42,23 +61,23 @@ If context is lost, read in order:
 
 ### Phase 0: Repo/Foundation
 
-- [ ] Create runtime folder structure (`server/`, `client/`, `shared/`).
-- [ ] Add scripts in `package.json` (`dev`, `build`, `test`).
-- [ ] Pin pnpm version usage to `10.13.1` in docs/setup notes.
-- [ ] Add base lint/format setup (minimal, non-blocking).
-- [ ] Smoke check: `dev` command starts without immediate runtime errors.
+- [x] Create runtime folder structure (`server/`, `client/`, `shared/`).
+- [x] Add scripts in `package.json` (`dev`, `build`, `test`).
+- [x] Pin pnpm version usage to `10.13.1` in docs/setup notes.
+- [x] Add base lint/format setup (minimal, non-blocking).
+- [x] Smoke check: `dev` command starts without immediate runtime errors.
 
 ### Phase 1: Shared Protocol Contracts
 
-- [ ] Keep `PROTOCOL.md` as the single protocol contract reference.
-- [ ] Implement `StateFrame` runtime validator (not just TS type).
-- [ ] Enforce locked NDJSON schema rules:
-  - [ ] `full` default `true`
-  - [ ] `full:false` requires `changed` or `removed`
-  - [ ] `changed` keys must exist in `states`
-  - [ ] `removed` keys must not exist in `states`
-- [ ] Add parser helpers for NDJSON encode/decode.
-- [ ] Smoke check: sample full/partial/error/done frames validate as expected.
+- [x] Keep `PROTOCOL.md` as the single protocol contract reference.
+- [x] Implement `StateFrame` runtime validator (not just TS type).
+- [x] Enforce locked NDJSON schema rules:
+  - [x] `full` default `true`
+  - [x] `full:false` requires `changed` or `removed`
+  - [x] `changed` keys must exist in `states`
+  - [x] `removed` keys must not exist in `states`
+- [x] Add parser helpers for NDJSON encode/decode.
+- [x] Smoke check: sample full/partial/error/done frames validate as expected.
 
 ### Phase 2: Server Runtime (Express)
 

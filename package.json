@@ -5,7 +5,31 @@
   "description": "StateSurface reference implementation",
   "type": "module",
   "license": "UNLICENSED",
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "build": "vite build",
+    "test": "vitest run",
+    "format": "prettier --write 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts'",
+    "format:check": "prettier --check 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts'"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "devDependencies": {
-    "ctxbin": "^1.1.1"
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.1",
+    "ctxbin": "^1.1.1",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "lithent": "^1.21.6"
   }
 }
