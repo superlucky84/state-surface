@@ -96,21 +96,21 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 3: Client Runtime Core
 
-- [ ] Implement anchor discovery (`querySelectorAll('h-state[name]')`).
-- [ ] Implement initial state bootstrap from `__STATE__`.
-- [ ] Implement per-anchor hydration (not full-page hydration).
-- [ ] Implement transition manager with `abort previous`.
-- [ ] Implement frame queue and apply loop.
-- [ ] Implement full frame apply (replace all active states).
-- [ ] Implement partial frame apply (removed first, then changed merge).
-- [ ] Implement backpressure policy:
-  - [ ] coalesce consecutive partial frames
-  - [ ] full frame supersedes pending partials
-- [ ] Implement `done` handling (flush then end).
-- [ ] Implement `error` handling:
-  - [ ] if template exists, render `system:error` style frame
-  - [ ] otherwise stop stream + surface error
-- [ ] Smoke check: first user action updates only changed anchors.
+- [x] Implement anchor discovery (`querySelectorAll('h-state[name]')`).
+- [x] Implement initial state bootstrap from `__STATE__`.
+- [x] Implement per-anchor hydration (not full-page hydration).
+- [x] Implement transition manager with `abort previous`.
+- [x] Implement frame queue and apply loop.
+- [x] Implement full frame apply (replace all active states).
+- [x] Implement partial frame apply (removed first, then changed merge).
+- [x] Implement backpressure policy:
+  - [x] coalesce consecutive partial frames
+  - [x] full frame supersedes pending partials
+- [x] Implement `done` handling (flush then end).
+- [x] Implement `error` handling:
+  - [x] if template exists, render `system:error` style frame
+  - [x] otherwise stop stream + surface error
+- [x] Smoke check: first user action updates only changed anchors.
 
 ### Phase 4: Template Registry + Rendering
 
