@@ -81,18 +81,18 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 2: Server Runtime (Express)
 
-- [ ] Implement `POST /transition/:name` NDJSON streaming endpoint.
-- [ ] Implement transition execution pipeline (yield frames sequentially).
-- [ ] Add server-side frame validation before streaming.
-- [ ] Implement parser-based SSR `<h-state>` filling (`fillHState`).
-- [ ] Implement `__STATE__` safe JSON embed helper (`safeStateJSON`).
-- [ ] Implement SSR hash generation with canonicalization rules:
-  - [ ] sha256
-  - [ ] normalized whitespace
-  - [ ] sorted attributes
-  - [ ] comments excluded
-  - [ ] dynamic attrs excluded
-- [ ] Smoke check: transition endpoint streams valid NDJSON in correct order.
+- [x] Implement `POST /transition/:name` NDJSON streaming endpoint.
+- [x] Implement transition execution pipeline (yield frames sequentially).
+- [x] Add server-side frame validation before streaming.
+- [x] Implement parser-based SSR `<h-state>` filling (`fillHState`).
+- [x] Implement `__STATE__` safe JSON embed helper (`safeStateJSON`).
+- [x] Implement SSR hash generation with canonicalization rules:
+  - [x] sha256
+  - [x] normalized whitespace
+  - [x] sorted attributes
+  - [x] comments excluded
+  - [x] dynamic attrs excluded
+- [x] Smoke check: transition endpoint streams valid NDJSON in correct order.
 
 ### Phase 3: Client Runtime Core
 
