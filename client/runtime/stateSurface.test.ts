@@ -13,17 +13,17 @@ function createMockSurface() {
   const traces: TraceEvent[] = [];
 
   const surface = new StateSurface({
-    renderTemplate: (name, data) => {
+    renderTemplate: (name, data, _el) => {
       rendered.push({ name, data });
     },
     hydrateTemplate: (name, data, _el) => {
       hydrated.push({ name, data });
       return () => {};
     },
-    updateTemplate: (name, data) => {
+    updateTemplate: (name, data, _el) => {
       updated.push({ name, data });
     },
-    unmountTemplate: name => {
+    unmountTemplate: (name, _el) => {
       unmounted.push(name);
     },
     trace: event => traces.push(event),

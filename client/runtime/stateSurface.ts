@@ -4,9 +4,9 @@ import { createNdjsonParser } from '../../shared/ndjson.js';
 
 // ── Types ──
 
-export type TemplateRenderer = (name: string, data: any) => any;
+export type TemplateRenderer = (name: string, data: any, el: HTMLElement) => void;
 export type TemplateHydrator = (name: string, data: any, el: HTMLElement) => () => void;
-export type TemplateUpdater = (name: string, data: any) => void;
+export type TemplateUpdater = (name: string, data: any, el: HTMLElement) => void;
 
 export type TraceEvent = {
   kind: 'received' | 'applied' | 'merged' | 'dropped' | 'error' | 'done';
@@ -17,7 +17,7 @@ export interface StateSurfaceOptions {
   renderTemplate: TemplateRenderer;
   hydrateTemplate: TemplateHydrator;
   updateTemplate: TemplateUpdater;
-  unmountTemplate: (name: string) => void;
+  unmountTemplate: (name: string, el: HTMLElement) => void;
   maxQueue?: number;
   frameBudgetMs?: number;
   trace?: (event: TraceEvent) => void;
@@ -38,7 +38,7 @@ export class StateSurface {
   private renderTemplate: TemplateRenderer;
   private hydrateTemplate: TemplateHydrator;
   private updateTemplate: TemplateUpdater;
-  private unmountTemplate: (name: string) => void;
+  private unmountTemplate: (name: string, el: HTMLElement) => void;
 
   trace?: (event: TraceEvent) => void;
 
@@ -272,10 +272,10 @@ export class StateSurface {
     // Remove inactive templates
     for (const key of removedKeys) {
       if (this.mounted.has(key)) {
-        this.unmountTemplate(key);
+        const el = this.anchors.get(key);
+        this.unmountTemplate(key, el!);
         this.mounted.delete(key);
         // Clear anchor content
-        const el = this.anchors.get(key);
         if (el) el.innerHTML = '';
       }
     }
@@ -289,11 +289,11 @@ export class StateSurface {
 
       if (!this.mounted.has(key)) {
         // First render for this anchor
-        this.renderTemplate(key, nextStates[key]);
+        this.renderTemplate(key, nextStates[key], el);
         this.mounted.add(key);
       } else {
         // Update existing
-        this.updateTemplate(key, nextStates[key]);
+        this.updateTemplate(key, nextStates[key], el);
       }
     }
 

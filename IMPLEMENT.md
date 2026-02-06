@@ -114,11 +114,11 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 4: Template Registry + Rendering
 
-- [ ] Create static template registry (`name -> module`).
-- [ ] Share same registry for SSR and CSR paths.
-- [ ] Add startup check for missing registry keys used in layout.
-- [ ] Add fallback path for template load/render failure.
-- [ ] Smoke check: missing template triggers fallback without crashing app.
+- [x] Create static template registry (`name -> module`).
+- [x] Share same registry for SSR and CSR paths.
+- [x] Add startup check for missing registry keys used in layout.
+- [x] Add fallback path for template load/render failure.
+- [x] Smoke check: missing template triggers fallback without crashing app.
 
 ### Phase 5: Observability/Dev Experience
 
