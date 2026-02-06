@@ -122,10 +122,10 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 5: Observability/Dev Experience
 
-- [ ] Add single trace hook API (`stateSurface.trace(event)`).
-- [ ] Emit trace events (`received`, `applied`, `merged`, `dropped`, `error`, `done`).
-- [ ] Add optional dev overlay (`?debug=1`) showing current `activeStates`.
-- [ ] Smoke check: trace output and overlay both work in dev mode.
+- [x] Add single trace hook API (`stateSurface.trace(event)`).
+- [x] Emit trace events (`received`, `applied`, `merged`, `dropped`, `error`, `done`).
+- [x] Add optional dev overlay (`?debug=1`) showing current `activeStates`.
+- [x] Smoke check: trace output and overlay both work in dev mode.
 
 ### Phase 6: Reference Flows (Must Demo)
 
