@@ -23,6 +23,10 @@ If context is lost, read in order:
 - Concurrency policy is `abort previous`.
 - Template loading is prebundle v1 + static registry.
 - Error template key convention is `system:error` (recommended anchor).
+- Routing is file-based (`routes/` directory) with `[param]` dynamic segments.
+- Each route exports: `layout` + `transition` + optional `params`.
+- SSR reuses transitions (first full frame = initial states).
+- Client entry is route-agnostic (discovers + hydrates whatever is in DOM).
 
 ## Execution Baseline
 
@@ -143,12 +147,43 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 - [x] Integration tests: hydration mismatch fallback path.
 - [x] Regression tests: abort previous transition semantics.
 
+### Phase 8: Multi-Page Routing
+
+- [ ] Define `RouteModule` type contract (`layout`, `transition`, `params`).
+- [ ] Implement file-based route scanner (`routes/` directory → URL patterns).
+  - [ ] `index.ts` → directory root
+  - [ ] `[param].ts` → dynamic segment (`:param`)
+  - [ ] Nested directories → nested URL paths
+- [ ] Implement `getInitialStates` helper (run transition, collect first full frame).
+- [ ] Implement route-to-Express registration (auto `app.get()` per discovered route).
+- [ ] Implement per-route SSR pipeline (route module → layout → fillHState → respond).
+- [ ] Create shared base layout (`layouts/base.ts`) for layout composition.
+- [ ] Migrate existing demo to route files:
+  - [ ] `routes/index.ts` → `/` (article demo page)
+  - [ ] `routes/article/[id].ts` → `/article/:id`
+  - [ ] `routes/search.ts` → `/search`
+- [ ] Verify client entry (`client/main.ts`) works unchanged across all routes.
+- [ ] Add tests: route scanner (filename → URL pattern conversion).
+- [ ] Add tests: `getInitialStates` (transition → first frame extraction).
+- [ ] Add tests: multi-route SSR (each route renders correct layout + states).
+- [ ] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
+
+### Phase 9: Routing Tests/Polish
+
+- [ ] Edge case: route with no initial transition (static page, no `__STATE__`).
+- [ ] Edge case: dynamic param validation (non-numeric `[id]` etc.).
+- [ ] Edge case: 404 handling (no matching route file).
+- [ ] Verify Vite dev middleware serves client assets on all routes.
+- [ ] Update demo with cross-route navigation links.
+- [ ] Smoke check: full demo with 3+ routes works end-to-end.
+
 ## Definition of Done (v1 Prototype)
 
 - [x] End-to-end demo works with real NDJSON streamed transitions.
 - [x] Partial hydration/update works at `<h-state>` boundary.
 - [x] Locked protocol rules are enforced by tests.
 - [x] Debug trace + overlay available in dev mode.
+- [ ] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
 
 ## Open Questions (Keep Short)
@@ -158,3 +193,4 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 ## Progress Log
 
 - 2026-02-04: Initial IMPLEMENT.md created from finalized DESIGN.md decisions.
+- 2026-02-06: Phase 8-9 (multi-page routing) added to plan.

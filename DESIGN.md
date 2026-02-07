@@ -53,6 +53,14 @@ Assumed by design = baseline requirement inherited from SSR + hydration.
 * [x] Full/partial and changed/removed precedence rule fixed
 * [x] `system:error` anchor policy fixed (recommended)
 
+**P7 — Routing**
+* [x] Route discovery strategy decided (file-based, `routes/` directory)
+* [x] Dynamic segment convention decided (`[param]` bracket syntax)
+* [x] Route module contract defined (layout + transition + params)
+* [x] SSR via transition reuse strategy decided (first full frame)
+* [x] Layout composition pattern decided (shared base + per-route content)
+* [x] Client entry is route-agnostic (discover + hydrate whatever is in DOM)
+
 ---
 
 ## 0. Purpose of This Document
@@ -115,17 +123,18 @@ Design intent:
 
 ---
 
-## 2. Navigation Model (MPA First)
+## 2. Navigation Model (MPA + File-Based Routing)
 
 ### 2.1 Page Navigation
 
-Page navigation is **pure MPA**.
+Page navigation is **MPA with file-based route discovery**.
 
-* Handled by the browser
-* Full HTML document per URL
+* Each URL maps to a **route module** in the `routes/` directory
+* The server renders a **full HTML document per URL**
+* Navigation between pages is a **full browser navigation**
 
 ```html
-<a href="/article/1"> → full page load
+<a href="/article/1"> → full page load (server renders route)
 ```
 
 ---
@@ -136,7 +145,140 @@ The runtime only operates **within a page lifetime**.
 
 * No client router
 * No URL ↔ state syncing
-* No hydration
+* After page load, in-page updates come from **streamed transitions**
+
+---
+
+### 2.3 File-Based Route Discovery
+
+Routes are defined by files in the `routes/` directory.
+The server scans this directory at startup and registers Express routes automatically.
+
+```
+routes/
+├── index.ts              → GET /
+├── article/
+│   └── [id].ts           → GET /article/:id
+├── search.ts             → GET /search
+└── admin/
+    ├── index.ts           → GET /admin
+    └── users/
+        └── [userId].ts    → GET /admin/users/:userId
+```
+
+**Naming conventions:**
+
+| File pattern | URL pattern | Example |
+|---|---|---|
+| `index.ts` | `/` (directory root) | `routes/index.ts` → `/` |
+| `[param].ts` | `/:param` (dynamic segment) | `routes/article/[id].ts` → `/article/:id` |
+| `name.ts` | `/name` (static segment) | `routes/search.ts` → `/search` |
+| `dir/index.ts` | `/dir` (nested root) | `routes/admin/index.ts` → `/admin` |
+
+**Convention rationale:** `[param]` bracket syntax is chosen over `_param` (underscore prefix)
+because it is the most widely recognized convention (Next.js, SvelteKit, Nuxt, etc.).
+
+---
+
+### 2.4 Route Module Contract
+
+Each route file exports a **RouteModule** object:
+
+```ts
+import type { RouteModule } from 'state-surface/server';
+
+export default {
+  // Layout function: returns full HTML document string
+  // Receives stateScript (__STATE__ tag) to embed
+  layout(stateScript: string): string { ... },
+
+  // Name of the transition to run for initial SSR state
+  transition: 'article-load',
+
+  // Extract transition params from Express request
+  params(req: Request): Record<string, unknown> {
+    return { articleId: Number(req.params.id) };
+  },
+} satisfies RouteModule;
+```
+
+**Required fields:**
+
+* `layout` — Function returning full HTML document (with `<h-state>` anchors and `stateScript` embedded)
+* `transition` — Name of a registered transition
+
+**Optional fields:**
+
+* `params` — Extracts transition params from request (defaults to `{}`)
+
+---
+
+### 2.5 SSR via Transition Reuse
+
+The same transition that streams to the client also produces SSR initial state.
+On route entry, the server:
+
+1. Resolves the route module
+2. Runs the transition's async generator
+3. Collects the **first full frame** (`type: 'state'`, `full !== false`)
+4. Uses those states to fill `<h-state>` anchors via `fillHState`
+5. Embeds `__STATE__` script
+6. Responds with complete HTML
+
+```ts
+async function getInitialStates(
+  transitionName: string,
+  params: Record<string, unknown>
+): Promise<Record<string, any>> {
+  const handler = getTransition(transitionName);
+  const gen = handler(params);
+  const { value } = await gen.next();
+
+  if (value?.type === 'state') return value.states;
+  return {};
+}
+```
+
+This eliminates duplication: **one transition serves both SSR and client streaming**.
+
+---
+
+### 2.6 Layout Composition
+
+Routes compose layouts from shared layout functions:
+
+```ts
+// layouts/base.ts — shared HTML shell
+export function baseLayout(bodyContent: string, stateScript: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><title>StateSurface</title></head>
+<body>
+  <h-state name="page:header"></h-state>
+  ${bodyContent}
+  <h-state name="system:error"></h-state>
+  ${stateScript}
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>`;
+}
+
+// routes/article/[id].ts — per-route layout
+import { baseLayout } from '../../layouts/base.js';
+
+export default {
+  layout: (stateScript) => baseLayout(`
+    <h-state name="page:content"></h-state>
+    <h-state name="panel:comments"></h-state>
+  `, stateScript),
+  transition: 'article-load',
+  params: req => ({ articleId: Number(req.params.id) }),
+};
+```
+
+**The client entry point is route-agnostic.**
+All templates are prebundled (Section 6.8). The client discovers whatever `<h-state>` anchors
+are in the DOM and hydrates them. No per-route client configuration is needed.
 
 ---
 
