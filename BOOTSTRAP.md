@@ -21,9 +21,12 @@ pnpm -v
 server/
 client/
 shared/
+routes/
 client/templates/
 client/runtime/
 ```
+
+Route-local templates/transitions live under `routes/**/templates` and `routes/**/transitions`.
 
 ## 3) Minimum File Creation Order
 
@@ -40,10 +43,12 @@ client/runtime/
    - bootstrap + hydration
    - frame queue apply (full/partial)
 5. `client/templates/registry.ts`
-   - static template registry
-6. `client/main.ts`
+   - static template registry + helpers
+6. `client/templates/auto.ts`
+   - auto-register templates from `routes/**/templates`
+7. `client/main.ts`
    - initial hydrate + transition trigger wiring
-7. `index.html`
+8. `index.html`
    - `<h-state>` anchors
    - `__STATE__` injection point
 

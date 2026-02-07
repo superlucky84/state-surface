@@ -5,6 +5,15 @@ export type TransitionHandler = (
   params: Record<string, unknown>
 ) => AsyncGenerator<StateFrame, void, unknown>;
 
+export type TransitionModule = {
+  name: string;
+  handler: TransitionHandler;
+};
+
+export function defineTransition(name: string, handler: TransitionHandler): TransitionModule {
+  return { name, handler };
+}
+
 // Static registry of transition name → handler
 const registry = new Map<string, TransitionHandler>();
 

@@ -87,6 +87,7 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 - [x] Implement `POST /transition/:name` NDJSON streaming endpoint.
 - [x] Implement transition execution pipeline (yield frames sequentially).
+- [x] Auto-discover transitions from `routes/**/transitions` at startup.
 - [x] Add server-side frame validation before streaming.
 - [x] Implement parser-based SSR `<h-state>` filling (`fillHState`).
 - [x] Implement `__STATE__` safe JSON embed helper (`safeStateJSON`).
@@ -120,9 +121,17 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 - [x] Create static template registry (`name -> module`).
 - [x] Share same registry for SSR and CSR paths.
+- [x] Auto-discover templates from `routes/**/templates` at startup.
 - [x] Add startup check for missing registry keys used in layout.
 - [x] Add fallback path for template load/render failure.
 - [x] Smoke check: missing template triggers fallback without crashing app.
+- [x] Refactor demo templates to **stateless TSX components** (use `mount`/`lmount` only when needed).
+
+### Template Authoring (TSX)
+
+Templates should be authored as **TSX components** (Lithent JSX runtime) and compiled by Vite.
+Keep templates in `routes/**/templates/*.tsx` and register them in the static registry.
+Prefer **stateless components** by default. Use `mount`/`lmount` only for client-only UI state.
 
 ### Phase 5: Observability/Dev Experience
 

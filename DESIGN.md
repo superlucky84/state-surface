@@ -166,6 +166,30 @@ routes/
         └── [userId].ts    → GET /admin/users/:userId
 ```
 
+Routes also host per-page assets:
+
+```
+routes/
+├── article/
+│   ├── [id].ts
+│   ├── templates/
+│   │   ├── pageContent.tsx
+│   │   └── panelComments.tsx
+│   └── transitions/
+│       └── articleLoad.ts
+├── search/
+│   ├── index.ts
+│   ├── templates/
+│   │   ├── searchInput.tsx
+│   │   └── searchResults.tsx
+│   └── transitions/
+│       └── search.ts
+└── _shared/
+    └── templates/
+        ├── pageHeader.tsx
+        └── systemError.tsx
+```
+
 **Naming conventions:**
 
 | File pattern | URL pattern | Example |
@@ -342,6 +366,22 @@ A transition:
 
 ---
 
+### 3.3 Transition Registration (Auto-Discovery)
+
+Transitions are auto-registered by scanning `routes/**/transitions/` at startup.
+Each module exports a **TransitionModule** via `defineTransition(name, handler)`.
+No manual registry calls are required in `server/index.ts`.
+
+```ts
+import { defineTransition } from '../server/transition.js';
+
+export default defineTransition('article-load', async function* (params) {
+  // yield StateFrame objects
+});
+```
+
+---
+
 ## 4. Transport Model (State Streams)
 
 ### 4.1 Default Transport
@@ -398,7 +438,7 @@ For concrete valid/invalid payload samples, see `PROTOCOL.md`.
 * Frames are **processed as a FIFO queue**
 * The **last frame** becomes the final `activeStates`
 * Updates are **data-only**; templates are already on the client
-* The **first frame is always a full snapshot**
+* The **first frame** is full when starting without a baseline (SSR fallback)
 
 ---
 
@@ -869,7 +909,7 @@ This keeps failure recovery **scoped to the `<h-state>` root**.
 
 ### 6.7 First Post-Hydration Frame
 
-After hydration, **no automatic state change occurs**.
+After hydration, **no automatic state change occurs** unless `boot.auto` is enabled.
 
 The first state frame is expected to arrive **only after user interaction**.
 At that moment:
@@ -887,8 +927,36 @@ Templates are **prebundled** into the client build.
 
 * No runtime template fetching
 * A **template registry** maps `name → module`
+* Templates are auto-registered from `routes/**/templates/**/*.tsx`
 * SSR uses the same registry (Vite SSR in dev, built modules in prod)
 * Lazy loading is **out of scope for v1**
+* Templates are authored as **TSX components** (Lithent JSX runtime) and compiled by Vite
+
+---
+
+### 6.8.1 Template Authoring (Stateless by Default)
+
+Templates should be **pure, stateless components** by default. StateSurface owns state on the server;
+templates only project data into DOM. Avoid local state unless it is strictly **client-only UI state**
+(focus, caret position, scroll, measurements).
+
+* Prefer top-level, reusable functions (no per-render function creation).
+* Lithent passes `children` as the **second** argument: `(props, children)`.
+* Use `mount` / `lmount` **only** when local state is unavoidable.
+* Each template file default-exports `defineTemplate(name, Component)`.
+
+Example:
+
+```tsx
+export const Badge = ({ label }: { label: string }) => <span>[{label}]</span>;
+
+export const Card = ({ title }: { title: string }, children: JSX.Element) => (
+  <div>
+    <Badge label="Info" /> {title}
+    {children}
+  </div>
+);
+```
 
 ---
 
@@ -915,6 +983,7 @@ export const templates = {
 ```
 
 This registry is the **single source of template mapping truth**.
+Template modules are TSX files (for example, `routes/article/templates/ArticleView.tsx`).
 
 ---
 
@@ -931,12 +1000,12 @@ This registry is the **single source of template mapping truth**.
 
 ### 7.2 File-Level Chunking
 
-Each file defines **state fragments**, not components.
+Each file defines a **single template component** (TSX), not a page bundle.
 
 ```
 views/
-├─ page.article.html
-├─ panel.comments.html
+├─ page.article.tsx
+├─ panel.comments.tsx
 ```
 
 Fragments are composed at runtime via **slots**, not imports.
@@ -1219,9 +1288,10 @@ This keeps update cost predictable while preserving responsiveness.
 
 ```
 article/
-├─ states.json
-├─ view.html
-└─ transitions.ts
+├─ templates/
+│  └─ pageContent.tsx
+└─ transitions/
+   └─ articleLoad.ts
 ```
 
 * Optional

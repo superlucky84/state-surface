@@ -1,10 +1,7 @@
 import { StateSurface } from './runtime/stateSurface.js';
 import { createLithentBridge } from './runtime/lithentBridge.js';
 import { attachDevOverlay } from './runtime/devOverlay.js';
-import { registerDemoTemplates } from '../demo/templates.js';
-
-// Register demo templates (same registry as server SSR)
-registerDemoTemplates();
+import './templates/auto.js';
 
 // Create StateSurface with Lithent bridge
 const bridge = createLithentBridge({ fallbackTemplate: 'system:error' });

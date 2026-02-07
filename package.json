@@ -10,8 +10,8 @@
     "dev": "tsx watch server/index.ts",
     "build": "vite build",
     "test": "vitest run",
-    "format": "prettier --write 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts'",
-    "format:check": "prettier --check 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts'"
+    "format": "prettier --write 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx'",
+    "format:check": "prettier --check 'server/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx'"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

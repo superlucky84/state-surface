@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The codebase is split by runtime responsibility. `server/` holds the Express runtime, SSR pipeline, and transition handling. `client/` contains the browser runtime and template registry, with the main entry at `client/main.ts` and supporting code in `client/runtime/` and `client/templates/`. `shared/` provides protocol types, NDJSON utilities, and template checks used by both server and client. `demo/` is a reference app plus integration flows and tests. Architecture and contracts are documented in `DESIGN.md`, `PROTOCOL.md`, `IMPLEMENT.md`, and `BOOTSTRAP.md`.
+The codebase is split by runtime responsibility. `server/` holds the Express runtime and SSR pipeline. `client/` contains the browser runtime, with the main entry at `client/main.ts` and supporting code in `client/runtime/`. `routes/` organizes page-specific templates and transitions (plus `_shared/` for shared templates). `shared/` provides protocol types, NDJSON utilities, and template checks used by both server and client. `demo/` is a reference app plus integration flows and tests. Architecture and contracts are documented in `DESIGN.md`, `PROTOCOL.md`, `IMPLEMENT.md`, and `BOOTSTRAP.md`.
 
 ## Build, Test, and Development Commands
 Use Node.js (latest stable) with `pnpm@10.13.1`. Key commands:

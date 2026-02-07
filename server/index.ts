@@ -4,8 +4,7 @@ import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
 import { fillHState, buildStateScript } from './ssr.js';
 import { createSSRRenderer } from './ssrRenderer.js';
-import { registerDemoTransitions } from '../demo/transitions.js';
-import { registerDemoTemplates } from '../demo/templates.js';
+import { bootstrapServer } from './bootstrap.js';
 import { demoLayout } from '../demo/layout.js';
 
 const app = express();
@@ -13,9 +12,8 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Register demo transitions and templates
-registerDemoTransitions();
-registerDemoTemplates();
+// Auto-register transitions and templates
+await bootstrapServer();
 
 // POST /transition/:name — NDJSON streaming endpoint
 app.post('/transition/:name', async (req, res) => {

@@ -1,8 +1,8 @@
 /**
- * Application template registration.
+ * Template registry re-export for convenience.
  *
- * Import this module at startup to register all templates.
- * Templates are Lithent mount() components that receive state data as props.
+ * Templates are auto-registered by `client/templates/auto.ts` from `routes/**/templates`.
+ * Templates are Lithent components that receive state data as props.
  *
  * Example:
  *   import { mount } from 'lithent';

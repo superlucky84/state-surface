@@ -1,0 +1,125 @@
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { registerTemplate } from '../shared/templateRegistry.js';
+import type { TemplateModule } from '../shared/templateRegistry.js';
+import { registerTransition } from './transition.js';
+import type { TransitionModule } from './transition.js';
+
+type BootstrapOptions = {
+  routesDir?: string;
+  transitionsDir?: string;
+  templatesDir?: string;
+};
+
+const MODULE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs']);
+
+export async function bootstrapServer(options: BootstrapOptions = {}) {
+  const serverDir = fileURLToPath(new URL('.', import.meta.url));
+  const rootDir = fileURLToPath(new URL('..', import.meta.url));
+  const routesDir = options.routesDir ?? path.join(rootDir, 'routes');
+  const transitionsDir = options.transitionsDir ?? routesDir;
+  const templatesDir = options.templatesDir ?? routesDir;
+
+  await registerTransitionsFromDir(transitionsDir);
+  await registerTemplatesFromDir(templatesDir);
+}
+
+async function registerTransitionsFromDir(dir: string) {
+  const modules = await loadModules(
+    dir,
+    '/routes/**/transitions/**/*.{ts,js,mjs}',
+    file => isModuleFile(file) && hasSegment(file, 'transitions')
+  );
+  for (const mod of modules) {
+    const transition = extractTransition(mod);
+    registerTransition(transition.name, transition.handler);
+  }
+}
+
+async function registerTemplatesFromDir(dir: string) {
+  const modules = await loadModules(
+    dir,
+    '/routes/**/templates/**/*.tsx',
+    file => isModuleFile(file) && file.endsWith('.tsx') && hasSegment(file, 'templates')
+  );
+  for (const mod of modules) {
+    const template = extractTemplate(mod);
+    registerTemplate(template.name, template.template);
+  }
+}
+
+function extractTransition(mod: any): TransitionModule {
+  const candidate = mod?.default ?? mod?.transition;
+  if (candidate?.name && candidate?.handler) return candidate as TransitionModule;
+  if (mod?.name && mod?.handler) return { name: mod.name, handler: mod.handler };
+  throw new Error('Transition module must export { name, handler } as default or named export');
+}
+
+function extractTemplate(mod: any): TemplateModule {
+  const candidate = mod?.default ?? mod?.template;
+  if (candidate?.name && candidate?.template) return candidate as TemplateModule;
+  if (mod?.name && mod?.template) return { name: mod.name, template: mod.template };
+  throw new Error('Template module must export { name, template } as default or named export');
+}
+
+async function loadModules(
+  dir: string,
+  globPattern: string,
+  filter: (file: string) => boolean
+): Promise<any[]> {
+  const globbed = loadModulesFromGlob(globPattern, filter);
+  if (globbed) return globbed;
+
+  const files = await listFiles(dir);
+  const modules = [];
+  for (const file of files.filter(filter).sort()) {
+    const url = pathToFileURL(file).href;
+    modules.push(await import(url));
+  }
+  return modules;
+}
+
+function loadModulesFromGlob(
+  pattern: string,
+  filter: (file: string) => boolean
+): any[] | null {
+  try {
+    const entries = Object.entries(import.meta.glob(pattern, { eager: true }));
+    return entries.filter(([file]) => filter(file)).map(([, mod]) => mod);
+  } catch {
+    return null;
+  }
+}
+
+async function listFiles(dir: string): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFiles(full)));
+    } else if (entry.isFile()) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+function isModuleFile(file: string): boolean {
+  if (file.endsWith('.d.ts')) return false;
+  if (file.includes('.test.')) return false;
+  const ext = path.extname(file);
+  return MODULE_EXTS.has(ext);
+}
+
+function hasSegment(file: string, segment: string): boolean {
+  return file.split(/[/\\]/).includes(segment);
+}

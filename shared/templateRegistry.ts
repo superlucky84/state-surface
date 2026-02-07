@@ -1,5 +1,16 @@
 import type { TagFunction } from 'lithent';
 
+// ── Template Modules ──
+
+export type TemplateModule = {
+  name: string;
+  template: TagFunction;
+};
+
+export function defineTemplate(name: string, template: TagFunction): TemplateModule {
+  return { name, template };
+}
+
 // ── Template Registry ──
 
 const registry = new Map<string, TagFunction>();
