@@ -83,4 +83,62 @@ describe('createNdjsonParser (streaming)', () => {
     expect(received).toHaveLength(1);
     expect(received[0].type).toBe('done');
   });
+
+  it('handles empty chunks', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+
+    parser.push('');
+    parser.push('');
+    parser.push('{"type":"done"}\n');
+    expect(received).toHaveLength(1);
+  });
+
+  it('handles chunk split mid-JSON key', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+
+    parser.push('{"ty');
+    parser.push('pe":"st');
+    parser.push('ate","sta');
+    parser.push('tes":{"a":{"v":1}}}\n');
+    expect(received).toHaveLength(1);
+    expect((received[0] as any).states.a.v).toBe(1);
+  });
+
+  it('handles multiple newlines between frames', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+
+    parser.push('{"type":"done"}\n\n\n{"type":"done"}\n');
+    expect(received).toHaveLength(2);
+  });
+
+  it('handles chunk ending exactly at newline', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+
+    parser.push('{"type":"state","states":{"x":1}}\n');
+    parser.push('{"type":"done"}\n');
+    expect(received).toHaveLength(2);
+  });
+
+  it('handles Unicode in values across chunk boundary', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+
+    const fullJson = '{"type":"state","states":{"a":{"text":"한글테스트"}}}\n';
+    const mid = Math.floor(fullJson.length / 2);
+    parser.push(fullJson.slice(0, mid));
+    parser.push(fullJson.slice(mid));
+    expect(received).toHaveLength(1);
+    expect((received[0] as any).states.a.text).toBe('한글테스트');
+  });
+
+  it('flush on empty buffer is safe', () => {
+    const received: StateFrame[] = [];
+    const parser = createNdjsonParser(frame => received.push(frame));
+    parser.flush();
+    expect(received).toHaveLength(0);
+  });
 });

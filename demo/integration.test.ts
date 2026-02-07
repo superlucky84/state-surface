@@ -1,0 +1,122 @@
+/**
+ * @vitest-environment happy-dom
+ *
+ * Integration tests: server NDJSON stream → client StateSurface apply path.
+ * Uses supertest for server and StateSurface with mock callbacks for client.
+ */
+import { describe, it, expect, beforeEach } from 'vitest';
+import request from 'supertest';
+import { app } from '../server/index.js';
+import { decodeFrames } from '../shared/ndjson.js';
+import { StateSurface } from '../client/runtime/stateSurface.js';
+import type { TraceEvent, StateSurfaceOptions } from '../client/runtime/stateSurface.js';
+import type { StateFrame } from '../shared/protocol.js';
+
+type RenderCall = { name: string; data: any };
+
+function createTestSurface() {
+  const rendered: RenderCall[] = [];
+  const updated: RenderCall[] = [];
+  const unmounted: string[] = [];
+  const traces: TraceEvent[] = [];
+
+  const opts: StateSurfaceOptions = {
+    renderTemplate: (name, data, _el) => rendered.push({ name, data }),
+    hydrateTemplate: (_name, _data, _el) => () => {},
+    updateTemplate: (name, data, _el) => updated.push({ name, data }),
+    unmountTemplate: (name, _el) => unmounted.push(name),
+    trace: event => traces.push(event),
+    frameBudgetMs: 1000,
+  };
+  const surface = new StateSurface(opts);
+  return { surface, rendered, updated, unmounted, traces };
+}
+
+function setupAnchors(names: string[]) {
+  document.body.innerHTML = names
+    .map(name => `<h-state name="${name}"></h-state>`)
+    .join('');
+}
+
+/**
+ * Feed server NDJSON response through StateSurface's frame pipeline.
+ */
+function feedFramesToSurface(surface: StateSurface, frames: StateFrame[]) {
+  for (const frame of frames) {
+    if (frame.type === 'state') {
+      (surface as any).frameQueue.push(frame);
+    } else if (frame.type === 'done') {
+      (surface as any).flushAll();
+    } else if (frame.type === 'error') {
+      (surface as any).handleError(frame);
+    }
+  }
+  (surface as any).flushQueue(true);
+}
+
+describe('server stream → client apply (article-load)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('full pipeline: server frames produce correct client state', async () => {
+    // 1. Get frames from server
+    const res = await request(app)
+      .post('/transition/article-load')
+      .send({ articleId: 1 });
+
+    const frames = decodeFrames(res.text);
+
+    // 2. Set up client
+    setupAnchors(['page:header', 'page:content', 'panel:comments', 'system:error']);
+    const { surface, rendered, updated } = createTestSurface();
+    surface.discoverAnchors();
+
+    // 3. Feed server frames to client
+    feedFramesToSurface(surface, frames);
+
+    // 4. Verify final state
+    expect(surface.activeStates['page:header']).toEqual({ title: 'Blog', nav: 'article' });
+    expect(surface.activeStates['page:content'].title).toBe('Article #1');
+    expect(surface.activeStates['page:content'].loading).toBe(false);
+    expect(surface.activeStates['panel:comments'].comments).toHaveLength(2);
+
+    // header rendered once, content rendered once then updated once, comments rendered once
+    expect(rendered.filter(r => r.name === 'page:header')).toHaveLength(1);
+    expect(rendered.filter(r => r.name === 'page:content')).toHaveLength(1);
+    expect(updated.filter(u => u.name === 'page:content')).toHaveLength(1);
+    expect(rendered.filter(r => r.name === 'panel:comments')).toHaveLength(1);
+  });
+});
+
+describe('server stream → client apply (search)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('full pipeline: search frames produce correct client state', async () => {
+    const res = await request(app)
+      .post('/transition/search')
+      .send({ query: 'test' });
+
+    const frames = decodeFrames(res.text);
+
+    setupAnchors(['page:header', 'search:input', 'search:results', 'system:error']);
+    const { surface, rendered, updated } = createTestSurface();
+    surface.discoverAnchors();
+
+    feedFramesToSurface(surface, frames);
+
+    expect(surface.activeStates['search:input'].query).toBe('test');
+    expect(surface.activeStates['search:results'].loading).toBe(false);
+    expect(surface.activeStates['search:results'].items).toHaveLength(3);
+
+    // results rendered once then updated once
+    expect(rendered.filter(r => r.name === 'search:results')).toHaveLength(1);
+    expect(updated.filter(u => u.name === 'search:results')).toHaveLength(1);
+
+    // header and input not updated (only partial changed search:results)
+    expect(updated.filter(u => u.name === 'page:header')).toHaveLength(0);
+    expect(updated.filter(u => u.name === 'search:input')).toHaveLength(0);
+  });
+});

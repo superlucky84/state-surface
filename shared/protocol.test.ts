@@ -124,6 +124,45 @@ describe('validateStateFrame', () => {
   it('rejects state frame with non-object states', () => {
     expect(validateStateFrame({ type: 'state', states: 'bad' }).valid).toBe(false);
   });
+
+  it('rejects state frame with array states', () => {
+    expect(validateStateFrame({ type: 'state', states: [1, 2] }).valid).toBe(false);
+  });
+
+  it('rejects partial with non-array changed', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: { a: {} },
+      changed: 'a' as any,
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects partial with non-array removed', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      removed: 'a' as any,
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts partial with empty changed but non-empty removed', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      changed: [],
+      removed: ['a'],
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts error frame without template', () => {
+    expect(validateStateFrame({ type: 'error', message: 'fail' })).toEqual({ valid: true });
+  });
 });
 
 describe('applyFrame', () => {
@@ -181,5 +220,41 @@ describe('applyFrame', () => {
       a: { x: 1 },
       'content:loaded': { article: 'hello' },
     });
+  });
+
+  it('full frame with empty states clears all active', () => {
+    const active = { a: { x: 1 }, b: { y: 2 } };
+    const frame: StateFrameState = { type: 'state', states: {} };
+    expect(applyFrame(active, frame)).toEqual({});
+  });
+
+  it('partial frame preserves untouched keys', () => {
+    const active = { a: { x: 1 }, b: { y: 2 }, c: { z: 3 } };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: { b: { y: 20 } },
+      changed: ['b'],
+    };
+    const result = applyFrame(active, frame);
+    expect(result.a).toEqual({ x: 1 });
+    expect(result.b).toEqual({ y: 20 });
+    expect(result.c).toEqual({ z: 3 });
+  });
+
+  it('precedence: removed applied after merge does not resurrect key', () => {
+    // Even if states has a key that's also in removed,
+    // removed wins because delete happens after merge
+    const active = { a: { x: 1 }, b: { y: 2 } };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: { a: { x: 999 } },
+      changed: ['a'],
+      removed: ['b'],
+    };
+    const result = applyFrame(active, frame);
+    expect(result).toEqual({ a: { x: 999 } });
+    expect(result).not.toHaveProperty('b');
   });
 });

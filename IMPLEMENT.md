@@ -137,18 +137,18 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 7: Tests/Verification
 
-- [ ] Unit tests: frame validator + precedence logic.
-- [ ] Unit tests: NDJSON parser (chunk split edge cases).
-- [ ] Integration tests: server stream -> client apply path.
-- [ ] Integration tests: hydration mismatch fallback path.
-- [ ] Regression tests: abort previous transition semantics.
+- [x] Unit tests: frame validator + precedence logic.
+- [x] Unit tests: NDJSON parser (chunk split edge cases).
+- [x] Integration tests: server stream -> client apply path.
+- [x] Integration tests: hydration mismatch fallback path.
+- [x] Regression tests: abort previous transition semantics.
 
 ## Definition of Done (v1 Prototype)
 
-- [ ] End-to-end demo works with real NDJSON streamed transitions.
-- [ ] Partial hydration/update works at `<h-state>` boundary.
-- [ ] Locked protocol rules are enforced by tests.
-- [ ] Debug trace + overlay available in dev mode.
+- [x] End-to-end demo works with real NDJSON streamed transitions.
+- [x] Partial hydration/update works at `<h-state>` boundary.
+- [x] Locked protocol rules are enforced by tests.
+- [x] Debug trace + overlay available in dev mode.
 - [ ] README includes run instructions and architecture summary.
 
 ## Open Questions (Keep Short)
