@@ -129,11 +129,11 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 6: Reference Flows (Must Demo)
 
-- [ ] Implement article loading flow (loading -> content -> comments).
-- [ ] Implement search flow with state combinations.
-- [ ] Verify unchanged `<h-state>` roots do not remount/flicker.
-- [ ] Verify first post-hydration user action updates only changed anchors.
-- [ ] Smoke check: both demo flows run end-to-end in one dev session.
+- [x] Implement article loading flow (loading -> content -> comments).
+- [x] Implement search flow with state combinations.
+- [x] Verify unchanged `<h-state>` roots do not remount/flicker.
+- [x] Verify first post-hydration user action updates only changed anchors.
+- [x] Smoke check: both demo flows run end-to-end in one dev session.
 
 ### Phase 7: Tests/Verification
 
