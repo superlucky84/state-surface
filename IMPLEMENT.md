@@ -182,6 +182,8 @@ Prefer **stateless components** by default. Use `mount`/`lmount` only for client
 - [ ] Add tests: `boot` auto-run (SSR hydrates then immediately transitions).
 - [ ] Add tests: multi-route SSR (each route renders correct layout + states).
 - [ ] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
+- [ ] Migrate `demo/layout.ts` into route-based layout (e.g., `routes/index.ts` or `layouts/base.ts`).
+- [ ] Relocate demo tests to route-oriented fixtures (or keep under `demo/` with updated scope).
 
 **Example (initial + boot)** — include in one route module:
 
