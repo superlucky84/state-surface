@@ -149,14 +149,18 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
 
 ### Phase 8: Multi-Page Routing
 
-- [ ] Define `RouteModule` type contract (`layout`, `transition`, `params`).
+- [ ] Define `RouteModule` type contract (`layout`, `transition`, `params`, `initial`, `boot`).
 - [ ] Implement file-based route scanner (`routes/` directory → URL patterns).
   - [ ] `index.ts` → directory root
   - [ ] `[param].ts` → dynamic segment (`:param`)
   - [ ] Nested directories → nested URL paths
-- [ ] Implement `getInitialStates` helper (run transition, collect first full frame).
+- [ ] Implement `getInitialStates` helper:
+  - [ ] If `initial` exists, use it.
+  - [ ] Else run transition and collect first **full** frame.
+  - [ ] If first frame is partial, return 500 with clear error.
 - [ ] Implement route-to-Express registration (auto `app.get()` per discovered route).
 - [ ] Implement per-route SSR pipeline (route module → layout → fillHState → respond).
+- [ ] Implement boot config injection and client auto-run (SSR → immediate transition).
 - [ ] Create shared base layout (`layouts/base.ts`) for layout composition.
 - [ ] Migrate existing demo to route files:
   - [ ] `routes/index.ts` → `/` (article demo page)
@@ -164,9 +168,26 @@ Use these as ground truth for Vite config, SSR render flow, and hydration wiring
   - [ ] `routes/search.ts` → `/search`
 - [ ] Verify client entry (`client/main.ts`) works unchanged across all routes.
 - [ ] Add tests: route scanner (filename → URL pattern conversion).
-- [ ] Add tests: `getInitialStates` (transition → first frame extraction).
+- [ ] Add tests: `getInitialStates` (initial override + transition fallback).
+- [ ] Add tests: SSR error when first frame is partial and `initial` missing.
+- [ ] Add tests: `boot` auto-run (SSR hydrates then immediately transitions).
 - [ ] Add tests: multi-route SSR (each route renders correct layout + states).
 - [ ] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
+
+**Example (initial + boot)** — include in one route module:
+
+```ts
+export default {
+  layout,
+  transition: 'article-load',
+  params: req => ({ articleId: Number(req.params.id) }),
+  initial: req => ({
+    'page:header': { title: 'Blog', nav: 'article' },
+    'page:content': { loading: false, articleId: Number(req.params.id) },
+  }),
+  boot: { auto: true, params: req => ({ articleId: Number(req.params.id) }) },
+};
+```
 
 ### Phase 9: Routing Tests/Polish
 

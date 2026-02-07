@@ -192,12 +192,26 @@ export default {
   // Receives stateScript (__STATE__ tag) to embed
   layout(stateScript: string): string { ... },
 
-  // Name of the transition to run for initial SSR state
+  // Name of the transition to stream on user actions
   transition: 'article-load',
 
   // Extract transition params from Express request
   params(req: Request): Record<string, unknown> {
     return { articleId: Number(req.params.id) };
+  },
+
+  // Optional: SSR base state (used before any transition)
+  initial(req: Request) {
+    return {
+      'page:header': { title: 'Blog', nav: 'article' },
+      'page:content': { loading: false, articleId: Number(req.params.id) },
+    };
+  },
+
+  // Optional: auto-run transition after hydration (SSR → immediate streaming)
+  boot: {
+    auto: true,
+    params: (req: Request) => ({ articleId: Number(req.params.id) }),
   },
 } satisfies RouteModule;
 ```
@@ -205,41 +219,46 @@ export default {
 **Required fields:**
 
 * `layout` — Function returning full HTML document (with `<h-state>` anchors and `stateScript` embedded)
-* `transition` — Name of a registered transition
 
 **Optional fields:**
 
+* `transition` — Name of a registered transition (required if the route uses streaming actions)
 * `params` — Extracts transition params from request (defaults to `{}`)
+* `initial` — Returns SSR base state (if omitted, SSR falls back to transition’s first full frame)
+* `boot` — Auto-run transition on the client after hydration (`auto: true`)
 
 ---
 
-### 2.5 SSR via Transition Reuse
+### 2.5 SSR Initial State Resolution
 
-The same transition that streams to the client also produces SSR initial state.
-On route entry, the server:
+SSR chooses the initial state in the following order:
 
-1. Resolves the route module
-2. Runs the transition's async generator
-3. Collects the **first full frame** (`type: 'state'`, `full !== false`)
-4. Uses those states to fill `<h-state>` anchors via `fillHState`
-5. Embeds `__STATE__` script
-6. Responds with complete HTML
+1. If `route.initial` exists, use it.
+2. Otherwise, if `route.transition` exists, run the transition and collect the **first full frame**
+   (`type: 'state'`, `full !== false`).
+3. If neither exists, render with empty anchors and no `__STATE__` bootstrap.
+
+If `initial` is missing and the transition’s first frame is **not** full, SSR responds with an error.
+Partial frames require a baseline state and are invalid for SSR bootstrapping.
 
 ```ts
-async function getInitialStates(
-  transitionName: string,
-  params: Record<string, unknown>
-): Promise<Record<string, any>> {
-  const handler = getTransition(transitionName);
+async function getInitialStates(route: RouteModule, req: Request) {
+  if (route.initial) return await route.initial(req);
+
+  if (!route.transition) return {};
+  const params = route.params?.(req) ?? {};
+  const handler = getTransition(route.transition);
   const gen = handler(params);
   const { value } = await gen.next();
 
-  if (value?.type === 'state') return value.states;
-  return {};
+  if (value?.type === 'state' && value.full !== false) return value.states;
+  throw new Error('SSR requires a full first frame when initial is missing');
 }
 ```
 
-This eliminates duplication: **one transition serves both SSR and client streaming**.
+**Default behavior remains transition reuse**, but `initial` allows explicit SSR control.
+If `boot.auto` is enabled, the server embeds boot config and the client
+auto-calls the route transition immediately after hydration.
 
 ---
 
@@ -263,7 +282,7 @@ export function baseLayout(bodyContent: string, stateScript: string): string {
 </html>`;
 }
 
-// routes/article/[id].ts — per-route layout
+// routes/article/[id].ts — per-route layout + initial + boot
 import { baseLayout } from '../../layouts/base.js';
 
 export default {
@@ -273,6 +292,11 @@ export default {
   `, stateScript),
   transition: 'article-load',
   params: req => ({ articleId: Number(req.params.id) }),
+  initial: req => ({
+    'page:header': { title: 'Blog', nav: 'article' },
+    'page:content': { loading: false, articleId: Number(req.params.id) },
+  }),
+  boot: { auto: true, params: req => ({ articleId: Number(req.params.id) }) },
 };
 ```
 
