@@ -99,6 +99,9 @@ Design intent:
 * Inspired by **HTML_Template_Sigma**-style block replacement
 * **If/logic minimized** in templates; state drives composition
 * `<h-state>` anchors map **state → template → data**
+* Rendering is intentionally split:
+  * **Surface (HTML string)** declares page shell + `<h-state>` anchors
+  * **Projection (TSX template)** renders inside each anchor
 
 * The **server owns state**
 * The **client owns DOM projection**
@@ -114,7 +117,24 @@ Design intent:
 
 ---
 
-### 1.2 What This Is Not
+### 1.2 Intentional Asymmetry: Surface vs Projection
+
+StateSurface intentionally does **not** unify everything into JSX.
+
+* `surface.ts` (or `layouts/*.ts`) returns plain HTML strings.
+* `routes/**/templates/*.tsx` contains projection components.
+* `<h-state>` anchors are explicit in the surface, so SSR/CSR boundaries stay visible.
+* TSX is used only for anchor-local rendering, not full-page shell authoring.
+
+This asymmetry is a design choice, not an inconsistency:
+
+* It preserves the "server state -> DOM surface" mental model.
+* It avoids collapsing into page-component architecture (SPA/SSR framework style).
+* It keeps route shell composition simple and string-first for SSR.
+
+---
+
+### 1.3 What This Is Not
 
 ❌ SPA framework
 ❌ Component system
@@ -212,8 +232,8 @@ Each route file exports a **RouteModule** object:
 import type { RouteModule } from 'state-surface/server';
 
 export default {
-  // Layout function: returns full HTML document string
-  // Receives stateScript (__STATE__ tag) to embed
+  // Surface function (RouteModule field name remains `layout`)
+  // Returns full HTML document string and embeds stateScript
   layout(stateScript: string): string { ... },
 
   // Name of the transition to stream on user actions
@@ -242,7 +262,9 @@ export default {
 
 **Required fields:**
 
-* `layout` — Function returning full HTML document (with `<h-state>` anchors and `stateScript` embedded)
+* `layout` — Surface function returning full HTML document string
+  (with `<h-state>` anchors and embedded `stateScript`).
+  Recommended implementation: compose shared string helpers from `surface.ts`.
 
 **Optional fields:**
 
@@ -286,19 +308,25 @@ auto-calls the route transition immediately after hydration.
 
 ---
 
-### 2.6 Layout Composition
-
-Routes compose layouts from shared layout functions:
+### 2.6 Surface Composition
 
 ```ts
-// layouts/base.ts — shared HTML shell
-export function baseLayout(bodyContent: string, stateScript: string): string {
+// layouts/surface.ts — shared string helpers
+export function stateSlots(...names: string[]): string {
+  return names.map((name) => `<h-state name="${name}"></h-state>`).join('\n');
+}
+
+export function joinSurface(...blocks: Array<string | undefined>): string {
+  return blocks.filter(Boolean).join('\n');
+}
+
+export function baseSurface(body: string, stateScript: string): string {
   return `<!DOCTYPE html>
 <html>
 <head><title>StateSurface</title></head>
 <body>
   <h-state name="page:header"></h-state>
-  ${bodyContent}
+  ${body}
   <h-state name="system:error"></h-state>
   ${stateScript}
   <script type="module" src="/client/main.ts"></script>
@@ -306,14 +334,18 @@ export function baseLayout(bodyContent: string, stateScript: string): string {
 </html>`;
 }
 
-// routes/article/[id].ts — per-route layout + initial + boot
-import { baseLayout } from '../../layouts/base.js';
+// routes/article/[id].ts — route-level surface + initial + boot
+import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
+
+const articleBodySurface = () =>
+  joinSurface(
+    '<main class="page">',
+    stateSlots('page:content', 'panel:comments'),
+    '</main>'
+  );
 
 export default {
-  layout: (stateScript) => baseLayout(`
-    <h-state name="page:content"></h-state>
-    <h-state name="panel:comments"></h-state>
-  `, stateScript),
+  layout: (stateScript) => baseSurface(articleBodySurface(), stateScript),
   transition: 'article-load',
   params: req => ({ articleId: Number(req.params.id) }),
   initial: req => ({
@@ -746,30 +778,31 @@ This keeps:
 
 ---
 
-### 6.5 Example: Layout + Templates (SSR → Hydration)
+### 6.5 Example: Surface + Templates (SSR → Hydration)
 
-Page layout **declares `<h-state>` anchors only**:
+Page surface **declares `<h-state>` anchors only** (string HTML):
 
-```tsx
-export default function Layout() {
-  return (
-    <html>
-      <body>
-        <header class="site-header">StateSurface</header>
+```ts
+export function articleSurface(stateScript: string): string {
+  return `<!DOCTYPE html>
+<html>
+<body>
+  <header class="site-header">StateSurface</header>
 
-        <main class="page">
-          <h-state name="page:article:view"></h-state>
-          <h-state name="panel:comments:open"></h-state>
-        </main>
+  <main class="page">
+    <h-state name="page:article:view"></h-state>
+    <h-state name="panel:comments:open"></h-state>
+  </main>
 
-        <footer class="site-footer">©2026</footer>
-      </body>
-    </html>
-  )
+  <footer class="site-footer">©2026</footer>
+  ${stateScript}
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>`;
 }
 ```
 
-Template modules render **inside** each `<h-state>`:
+Projection templates render **inside** each `<h-state>`:
 
 ```tsx
 export function ArticleView({ article }) {
@@ -931,11 +964,13 @@ Templates are **prebundled** into the client build.
 * SSR uses the same registry (Vite SSR in dev, built modules in prod)
 * Lazy loading is **out of scope for v1**
 * Templates are authored as **TSX components** (Lithent JSX runtime) and compiled by Vite
+* Surface composition remains **plain TypeScript string builders** (`surface.ts`, `layouts/*.ts`)
 
 ---
 
-### 6.8.1 Template Authoring (Stateless by Default)
+### 6.8.1 Template Authoring (Projection, Stateless by Default)
 
+Templates are projection modules. Keep full-page shell in surface files (`*.ts`, string-based).
 Templates should be **pure, stateless components** by default. StateSurface owns state on the server;
 templates only project data into DOM. Avoid local state unless it is strictly **client-only UI state**
 (focus, caret position, scroll, measurements).

@@ -7,6 +7,7 @@ import { registerTransition } from './transition.js';
 import type { TransitionModule } from './transition.js';
 
 type BootstrapOptions = {
+  rootDir?: string;
   routesDir?: string;
   transitionsDir?: string;
   templatesDir?: string;
@@ -15,8 +16,7 @@ type BootstrapOptions = {
 const MODULE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs']);
 
 export async function bootstrapServer(options: BootstrapOptions = {}) {
-  const serverDir = fileURLToPath(new URL('.', import.meta.url));
-  const rootDir = fileURLToPath(new URL('..', import.meta.url));
+  const rootDir = options.rootDir ?? resolveRootDir();
   const routesDir = options.routesDir ?? path.join(rootDir, 'routes');
   const transitionsDir = options.transitionsDir ?? routesDir;
   const templatesDir = options.templatesDir ?? routesDir;
@@ -25,10 +25,18 @@ export async function bootstrapServer(options: BootstrapOptions = {}) {
   await registerTemplatesFromDir(templatesDir);
 }
 
+function resolveRootDir(): string {
+  try {
+    return fileURLToPath(new URL('..', import.meta.url));
+  } catch {
+    return process.cwd();
+  }
+}
+
 async function registerTransitionsFromDir(dir: string) {
   const modules = await loadModules(
     dir,
-    '/routes/**/transitions/**/*.{ts,js,mjs}',
+    'transitions',
     file => isModuleFile(file) && hasSegment(file, 'transitions')
   );
   for (const mod of modules) {
@@ -40,7 +48,7 @@ async function registerTransitionsFromDir(dir: string) {
 async function registerTemplatesFromDir(dir: string) {
   const modules = await loadModules(
     dir,
-    '/routes/**/templates/**/*.tsx',
+    'templates',
     file => isModuleFile(file) && file.endsWith('.tsx') && hasSegment(file, 'templates')
   );
   for (const mod of modules) {
@@ -65,10 +73,10 @@ function extractTemplate(mod: any): TemplateModule {
 
 async function loadModules(
   dir: string,
-  globPattern: string,
+  kind: 'transitions' | 'templates',
   filter: (file: string) => boolean
 ): Promise<any[]> {
-  const globbed = loadModulesFromGlob(globPattern, filter);
+  const globbed = loadModulesFromGlob(kind, filter);
   if (globbed) return globbed;
 
   const files = await listFiles(dir);
@@ -81,11 +89,16 @@ async function loadModules(
 }
 
 function loadModulesFromGlob(
-  pattern: string,
+  kind: 'transitions' | 'templates',
   filter: (file: string) => boolean
 ): any[] | null {
   try {
-    const entries = Object.entries(import.meta.glob(pattern, { eager: true }));
+    const entries =
+      kind === 'transitions'
+        ? Object.entries(
+            import.meta.glob('/routes/**/transitions/**/*.{ts,js,mjs}', { eager: true })
+          )
+        : Object.entries(import.meta.glob('/routes/**/templates/**/*.tsx', { eager: true }));
     return entries.filter(([file]) => filter(file)).map(([, mod]) => mod);
   } catch {
     return null;

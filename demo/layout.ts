@@ -1,16 +1,28 @@
+import { joinSurface, stateSlot, surfaceDocument } from './surface.js';
+
 /**
  * Demo HTML layout with <h-state> anchors.
  * Used for both SSR rendering and as the shell template.
  */
 export function demoLayout(body: string, stateScript: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StateSurface Demo</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+  const anchors = joinSurface(
+    stateSlot('page:header'),
+    stateSlot('page:content'),
+    stateSlot('panel:comments'),
+    stateSlot('search:input'),
+    stateSlot('search:results'),
+    stateSlot('system:error')
+  );
+
+  const controls = `<div class="demo-controls">
+  <h3>Demo Controls</h3>
+  <button data-action="article-load" data-params='{"articleId":1}'>Load Article #1</button>
+  <button data-action="article-load" data-params='{"articleId":2}'>Load Article #2</button>
+  <button data-action="search" data-params='{"query":"lithent"}'>Search "lithent"</button>
+  <button data-action="search" data-params='{"query":"state"}'>Search "state"</button>
+</div>`;
+
+  const styles = `    * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
     .site-header { border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 20px; }
     .site-header h1 { font-size: 1.5rem; }
@@ -31,29 +43,14 @@ export function demoLayout(body: string, stateScript: string): string {
     .error-panel { background: #fee; border: 1px solid #c00; padding: 12px; color: #900; margin: 12px 0; }
     h-state { display: block; }
     .demo-controls { margin-top: 32px; padding-top: 16px; border-top: 2px solid #333; }
-    .demo-controls button { margin-right: 8px; padding: 8px 16px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <h-state name="page:header"></h-state>
-  <h-state name="page:content"></h-state>
-  <h-state name="panel:comments"></h-state>
-  <h-state name="search:input"></h-state>
-  <h-state name="search:results"></h-state>
-  <h-state name="system:error"></h-state>
+    .demo-controls button { margin-right: 8px; padding: 8px 16px; cursor: pointer; }`;
 
-  <div class="demo-controls">
-    <h3>Demo Controls</h3>
-    <button data-action="article-load" data-params='{"articleId":1}'>Load Article #1</button>
-    <button data-action="article-load" data-params='{"articleId":2}'>Load Article #2</button>
-    <button data-action="search" data-params='{"query":"lithent"}'>Search "lithent"</button>
-    <button data-action="search" data-params='{"query":"state"}'>Search "state"</button>
-  </div>
-
-  ${stateScript}
-  <script type="module" src="/client/main.ts"></script>
-</body>
-</html>`;
+  return surfaceDocument({
+    title: 'StateSurface Demo',
+    styles,
+    body: joinSurface(anchors, body, controls),
+    stateScript,
+  });
 }
 
 /**

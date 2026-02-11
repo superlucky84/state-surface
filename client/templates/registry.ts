@@ -1,7 +1,7 @@
 /**
  * Template registry re-export for convenience.
  *
- * Templates are auto-registered by `client/templates/auto.ts` from `routes/**/templates`.
+ * Templates are auto-registered by `client/templates/auto.ts` from route-level templates dirs.
  * Templates are Lithent components that receive state data as props.
  *
  * Example:

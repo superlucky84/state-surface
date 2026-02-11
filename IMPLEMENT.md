@@ -25,6 +25,9 @@ If context is lost, read in order:
 - Error template key convention is `system:error` (recommended anchor).
 - Routing is file-based (`routes/` directory) with `[param]` dynamic segments.
 - Each route exports: `layout` + `transition` + optional `params`.
+- Surface/projection split is intentional:
+  - `layout` returns a **string surface** (`surface.ts`/`layouts/*.ts`)
+  - templates are **TSX projections** (`routes/**/templates/*.tsx`)
 - SSR reuses transitions (first full frame = initial states).
 - Client entry is route-agnostic (discovers + hydrates whatever is in DOM).
 
@@ -133,6 +136,19 @@ Templates should be authored as **TSX components** (Lithent JSX runtime) and com
 Keep templates in `routes/**/templates/*.tsx` and register them in the static registry.
 Prefer **stateless components** by default. Use `mount`/`lmount` only for client-only UI state.
 
+### Surface Authoring (String Composition)
+
+Route shell files should stay **string-based** and composable.
+Prefer shared helpers in `surface.ts` / `layouts/*.ts`:
+
+- `stateSlots(...)` for `<h-state>` anchor blocks
+- `joinSurface(...)` for reusable string fragments
+- `baseSurface(...)` for shared document shell
+
+Keep the boundary strict:
+- surface declares anchors and static shell
+- templates render only inside anchors
+
 ### Phase 5: Observability/Dev Experience
 
 - [x] Add single trace hook API (`stateSurface.trace(event)`).
@@ -170,7 +186,8 @@ Prefer **stateless components** by default. Use `mount`/`lmount` only for client
 - [ ] Implement route-to-Express registration (auto `app.get()` per discovered route).
 - [ ] Implement per-route SSR pipeline (route module → layout → fillHState → respond).
 - [ ] Implement boot config injection and client auto-run (SSR → immediate transition).
-- [ ] Create shared base layout (`layouts/base.ts`) for layout composition.
+- [ ] Create shared surface helpers (`layouts/surface.ts`) for string composition.
+- [ ] Enforce surface/projection boundary (surface anchors only, TSX inside anchors only).
 - [ ] Migrate existing demo to route files:
   - [ ] `routes/index.ts` → `/` (article demo page)
   - [ ] `routes/article/[id].ts` → `/article/:id`
@@ -182,7 +199,7 @@ Prefer **stateless components** by default. Use `mount`/`lmount` only for client
 - [ ] Add tests: `boot` auto-run (SSR hydrates then immediately transitions).
 - [ ] Add tests: multi-route SSR (each route renders correct layout + states).
 - [ ] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
-- [ ] Migrate `demo/layout.ts` into route-based layout (e.g., `routes/index.ts` or `layouts/base.ts`).
+- [ ] Migrate `demo/layout.ts` to shared `surface.ts` helpers and then route-based surfaces.
 - [ ] Relocate demo tests to route-oriented fixtures (or keep under `demo/` with updated scope).
 
 **Example (initial + boot)** — include in one route module:
@@ -226,3 +243,4 @@ export default {
 
 - 2026-02-04: Initial IMPLEMENT.md created from finalized DESIGN.md decisions.
 - 2026-02-06: Phase 8-9 (multi-page routing) added to plan.
+- 2026-02-11: Locked surface/projection asymmetry and added surface composition tasks.
