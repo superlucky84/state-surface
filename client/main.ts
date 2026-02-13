@@ -16,6 +16,16 @@ const surface = new StateSurface({
 surface.discoverAnchors();
 surface.bootstrap();
 
+// Auto-run transition if boot config is present
+const bootEl = document.getElementById('__BOOT__');
+if (bootEl?.textContent) {
+  const bootConfig = JSON.parse(bootEl.textContent) as {
+    transition: string;
+    params: Record<string, unknown>;
+  };
+  surface.transition(bootConfig.transition, bootConfig.params);
+}
+
 // Attach dev overlay (?debug=1)
 attachDevOverlay(surface);
 

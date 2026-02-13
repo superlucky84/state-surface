@@ -54,6 +54,16 @@ export function buildStateScript(states: Record<string, any>): string {
   return `<script id="__STATE__" type="application/json">${safeStateJSON(states)}</script>`;
 }
 
+/**
+ * Build the __BOOT__ script tag for auto-run transition after hydration.
+ */
+export function buildBootScript(boot: {
+  transition: string;
+  params: Record<string, unknown>;
+}): string {
+  return `<script id="__BOOT__" type="application/json">${safeStateJSON(boot)}</script>`;
+}
+
 // ── SSR Hash ──
 
 /**

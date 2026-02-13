@@ -1,10 +1,10 @@
-import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerTemplate } from '../shared/templateRegistry.js';
 import type { TemplateModule } from '../shared/templateRegistry.js';
 import { registerTransition } from './transition.js';
 import type { TransitionModule } from './transition.js';
+import { listFiles, isModuleFile, hasSegment } from './fsUtils.js';
 
 type BootstrapOptions = {
   rootDir?: string;
@@ -12,8 +12,6 @@ type BootstrapOptions = {
   transitionsDir?: string;
   templatesDir?: string;
 };
-
-const MODULE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs']);
 
 export async function bootstrapServer(options: BootstrapOptions = {}) {
   const rootDir = options.rootDir ?? resolveRootDir();
@@ -105,34 +103,3 @@ function loadModulesFromGlob(
   }
 }
 
-async function listFiles(dir: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw err;
-  }
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listFiles(full)));
-    } else if (entry.isFile()) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-function isModuleFile(file: string): boolean {
-  if (file.endsWith('.d.ts')) return false;
-  if (file.includes('.test.')) return false;
-  const ext = path.extname(file);
-  return MODULE_EXTS.has(ext);
-}
-
-function hasSegment(file: string, segment: string): boolean {
-  return file.split(/[/\\]/).includes(segment);
-}

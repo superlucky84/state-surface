@@ -174,33 +174,33 @@ Keep the boundary strict:
 
 ### Phase 8: Multi-Page Routing
 
-- [ ] Define `RouteModule` type contract (`layout`, `transition`, `params`, `initial`, `boot`).
-- [ ] Implement file-based route scanner (`routes/` directory → URL patterns).
-  - [ ] `index.ts` → directory root
-  - [ ] `[param].ts` → dynamic segment (`:param`)
-  - [ ] Nested directories → nested URL paths
-- [ ] Implement `getInitialStates` helper:
-  - [ ] If `initial` exists, use it.
-  - [ ] Else run transition and collect first **full** frame.
-  - [ ] If first frame is partial, return 500 with clear error.
-- [ ] Implement route-to-Express registration (auto `app.get()` per discovered route).
-- [ ] Implement per-route SSR pipeline (route module → layout → fillHState → respond).
-- [ ] Implement boot config injection and client auto-run (SSR → immediate transition).
-- [ ] Create shared surface helpers (`layouts/surface.ts`) for string composition.
-- [ ] Enforce surface/projection boundary (surface anchors only, TSX inside anchors only).
-- [ ] Migrate existing demo to route files:
-  - [ ] `routes/index.ts` → `/` (article demo page)
-  - [ ] `routes/article/[id].ts` → `/article/:id`
-  - [ ] `routes/search.ts` → `/search`
-- [ ] Verify client entry (`client/main.ts`) works unchanged across all routes.
-- [ ] Add tests: route scanner (filename → URL pattern conversion).
-- [ ] Add tests: `getInitialStates` (initial override + transition fallback).
-- [ ] Add tests: SSR error when first frame is partial and `initial` missing.
-- [ ] Add tests: `boot` auto-run (SSR hydrates then immediately transitions).
-- [ ] Add tests: multi-route SSR (each route renders correct layout + states).
-- [ ] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
-- [ ] Migrate `demo/layout.ts` to shared `surface.ts` helpers and then route-based surfaces.
-- [ ] Relocate demo tests to route-oriented fixtures (or keep under `demo/` with updated scope).
+- [x] Define `RouteModule` type contract (`layout`, `transition`, `params`, `initial`, `boot`).
+- [x] Implement file-based route scanner (`routes/` directory → URL patterns).
+  - [x] `index.ts` → directory root
+  - [x] `[param].ts` → dynamic segment (`:param`)
+  - [x] Nested directories → nested URL paths
+- [x] Implement `getInitialStates` helper:
+  - [x] If `initial` exists, use it.
+  - [x] Else run transition and collect first **full** frame.
+  - [x] If first frame is partial, return 500 with clear error.
+- [x] Implement route-to-Express registration (auto `app.get()` per discovered route).
+- [x] Implement per-route SSR pipeline (route module → layout → fillHState → respond).
+- [x] Implement boot config injection and client auto-run (SSR → immediate transition).
+- [x] Create shared surface helpers (`layouts/surface.ts`) for string composition.
+- [x] Enforce surface/projection boundary (surface anchors only, TSX inside anchors only).
+- [x] Migrate existing demo to route files:
+  - [x] `routes/index.ts` → `/` (article demo page)
+  - [x] `routes/article/[id].ts` → `/article/:id`
+  - [x] `routes/search.ts` → `/search`
+- [x] Verify client entry (`client/main.ts`) works unchanged across all routes.
+- [x] Add tests: route scanner (filename → URL pattern conversion).
+- [x] Add tests: `getInitialStates` (initial override + transition fallback).
+- [x] Add tests: SSR error when first frame is partial and `initial` missing.
+- [x] Add tests: `boot` auto-run (SSR hydrates then immediately transitions).
+- [x] Add tests: multi-route SSR (each route renders correct layout + states).
+- [x] Smoke check: navigate between routes via `<a>` links, each page SSR-renders correctly.
+- [x] Migrate `demo/layout.ts` to shared `surface.ts` helpers and then route-based surfaces.
+- [x] Relocate demo tests to route-oriented fixtures (or keep under `demo/` with updated scope).
 
 **Example (initial + boot)** — include in one route module:
 
@@ -219,12 +219,12 @@ export default {
 
 ### Phase 9: Routing Tests/Polish
 
-- [ ] Edge case: route with no initial transition (static page, no `__STATE__`).
-- [ ] Edge case: dynamic param validation (non-numeric `[id]` etc.).
-- [ ] Edge case: 404 handling (no matching route file).
-- [ ] Verify Vite dev middleware serves client assets on all routes.
-- [ ] Update demo with cross-route navigation links.
-- [ ] Smoke check: full demo with 3+ routes works end-to-end.
+- [x] Edge case: route with no initial transition (static page, no `__STATE__`).
+- [x] Edge case: dynamic param validation (non-numeric `[id]` etc.).
+- [x] Edge case: 404 handling (no matching route file).
+- [x] Verify Vite dev middleware serves client assets on all routes.
+- [x] Update demo with cross-route navigation links.
+- [x] Smoke check: full demo with 3+ routes works end-to-end.
 
 ## Definition of Done (v1 Prototype)
 
@@ -232,7 +232,7 @@ export default {
 - [x] Partial hydration/update works at `<h-state>` boundary.
 - [x] Locked protocol rules are enforced by tests.
 - [x] Debug trace + overlay available in dev mode.
-- [ ] Multi-page routing works with file-based route discovery.
+- [x] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
 
 ## Open Questions (Keep Short)
@@ -244,3 +244,5 @@ export default {
 - 2026-02-04: Initial IMPLEMENT.md created from finalized DESIGN.md decisions.
 - 2026-02-06: Phase 8-9 (multi-page routing) added to plan.
 - 2026-02-11: Locked surface/projection asymmetry and added surface composition tasks.
+- 2026-02-14: Phase 8 complete — file-based route discovery, per-route SSR, boot config, demo migration (145 tests passing).
+- 2026-02-14: Phase 9 complete — static page route, param validation, 404 handling, cross-route nav (160 tests passing).

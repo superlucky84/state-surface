@@ -23,29 +23,74 @@ When context is needed, read in this order:
 ## Tech Stack
 
 - **Runtime**: Node.js (latest stable), pnpm `10.13.1`
-- **Server**: Express
+- **Server**: Express 5 with Vite middleware (dev mode)
 - **Client rendering**: Lithent (lightweight ~4KB VDOM library, used only as a diffing engine)
 - **Transport**: NDJSON over HTTP POST (`POST /transition/:name`, `application/x-ndjson`)
+- **Testing**: Vitest + Supertest + happy-dom
 - **Optional**: fp-pack for data-transform pipelines in `shared/` helpers
 
 ## Build & Dev Commands
 
 ```bash
 pnpm install
-pnpm dev      # start dev server/client
-pnpm build    # production build
-pnpm test     # run tests
+pnpm dev                  # start dev server via tsx watch server/index.ts
+pnpm build                # production build (Vite)
+pnpm test                 # run all tests with Vitest
+pnpm test -- -t "keyword" # run tests matching a keyword
+pnpm format               # format with Prettier
+pnpm format:check         # check formatting without writing
 ```
 
-## Target Folder Structure
+## Coding Conventions
+
+- TypeScript-first, ESM (`"type": "module"`), JSX via `jsxImportSource: "lithent"`
+- Prettier enforced: semicolons, single quotes, trailing commas (ES5), 100-column width, no parens on single arrow params
+- Naming: `camelCase` for variables/functions, `PascalCase` for types/classes, `lowerCamelCase` for module filenames (e.g., `ssrRenderer.ts`)
+- Tests use `*.test.ts` suffix and live alongside their modules (colocated)
+- Commits follow Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`)
+
+## Folder Structure
 
 ```
-server/          # Express server, SSR, transition endpoints
-client/          # Runtime, templates, hydration
-  runtime/       # StateSurface client core (anchor discovery, frame queue, apply)
-  templates/     # Static template registry (name → module)
-shared/          # Protocol types, frame validator, NDJSON encode/decode
-skills/          # AI agent skill docs (lithent, fp-pack) — not runtime code
+server/              # Express server, SSR, transition endpoints
+  index.ts           # Server entry — Express app, route registration, Vite middleware
+  bootstrap.ts       # Auto-register transitions & templates from routes/ at startup
+  routeScanner.ts    # File-based route discovery (routes/ → URL patterns)
+  routeHandler.ts    # Per-route Express GET handler (SSR pipeline)
+  initialStates.ts   # SSR initial state resolution (initial > transition > empty)
+  ssr.ts             # SSR helpers (fillHState, buildStateScript, buildBootScript, sha256 hash)
+  ssrRenderer.ts     # Template rendering for SSR
+  transition.ts      # Transition registry & handler
+  fsUtils.ts         # Shared filesystem utilities (listFiles, isModuleFile)
+client/              # Browser runtime
+  main.ts            # Client entry — bootstrap StateSurface, boot auto-run, wire controls
+  runtime/
+    stateSurface.ts  # Core: anchor discovery, hydration, transition streaming, frame queue
+    lithentBridge.ts # Lithent VDOM integration (render/hydrate/update)
+    devOverlay.ts    # Debug overlay UI (?debug=1)
+  templates/
+    registry.ts      # Global template registry
+    auto.ts          # Auto-register route templates via glob import
+shared/              # Protocol types, validators, NDJSON — used by both server & client
+  protocol.ts        # StateFrame types, validation, applyFrame (full/partial merge)
+  ndjson.ts          # NDJSON encode/decode with streaming chunk parser
+  routeModule.ts     # RouteModule type contract (layout, transition, params, initial, boot)
+  templateRegistry.ts
+  templateCheck.ts
+layouts/             # Shared surface composition helpers (string-based HTML builders)
+  surface.ts         # stateSlots, joinSurface, baseSurface
+routes/              # Route modules + page-specific templates/transitions (auto-loaded)
+  index.ts           # GET / — home/article demo page
+  search.ts          # GET /search — search page
+  article/[id].ts    # GET /article/:id — article page (with boot auto-run)
+  _shared/templates/ # Cross-route templates (pageHeader, systemError)
+  article/           # transitions/ + templates/ for article pages
+  search/            # transitions/ + templates/ for search pages
+demo/                # Reference demo app + integration test suite
+  layout.ts          # Demo HTML layout builder (legacy, used by demo tests)
+  surface.ts         # Surface document composition helper
+  *.test.ts          # Integration tests (SSR, hydration, flows, abort, full-stack)
+skills/              # AI agent skill docs (lithent, fp-pack) — not runtime code
 ```
 
 ## Architecture
@@ -80,71 +125,21 @@ User action → POST /transition/:name → server generator yields StateFrames
 - `changed` keys must exist in `states`; `removed` keys must NOT exist in `states`
 - A key cannot appear in both `changed` and `removed`
 
+### Route Auto-Registration
+
+`server/bootstrap.ts` scans `routes/**/transitions/*.ts` and `routes/**/templates/*.tsx` at startup, auto-registering all found handlers and templates. On the client, `client/templates/auto.ts` uses glob import to do the same. New routes just need the right file path to be discovered.
+
 ## Reference Projects
 
 Two sibling projects serve as implementation references:
 
 ### `../lithent` — Lithent library source
 
-The actual Lithent library. Key internals to know:
-
-- **SSR** (`lithent/ssr`):
-  - `renderToString(wDom)` — recursively converts WDom to HTML string. Skips events, keys, refs. Handles `innerHTML` prop, self-closing tags, style objects.
-  - `hydration(wDom, wrapElement)` — attaches existing DOM elements to WDom tree (`addElement`), then calls `render(wDom, wrapElement, null, true)` to bind events without re-creating DOM.
-  - Hydration walks real DOM children and WDom children in parallel, matching by tag name and node type. Fragment/loop types (`f`/`l`) are flattened.
-
-- **Render** (`lithent/src/render.ts`):
-  - `render(wDom, wrapElement, afterElement?, isHydration?)` — when `isHydration=true`, skips DOM creation, only attaches events via `updateProps`. Returns a cleanup function.
-  - Internal update dispatch uses `nr` (needRerender) flags: `A`(add), `D`(delete), `R`(replace), `U`(update), `S`(sorted-replace), `T`(sorted-update), `L`(loop-update).
-
-- **JSX runtime** (`lithent/jsx-runtime`):
-  - Exports `jsx`, `jsxs`, `jsxDEV` (all alias `createWNode`) and `Fragment`.
-  - Compatible with `jsxImportSource: "lithent"` in tsconfig.
-
-- **Vite plugin** (`../lithent/packages/lithentVite`):
-  - `@lithent/lithent-vite` — sets `esbuild.jsx: 'automatic'` + `jsxImportSource: 'lithent'`, handles HMR boundary injection. Install as devDependency.
+Key internals: SSR via `renderToString`/`hydration` from `lithent/ssr`, render with `isHydration` flag, JSX runtime compatible with `jsxImportSource: "lithent"`. Vite plugin `@lithent/lithent-vite` handles automatic JSX transform. See `skills/lithent/SKILL.md` for full API reference.
 
 ### `../blog` — Vite + Lithent SSR prototype
 
-Working SSR blog app. Key patterns to replicate:
-
-- **Dev server** (`server.js`):
-  ```js
-  // Vite as middleware in Express (dev only)
-  const { createServer: createViteServer } = await import('vite');
-  vite = await createViteServer({
-    server: { middlewareMode: 'ssr', hmr: true },
-  });
-  // ... mount routes ...
-  app.use(vite.middlewares);  // Vite middleware AFTER app routes
-  ```
-
-- **SSR rendering** (`serverHelper/makePage.js`):
-  ```js
-  import { h } from 'lithent';
-  import { renderToString } from 'lithent/ssr';
-  // Server renders full HTML from Layout component
-  let pageString = renderToString(h(Layout, { page: Page, ...props }));
-  return `<!DOCTYPE html>${pageString}`;
-  ```
-
-- **Module loading**:
-  - Dev: `vite.ssrLoadModule('@/layout')` — hot-reloads modules
-  - Prod: `import(path.resolve(__dirname, distPath))` — pre-built modules
-
-- **Client hydration** (`src/base/load.ts`):
-  ```ts
-  import { h } from 'lithent';
-  import { hydration } from 'lithent/ssr';
-  const LayoutWDom = h(Layout, props);
-  hydration(LayoutWDom, document.documentElement);
-  ```
-
-- **Data passing**: Server sets `globalThis.pagedata`, injects loader script via `</body>` replacement. Client reads data at hydration time.
-
-- **tsconfig JSX**: Uses `"jsx": "preserve"` with `"jsxFactory": "h"` + `"jsxFragmentFactory": "Fragment"`. The `@lithent/lithent-vite` plugin handles automatic JSX transform via esbuild.
-
-- **Dev watcher** (`watch-serve.js`): Uses chokidar to restart Express on server.js / src file changes. **For StateSurface**, `tsx watch` replaces this.
+Working SSR blog app demonstrating: Vite as Express middleware (dev), `renderToString` for SSR, `hydration` for client hydrate, `globalThis.pagedata` for server→client data passing. For StateSurface, `tsx watch` replaces the chokidar-based dev watcher.
 
 ## Library Usage Notes
 

@@ -1,11 +1,13 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
 import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
-import { fillHState, buildStateScript } from './ssr.js';
-import { createSSRRenderer } from './ssrRenderer.js';
 import { bootstrapServer } from './bootstrap.js';
-import { demoLayout } from '../demo/layout.js';
+import { scanRoutes } from './routeScanner.js';
+import { createRouteHandler } from './routeHandler.js';
+import type { RouteModule } from '../shared/routeModule.js';
 
 const app = express();
 const PORT = 3000;
@@ -14,6 +16,24 @@ app.use(express.json());
 
 // Auto-register transitions and templates
 await bootstrapServer();
+
+// Auto-discover and register route modules
+function resolveRootDir(): string {
+  try {
+    return fileURLToPath(new URL('..', import.meta.url));
+  } catch {
+    return process.cwd();
+  }
+}
+
+const routesDir = path.join(resolveRootDir(), 'routes');
+const scannedRoutes = await scanRoutes(routesDir);
+
+for (const route of scannedRoutes) {
+  const mod = await import(pathToFileURL(route.filePath).href);
+  const routeModule = extractRouteModule(mod);
+  app.get(route.urlPattern, createRouteHandler(routeModule));
+}
 
 // POST /transition/:name — NDJSON streaming endpoint
 app.post('/transition/:name', async (req, res) => {
@@ -55,26 +75,14 @@ app.post('/transition/:name', async (req, res) => {
   res.end();
 });
 
-// SSR demo page — serves initial article load with SSR-filled anchors
-function renderDemoPage(): string {
-  const initialStates: Record<string, any> = {
-    'page:header': { title: 'Blog', nav: 'article' },
-    'page:content': {
-      loading: false,
-      articleId: 1,
-      title: 'Article #1',
-      body: 'This is the content of article 1. Server-rendered on initial load.',
-    },
-  };
-
-  const renderer = createSSRRenderer();
-  const stateScript = buildStateScript(initialStates);
-  const shell = demoLayout('', stateScript);
-  return fillHState(shell, initialStates, renderer);
-}
-
-app.get('/', (_req, res) => {
-  res.send(renderDemoPage());
+// 404 handler for unmatched routes
+app.use((req, res, next) => {
+  // Let Vite middleware handle asset requests in dev
+  if (req.path.startsWith('/client/') || req.path.startsWith('/@') || req.path.startsWith('/node_modules/')) {
+    next();
+    return;
+  }
+  res.status(404).send('Not Found');
 });
 
 // Dev server with Vite middleware for client-side TS
@@ -90,8 +98,17 @@ async function startDev() {
 
   app.listen(PORT, () => {
     console.log(`StateSurface dev server running at http://localhost:${PORT}`);
+    console.log(`  Routes: ${scannedRoutes.map(r => r.urlPattern).join(', ')}`);
     console.log(`  Debug overlay: http://localhost:${PORT}/?debug=1`);
   });
+}
+
+function extractRouteModule(mod: any): RouteModule {
+  const candidate = mod?.default ?? mod;
+  if (candidate && typeof candidate.layout === 'function') {
+    return candidate as RouteModule;
+  }
+  throw new Error('Route module must default-export an object with a layout function');
 }
 
 // Only listen when run directly (not imported for testing)
