@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { app } from '../server/index.js';
+import { app } from './index.js';
 
 describe('demo SSR page', () => {
   it('GET / returns SSR-rendered HTML with filled anchors', async () => {

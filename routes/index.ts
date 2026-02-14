@@ -1,6 +1,6 @@
 import type { RouteModule } from '../shared/routeModule.js';
 import { joinSurface, stateSlots } from '../layouts/surface.js';
-import { surfaceDocument } from '../demo/surface.js';
+import { surfaceDocument } from '../layouts/surface.js';
 
 const styles = `* { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }

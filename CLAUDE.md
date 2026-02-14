@@ -78,18 +78,15 @@ shared/              # Protocol types, validators, NDJSON — used by both serve
   templateRegistry.ts
   templateCheck.ts
 layouts/             # Shared surface composition helpers (string-based HTML builders)
-  surface.ts         # stateSlots, joinSurface, baseSurface
+  surface.ts         # stateSlots, joinSurface, surfaceDocument, baseSurface
 routes/              # Route modules + page-specific templates/transitions (auto-loaded)
   index.ts           # GET / — home/article demo page
   search.ts          # GET /search — search page
+  about.ts           # GET /about — static page (no transition)
   article/[id].ts    # GET /article/:id — article page (with boot auto-run)
   _shared/templates/ # Cross-route templates (pageHeader, systemError)
   article/           # transitions/ + templates/ for article pages
   search/            # transitions/ + templates/ for search pages
-demo/                # Reference demo app + integration test suite
-  layout.ts          # Demo HTML layout builder (legacy, used by demo tests)
-  surface.ts         # Surface document composition helper
-  *.test.ts          # Integration tests (SSR, hydration, flows, abort, full-stack)
 skills/              # AI agent skill docs (lithent, fp-pack) — not runtime code
 ```
 

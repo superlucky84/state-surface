@@ -2,8 +2,8 @@
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StateSurface } from '../client/runtime/stateSurface.js';
-import type { TraceEvent } from '../client/runtime/stateSurface.js';
+import { StateSurface } from './stateSurface.js';
+import type { TraceEvent } from './stateSurface.js';
 
 type RenderCall = { name: string; data: any };
 

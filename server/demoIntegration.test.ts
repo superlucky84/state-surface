@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import { app } from '../server/index.js';
+import { app } from './index.js';
 import { decodeFrames } from '../shared/ndjson.js';
 import { StateSurface } from '../client/runtime/stateSurface.js';
 import type { TraceEvent, StateSurfaceOptions } from '../client/runtime/stateSurface.js';

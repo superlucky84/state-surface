@@ -93,6 +93,7 @@ Implementation baseline:
 
 * Backend: **Express-based**
 * Frontend: **Lithent-based** rendering engine (from `skills/lithent`)
+* Styling: **Tailwind CSS** — utility-first, surface와 template 모두에서 사용
 
 Design intent:
 
@@ -134,7 +135,57 @@ This asymmetry is a design choice, not an inconsistency:
 
 ---
 
-### 1.3 What This Is Not
+### 1.3 Authoring Guide: Surface vs Template Decision
+
+The surface/projection split introduces two distinct authoring modes.
+This section defines the decision boundary to minimize confusion.
+
+**The single question:**
+
+> **"Will this content change while the user stays on this page?"**
+>
+> * **No** → surface (static HTML string)
+> * **Yes** → `<h-state>` anchor + template (TSX projection)
+
+**What belongs in a surface:**
+
+* Page skeleton and structural layout (`<main>`, `<footer>`, grid wrappers)
+* Truly static content that never changes within a page lifetime (copyright, fixed headings)
+* `<h-state>` anchor declarations (the slots themselves)
+
+**What belongs in a template:**
+
+* Any content driven by server state (articles, comments, search results)
+* Navigation with active-state indicators (even if nav *looks* static, highlighting the current page requires data)
+* Any content that could be updated by a transition stream
+
+**Promotion path (surface → template):**
+
+Content often starts static and later needs to become dynamic.
+The intended migration is straightforward:
+
+```
+Before (surface):
+  <footer>© 2026 StateSurface</footer>
+
+After (promoted to template):
+  <h-state name="page:footer"></h-state>
+  + new template module for page:footer
+```
+
+This promotion is a **designed migration path**, not a refactoring failure.
+
+**Rule of thumb:**
+
+* Keep surfaces thin — structure and anchors only.
+* When in doubt, use a template. Demoting a template back to surface is trivial
+  (just inline the static HTML), but promoting surface to template requires
+  creating a new template module and state key.
+* A surface should read like a **wireframe**: slots and structure, no business content.
+
+---
+
+### 1.4 What This Is Not
 
 ❌ SPA framework
 ❌ Component system
@@ -224,7 +275,43 @@ because it is the most widely recognized convention (Next.js, SvelteKit, Nuxt, e
 
 ---
 
-### 2.4 Route Module Contract
+### 2.4 Route-Level Surface Independence
+
+Each route defines **only the `<h-state>` slots relevant to its own page purpose**.
+A route's surface is its page identity — slots must not leak across pages.
+
+**Principles:**
+
+* A route's surface declares **exactly** the anchors that page needs — no more, no less.
+* **Shared anchors** (`page:header`, `system:error`) come from shared layout helpers (`baseSurface`).
+* **Page-specific anchors** are defined only in the route that uses them.
+* No route should be a "catch-all" that includes slots from other pages.
+* Each route's transitions yield frames targeting **only that page's slots**.
+
+**Example — correct (each page has independent slots):**
+
+```
+GET /                → page:hero, page:recent-articles
+GET /article/:id     → page:content, panel:comments
+GET /search          → search:input, search:results
+GET /about           → (static — no dynamic slots)
+```
+
+All pages share `page:header` and `system:error` via `baseSurface`.
+
+**Anti-pattern — wrong (one page holds all slots):**
+
+```
+GET /  → page:content, panel:comments, search:input, search:results  ← leaking
+```
+
+This project's route files should serve as a **well-structured site example**.
+Each page stands alone; navigating between pages is a full MPA load
+that brings a completely different surface and slot set.
+
+---
+
+### 2.5 Route Module Contract
 
 Each route file exports a **RouteModule** object:
 
@@ -275,7 +362,7 @@ export default {
 
 ---
 
-### 2.5 SSR Initial State Resolution
+### 2.6 SSR Initial State Resolution
 
 SSR chooses the initial state in the following order:
 
@@ -308,7 +395,7 @@ auto-calls the route transition immediately after hydration.
 
 ---
 
-### 2.6 Surface Composition
+### 2.7 Surface Composition
 
 ```ts
 // layouts/surface.ts — shared string helpers

@@ -75,16 +75,6 @@ app.post('/transition/:name', async (req, res) => {
   res.end();
 });
 
-// 404 handler for unmatched routes
-app.use((req, res, next) => {
-  // Let Vite middleware handle asset requests in dev
-  if (req.path.startsWith('/client/') || req.path.startsWith('/@') || req.path.startsWith('/node_modules/')) {
-    next();
-    return;
-  }
-  res.status(404).send('Not Found');
-});
-
 // Dev server with Vite middleware for client-side TS
 async function startDev() {
   const { createServer } = await import('vite');
@@ -95,6 +85,11 @@ async function startDev() {
 
   // Vite handles client TS/JS module serving
   app.use(vite.middlewares);
+
+  // 404 handler — AFTER Vite middleware so assets are served first
+  app.use((_req, res) => {
+    res.status(404).send('Not Found');
+  });
 
   app.listen(PORT, () => {
     console.log(`StateSurface dev server running at http://localhost:${PORT}`);
@@ -111,8 +106,12 @@ function extractRouteModule(mod: any): RouteModule {
   throw new Error('Route module must default-export an object with a layout function');
 }
 
-// Only listen when run directly (not imported for testing)
-if (process.env.NODE_ENV !== 'test') {
+// In test mode, add 404 handler directly (no Vite middleware)
+if (process.env.NODE_ENV === 'test') {
+  app.use((_req: express.Request, res: express.Response) => {
+    res.status(404).send('Not Found');
+  });
+} else {
   startDev();
 }
 
