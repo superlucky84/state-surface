@@ -44,12 +44,14 @@ If context is lost, read in order:
 Two sibling directories contain working code to reference during implementation:
 
 ### `../lithent` — Lithent library source
+
 - SSR path: `renderToString` (recursive WDom→HTML), `hydration` (attach DOM + bind events)
 - Hydration calls `render(wDom, el, null, true)` — skips DOM creation, only attaches events
 - JSX runtime at `lithent/jsx-runtime` — exports `jsx`/`jsxs`/`Fragment`
 - Vite plugin at `packages/lithentVite` — sets `esbuild.jsx: 'automatic'`, `jsxImportSource: 'lithent'`
 
 ### `../blog` — Vite + Lithent SSR prototype
+
 - Dev: `createViteServer({ server: { middlewareMode: 'ssr' } })` → `vite.ssrLoadModule()`
 - SSR: `renderToString(h(Layout, props))` → `<!DOCTYPE html>` prefix → inject script before `</body>`
 - Hydration: `hydration(h(Layout, props), document.documentElement)`
@@ -148,6 +150,7 @@ Prefer shared helpers in `surface.ts` / `layouts/*.ts`:
 - `baseSurface(...)` for shared document shell
 
 Keep the boundary strict:
+
 - surface declares anchors and static shell
 - templates render only inside anchors
 
@@ -238,35 +241,35 @@ Per DESIGN.md Section 2.4 — each route must define only the `<h-state>` slots 
 
 **Target page structure:**
 
-| Route | Page-specific slots | Shared slots (via baseSurface) |
-|-------|--------------------|---------------------------------|
-| `GET /` | `page:hero`, `page:recent-articles` | `page:header`, `system:error` |
-| `GET /article/:id` | `page:content`, `panel:comments` | `page:header`, `system:error` |
-| `GET /search` | `search:input`, `search:results` | `page:header`, `system:error` |
-| `GET /about` | *(static — no dynamic slots)* | `page:header`, `system:error` |
+| Route              | Page-specific slots                 | Shared slots (via baseSurface) |
+| ------------------ | ----------------------------------- | ------------------------------ |
+| `GET /`            | `page:hero`, `page:recent-articles` | `page:header`, `system:error`  |
+| `GET /article/:id` | `page:content`, `panel:comments`    | `page:header`, `system:error`  |
+| `GET /search`      | `search:input`, `search:results`    | `page:header`, `system:error`  |
+| `GET /about`       | _(static — no dynamic slots)_       | `page:header`, `system:error`  |
 
-- [ ] Redesign `routes/index.ts` as a proper home page:
-  - [ ] Replace catch-all slots with home-specific slots (`page:hero`, `page:recent-articles`).
-  - [ ] Remove demo controls (buttons that trigger article-load/search on the same page).
-  - [ ] Create a home-specific transition (e.g., `home-load`) or use `initial` only.
-- [ ] Create home page templates:
-  - [ ] `routes/index/templates/pageHero.tsx` — hero/welcome section.
-  - [ ] `routes/index/templates/pageRecentArticles.tsx` — recent article list.
-- [ ] Create home page transition (if needed):
-  - [ ] `routes/index/transitions/homeLoad.ts` — yields home-specific state frames.
-- [ ] Verify `routes/article/[id].ts` already follows the principle (article-only slots).
-- [ ] Verify `routes/search.ts` already follows the principle (search-only slots).
-- [ ] Set up Tailwind CSS:
-  - [ ] Install `tailwindcss` + Vite plugin (`@tailwindcss/vite`).
-  - [ ] Configure `content` paths for surface (`.ts`) and template (`.tsx`) files.
-  - [ ] Replace existing inline `<style>` blocks with Tailwind utility classes.
-  - [ ] Tailwind classes work in both surface strings and TSX templates.
-- [ ] Update tests:
-  - [ ] `server/demoSsr.test.ts` → update assertions for new home page structure.
-  - [ ] `server/demoIntegration.test.ts` → update or split per-route integration tests.
-  - [ ] Add home page-specific tests.
-- [ ] Smoke check: each route renders only its own slots, no cross-page slot leakage.
-- [ ] Smoke check: full site navigation works end-to-end across all routes.
+- [x] Redesign `routes/index.ts` as a proper home page:
+  - [x] Replace catch-all slots with home-specific slots (`page:hero`, `page:recent-articles`).
+  - [x] Remove demo controls (buttons that trigger article-load/search on the same page).
+  - [x] Use `initial` only for home SSR state (no dedicated `home-load` transition needed).
+- [x] Create home page templates:
+  - [x] `routes/index/templates/pageHero.tsx` — hero/welcome section.
+  - [x] `routes/index/templates/pageRecentArticles.tsx` — recent article list.
+- [x] Create home page transition (if needed):
+  - [x] Not needed in current design (`initial`-only home page).
+- [x] Verify `routes/article/[id].ts` already follows the principle (article-only slots).
+- [x] Verify `routes/search.ts` already follows the principle (search-only slots).
+- [x] Set up Tailwind CSS:
+  - [x] Install `tailwindcss` + Vite plugin (`@tailwindcss/vite`).
+  - [x] Configure source scan paths for surface (`.ts`) and template (`.tsx`) files.
+  - [x] Replace existing inline `<style>` blocks with Tailwind utility classes.
+  - [x] Tailwind classes work in both surface strings and TSX templates.
+- [x] Update tests:
+  - [x] `server/demoSsr.test.ts` → update assertions for new home page structure.
+  - [x] `server/demoIntegration.test.ts` → add home surface-independence assertion.
+  - [x] Add home page-specific tests.
+- [x] Smoke check: each route renders only its own slots, no cross-page slot leakage.
+- [x] Smoke check: full site navigation works end-to-end across all routes.
 
 ### Phase 11: Chatbot Demo Route
 
@@ -274,14 +277,15 @@ StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑
 LLM 응답 스트리밍 → NDJSON partial frame → progressive UI construction.
 
 **Why this demo matters:**
+
 - NDJSON 스트리밍이 가장 빛나는 실전 유스케이스
 - `abort previous` = 생성 중단 (별도 취소 로직 불필요)
 - partial frame의 점진적 UI 구성이 가장 직관적으로 드러남
 
 **Target page structure:**
 
-| Route | Slots | Shared slots |
-|-------|-------|--------------|
+| Route       | Slots                                        | Shared slots                  |
+| ----------- | -------------------------------------------- | ----------------------------- |
 | `GET /chat` | `chat:messages`, `chat:input`, `chat:typing` | `page:header`, `system:error` |
 
 **Performance strategy — `cacheUpdate` (lithent/helper):**
@@ -294,8 +298,8 @@ import { cacheUpdate } from 'lithent/helper';
 
 const ChatMessage = mount<MessageProps>(renew => {
   return cacheUpdate(
-    (props) => [props.id, props.text, props.role],
-    (props) => (
+    props => [props.id, props.text, props.role],
+    props => (
       <div class={`message ${props.role}`}>
         <strong>{props.role}:</strong> {props.text}
       </div>
@@ -304,7 +308,9 @@ const ChatMessage = mount<MessageProps>(renew => {
 });
 
 // key + cacheUpdate 조합: 기존 메시지 = zero diff, 새 메시지만 렌더
-{messages.map(m => <ChatMessage key={m.id} {...m} />)}
+{
+  messages.map(m => <ChatMessage key={m.id} {...m} />);
+}
 ```
 
 **Checklist:**
@@ -327,7 +333,7 @@ const ChatMessage = mount<MessageProps>(renew => {
   - [ ] `cacheUpdate` dependency check confirms skip for unchanged messages.
 - [ ] Update `pageHeader.tsx` nav with `/chat` link.
 - [ ] Add tests:
-  - [ ] Transition yields correct frame sequence (full → partial* → done).
+  - [ ] Transition yields correct frame sequence (full → partial\* → done).
   - [ ] Abort mid-stream produces clean state.
   - [ ] SSR initial render shows empty chat or welcome message.
 - [ ] Smoke check: full chat flow works end-to-end in dev server.
@@ -365,12 +371,12 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 
 **사용자 노출 4개념:**
 
-| 개념 | 사용자가 하는 일 | 파일 위치 |
-|------|----------------|-----------|
-| **Surface** | HTML 문자열로 페이지 뼈대 + 앵커 선언 | `routes/*.ts` layout, `layouts/` |
-| **Template** | TSX로 앵커 안 콘텐츠 정의 | `routes/**/templates/*.tsx` |
-| **Transition** | async generator로 상태 프레임 yield | `routes/**/transitions/*.ts` |
-| **Action** | 클라이언트에서 transition 호출 트리거 | `client/main.ts`, DOM event |
+| 개념           | 사용자가 하는 일                      | 파일 위치                        |
+| -------------- | ------------------------------------- | -------------------------------- |
+| **Surface**    | HTML 문자열로 페이지 뼈대 + 앵커 선언 | `routes/*.ts` layout, `layouts/` |
+| **Template**   | TSX로 앵커 안 콘텐츠 정의             | `routes/**/templates/*.tsx`      |
+| **Transition** | async generator로 상태 프레임 yield   | `routes/**/transitions/*.ts`     |
+| **Action**     | 클라이언트에서 transition 호출 트리거 | `client/main.ts`, DOM event      |
 
 **Checklist:**
 

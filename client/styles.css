@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+
+@source '../layouts/**/*.ts';
+@source '../routes/**/*.ts';
+@source '../routes/**/*.tsx';
+@source '../client/**/*.ts';
+@source '../client/**/*.tsx';

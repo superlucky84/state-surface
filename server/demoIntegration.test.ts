@@ -33,9 +33,7 @@ function createTestSurface() {
 }
 
 function setupAnchors(names: string[]) {
-  document.body.innerHTML = names
-    .map(name => `<h-state name="${name}"></h-state>`)
-    .join('');
+  document.body.innerHTML = names.map(name => `<h-state name="${name}"></h-state>`).join('');
 }
 
 /**
@@ -61,9 +59,7 @@ describe('server stream → client apply (article-load)', () => {
 
   it('full pipeline: server frames produce correct client state', async () => {
     // 1. Get frames from server
-    const res = await request(app)
-      .post('/transition/article-load')
-      .send({ articleId: 1 });
+    const res = await request(app).post('/transition/article-load').send({ articleId: 1 });
 
     const frames = decodeFrames(res.text);
 
@@ -89,15 +85,27 @@ describe('server stream → client apply (article-load)', () => {
   });
 });
 
+describe('home route surface independence', () => {
+  it('GET / renders home slots only (no cross-page leakage)', async () => {
+    const res = await request(app).get('/');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('name="page:hero"');
+    expect(res.text).toContain('name="page:recent-articles"');
+    expect(res.text).not.toContain('name="page:content"');
+    expect(res.text).not.toContain('name="panel:comments"');
+    expect(res.text).not.toContain('name="search:input"');
+    expect(res.text).not.toContain('name="search:results"');
+  });
+});
+
 describe('server stream → client apply (search)', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
   });
 
   it('full pipeline: search frames produce correct client state', async () => {
-    const res = await request(app)
-      .post('/transition/search')
-      .send({ query: 'test' });
+    const res = await request(app).post('/transition/search').send({ query: 'test' });
 
     const frames = decodeFrames(res.text);
 

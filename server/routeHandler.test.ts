@@ -9,8 +9,9 @@ describe('multi-route SSR', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
     expect(res.text).toContain('<h-state name="page:header"');
-    expect(res.text).toContain('<h-state name="page:content"');
-    expect(res.text).toContain('Article #1');
+    expect(res.text).toContain('<h-state name="page:hero"');
+    expect(res.text).toContain('<h-state name="page:recent-articles"');
+    expect(res.text).toContain('State-driven UI for MPA pages');
     expect(res.text).toContain('id="__STATE__"');
     expect(res.text).toContain('data-ssr-hash');
   });
@@ -79,10 +80,15 @@ describe('boot config injection', () => {
 });
 
 describe('empty anchors', () => {
-  it('GET / leaves panel:comments empty (no initial state)', async () => {
+  it('GET / includes only home-specific slots', async () => {
     const res = await request(app).get('/');
 
-    expect(res.text).toMatch(/<h-state name="panel:comments"><\/h-state>/);
+    expect(res.text).toContain('name="page:hero"');
+    expect(res.text).toContain('name="page:recent-articles"');
+    expect(res.text).not.toContain('name="page:content"');
+    expect(res.text).not.toContain('name="panel:comments"');
+    expect(res.text).not.toContain('name="search:input"');
+    expect(res.text).not.toContain('name="search:results"');
   });
 
   it('GET /search leaves search:results empty initially', async () => {

@@ -55,12 +55,14 @@ export function baseSurface(body: string, stateScript: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StateSurface</title>
 </head>
-<body>
+<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
+<div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-6 md:px-8">
 <h-state name="page:header"></h-state>
 ${body}
 <h-state name="system:error"></h-state>
+</div>
 ${stateScript}
-<script type="module" src="/client/main.ts"></script>
+  <script type="module" src="/client/main.ts"></script>
 </body>
 </html>`;
 }

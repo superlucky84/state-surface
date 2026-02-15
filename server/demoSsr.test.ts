@@ -3,29 +3,33 @@ import request from 'supertest';
 import { app } from './index.js';
 
 describe('demo SSR page', () => {
-  it('GET / returns SSR-rendered HTML with filled anchors', async () => {
+  it('GET / returns SSR-rendered home HTML with filled home anchors', async () => {
     const res = await request(app).get('/');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
     expect(res.text).toContain('<h-state name="page:header"');
-    expect(res.text).toContain('<h-state name="page:content"');
+    expect(res.text).toContain('<h-state name="page:hero"');
+    expect(res.text).toContain('<h-state name="page:recent-articles"');
 
     // SSR-filled content
-    expect(res.text).toContain('Article #1');
+    expect(res.text).toContain('State-driven UI for MPA pages');
     expect(res.text).toContain('data-ssr-hash');
 
     // __STATE__ script present
     expect(res.text).toContain('id="__STATE__"');
     expect(res.text).toContain('page:header');
-    expect(res.text).toContain('page:content');
+    expect(res.text).toContain('page:hero');
+    expect(res.text).toContain('page:recent-articles');
   });
 
-  it('GET / does not fill anchors without state', async () => {
+  it('GET / keeps cross-page slots out of home surface', async () => {
     const res = await request(app).get('/');
 
-    // panel:comments has no initial state — should be empty
-    expect(res.text).toMatch(/<h-state name="panel:comments"><\/h-state>/);
+    expect(res.text).not.toContain('name="page:content"');
+    expect(res.text).not.toContain('name="panel:comments"');
+    expect(res.text).not.toContain('name="search:input"');
+    expect(res.text).not.toContain('name="search:results"');
   });
 });
 
@@ -38,7 +42,10 @@ describe('demo transitions', () => {
 
     expect(res.status).toBe(200);
 
-    const lines = res.text.trim().split('\n').map((l: string) => JSON.parse(l));
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
 
     // First frame: full state
     expect(lines[0].type).toBe('state');
@@ -67,7 +74,10 @@ describe('demo transitions', () => {
 
     expect(res.status).toBe(200);
 
-    const lines = res.text.trim().split('\n').map((l: string) => JSON.parse(l));
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
 
     expect(lines[0].type).toBe('state');
     expect(lines[0].states).toHaveProperty('search:input');
