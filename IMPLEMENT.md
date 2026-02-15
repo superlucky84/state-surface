@@ -319,9 +319,100 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 - [ ] Smoke check: article page actions work end-to-end via `data-action`.
 - [ ] Smoke check: pending visual feedback visible during slow transitions.
 
-### Phase 12: Chatbot Demo Route
+### Phase 12: Demo Site Redesign — Self-Documenting Feature Showcase
 
 (Phase 11 action system 완료 후 진행)
+
+기존 데모 페이지를 재기획하여, 각 페이지가 StateSurface의 특정 기능을 **콘텐츠로 설명**하면서
+동시에 해당 기능을 **구현으로 시연**하는 자기문서화(self-documenting) 사이트로 전환한다.
+
+**설계 원칙:**
+
+* 페이지를 열면 "이 기능이 뭔지" 읽으면서 "이 기능이 동작하는 것"을 체험
+* 기존 article/search 데모를 교체 (chat은 Phase 13에서 별도 구현)
+* 모든 StateSurface 핵심 기능이 최소 1개 페이지에서 시연됨
+
+**Target page structure (DESIGN.md Section 2.4 참조):**
+
+| Route | 콘텐츠 | 시연 기능 |
+|-------|--------|----------|
+| `/` | StateSurface 소개 — 4 핵심 개념 카드 + 각 기능 페이지 링크 | `initial` SSR only, surface 조합 |
+| `/guide/[slug]` | 개념별 가이드 (surface, template, transition, action) | Dynamic `[param]`, boot auto-run, full→partial |
+| `/features/streaming` | 스트리밍 데모 — 프레임 흐름 실시간 시각화 | Full/partial, `removed`, error frame |
+| `/features/actions` | 액션 플레이그라운드 — 버튼, 폼, scoped pending 체험 | `data-action`, form submit, `data-pending-targets` |
+| `/search` | StateSurface 기능/개념 검색 | Form `data-action`, pending 상태 |
+
+**Target slot structure:**
+
+| Route | Page-specific slots | Shared (via baseSurface) |
+|-------|--------------------|-----------------------------|
+| `/` | `page:hero`, `page:concepts`, `page:features` | `page:header`, `system:error` |
+| `/guide/[slug]` | `guide:content`, `guide:toc` | `page:header`, `system:error` |
+| `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | `page:header`, `system:error` |
+| `/features/actions` | `actions:playground`, `actions:log` | `page:header`, `system:error` |
+| `/search` | `search:input`, `search:results` | `page:header`, `system:error` |
+
+**Checklist:**
+
+- [ ] Redesign home page (`/`):
+  - [ ] `routes/index.ts` — hero (framework intro) + concepts (4 카드) + features (데모 링크).
+  - [ ] `routes/index/templates/pageHero.tsx` — StateSurface 소개 히어로.
+  - [ ] `routes/index/templates/pageConcepts.tsx` — Surface, Template, Transition, Action 4 카드.
+  - [ ] `routes/index/templates/pageFeatures.tsx` — 기능 데모 페이지 링크 목록.
+  - [ ] `initial` only (transition 없음) — 정적 SSR의 모범 예시.
+- [ ] Create guide route (`/guide/[slug]`):
+  - [ ] `routes/guide/[slug].ts` — 개념 가이드 surface (guide:content, guide:toc).
+  - [ ] `routes/guide/transitions/guideLoad.ts`:
+    - [ ] Full frame: 가이드 메타 + TOC (즉시).
+    - [ ] Partial frame: 본문 콘텐츠 로드 (스트리밍 시연).
+  - [ ] `routes/guide/templates/guideContent.tsx` — 가이드 본문 렌더링.
+  - [ ] `routes/guide/templates/guideToc.tsx` — 목차 사이드바.
+  - [ ] Slug별 콘텐츠 데이터: `surface`, `template`, `transition`, `action`.
+  - [ ] `boot: { auto: true }` — SSR 후 자동 콘텐츠 로드.
+  - [ ] 가이드 콘텐츠는 해당 기능을 설명하는 텍스트.
+- [ ] Create streaming demo page (`/features/streaming`):
+  - [ ] `routes/features/streaming.ts` — 스트리밍 시각화 surface.
+  - [ ] `routes/features/streaming/transitions/streamDemo.ts`:
+    - [ ] Full frame → partial (changed) → partial (removed) → error → done 시퀀스.
+    - [ ] 각 프레임 타입을 의도적으로 시연.
+  - [ ] `routes/features/streaming/templates/demoControls.tsx` — 프레임 발사 버튼들.
+  - [ ] `routes/features/streaming/templates/demoTimeline.tsx` — 프레임 도착 타임라인.
+  - [ ] `routes/features/streaming/templates/demoOutput.tsx` — 현재 activeStates 시각화.
+  - [ ] `removed` 키 시연 (이전에 빠져있던 기능).
+  - [ ] Error frame 시연.
+- [ ] Create actions playground page (`/features/actions`):
+  - [ ] `routes/features/actions.ts` — 액션 플레이그라운드 surface.
+  - [ ] `routes/features/actions/transitions/actionDemo.ts` — 다양한 액션 처리.
+  - [ ] `routes/features/actions/templates/actionsPlayground.tsx`:
+    - [ ] 버튼 `data-action` 예제.
+    - [ ] Form `data-action` 제출 예제.
+    - [ ] `data-pending-targets` scoped pending 예제.
+    - [ ] 다중 action 버튼 예제.
+  - [ ] `routes/features/actions/templates/actionsLog.tsx` — 액션 이벤트 로그 표시.
+- [ ] Redesign search page (`/search`):
+  - [ ] `routes/search.ts` — StateSurface 기능/개념 검색으로 콘텐츠 변경.
+  - [ ] `routes/search/transitions/search.ts` — 기능 목록에서 검색.
+  - [ ] 검색 결과는 StateSurface 기능/개념 설명 + 해당 데모 페이지 링크.
+- [ ] Remove old routes:
+  - [ ] `routes/article/` 디렉터리 제거 (guide로 대체).
+  - [ ] 관련 transition (article-load) 제거.
+- [ ] Update navigation:
+  - [ ] `routes/_shared/templates/pageHeader.tsx` — 새 페이지 구조 반영.
+  - [ ] 모든 페이지 간 링크 동작 확인.
+- [ ] Update tests:
+  - [ ] 기존 article 관련 테스트 제거/교체.
+  - [ ] 각 새 route에 대한 SSR 테스트.
+  - [ ] Guide dynamic param 테스트.
+  - [ ] Streaming demo 프레임 시퀀스 테스트.
+  - [ ] Actions playground 테스트.
+  - [ ] Cross-page slot independence 재검증.
+- [ ] Smoke check: 모든 페이지 SSR 정상 렌더링.
+- [ ] Smoke check: 페이지 간 네비게이션 정상 동작.
+- [ ] Smoke check: 각 페이지에서 시연하는 기능이 실제로 동작.
+
+### Phase 13: Chatbot Demo Route
+
+(Phase 12 demo site 완료 후 진행)
 
 StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑됨을 보여주는 데모 route.
 LLM 응답 스트리밍 → NDJSON partial frame → progressive UI construction.
@@ -388,7 +479,7 @@ const ChatMessage = mount<MessageProps>(renew => {
   - [ ] SSR initial render shows empty chat or welcome message.
 - [ ] Smoke check: full chat flow works end-to-end in dev server.
 
-### Phase 13: Engine/User Code Separation
+### Phase 14: Engine/User Code Separation
 
 프레임워크 내부 코어 코드를 `engine/`으로 통합하여, 사용자가 작성하는 영역과 명확히 분리한다.
 사용자는 **surface, template, transition, action** 4가지 개념만 신경 쓰면 되고,

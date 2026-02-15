@@ -236,34 +236,61 @@ The server scans this directory at startup and registers Express routes automati
 
 ```
 routes/
-├── index.ts              → GET /
-├── article/
-│   └── [id].ts           → GET /article/:id
-├── search.ts             → GET /search
-└── admin/
-    ├── index.ts           → GET /admin
-    └── users/
-        └── [userId].ts    → GET /admin/users/:userId
+├── index.ts                      → GET /
+├── guide/
+│   └── [slug].ts                 → GET /guide/:slug
+├── features/
+│   ├── streaming.ts              → GET /features/streaming
+│   └── actions.ts                → GET /features/actions
+├── search.ts                     → GET /search
+└── chat.ts                       → GET /chat
 ```
 
 Routes also host per-page assets:
 
 ```
 routes/
-├── article/
-│   ├── [id].ts
+├── index/
+│   └── templates/
+│       ├── pageHero.tsx
+│       ├── pageConcepts.tsx
+│       └── pageFeatures.tsx
+├── guide/
+│   ├── [slug].ts
 │   ├── templates/
-│   │   ├── pageContent.tsx
-│   │   └── panelComments.tsx
+│   │   ├── guideContent.tsx
+│   │   └── guideToc.tsx
 │   └── transitions/
-│       └── articleLoad.ts
+│       └── guideLoad.ts
+├── features/
+│   ├── streaming.ts
+│   ├── streaming/
+│   │   ├── templates/
+│   │   │   ├── demoControls.tsx
+│   │   │   ├── demoTimeline.tsx
+│   │   │   └── demoOutput.tsx
+│   │   └── transitions/
+│   │       └── streamDemo.ts
+│   ├── actions.ts
+│   └── actions/
+│       ├── templates/
+│       │   ├── actionsPlayground.tsx
+│       │   └── actionsLog.tsx
+│       └── transitions/
+│           └── actionDemo.ts
 ├── search/
-│   ├── index.ts
 │   ├── templates/
 │   │   ├── searchInput.tsx
 │   │   └── searchResults.tsx
 │   └── transitions/
 │       └── search.ts
+├── chat/
+│   ├── templates/
+│   │   ├── chatMessages.tsx
+│   │   ├── chatInput.tsx
+│   │   └── chatTyping.tsx
+│   └── transitions/
+│       └── chat.ts
 └── _shared/
     └── templates/
         ├── pageHeader.tsx
@@ -300,10 +327,12 @@ A route's surface is its page identity — slots must not leak across pages.
 **Example — correct (each page has independent slots):**
 
 ```
-GET /                → page:hero, page:recent-articles
-GET /article/:id     → page:content, panel:comments
-GET /search          → search:input, search:results
-GET /about           → (static — no dynamic slots)
+GET /                    → page:hero, page:concepts, page:features
+GET /guide/:slug         → guide:content, guide:toc
+GET /features/streaming  → demo:controls, demo:timeline, demo:output
+GET /features/actions    → actions:playground, actions:log
+GET /search              → search:input, search:results
+GET /chat                → chat:messages, chat:input, chat:typing
 ```
 
 All pages share `page:header` and `system:error` via `baseSurface`.
@@ -311,12 +340,61 @@ All pages share `page:header` and `system:error` via `baseSurface`.
 **Anti-pattern — wrong (one page holds all slots):**
 
 ```
-GET /  → page:content, panel:comments, search:input, search:results  ← leaking
+GET /  → guide:content, search:input, chat:messages  ← leaking
 ```
 
 This project's route files should serve as a **well-structured site example**.
 Each page stands alone; navigating between pages is a full MPA load
 that brings a completely different surface and slot set.
+
+#### Demo Site: Self-Documenting Feature Showcase
+
+The project's demo pages double as **feature documentation**.
+Each page's content explains the StateSurface concept it demonstrates —
+users learn by reading the content while experiencing the feature in action.
+
+| Route | Content | Demonstrated Features |
+|-------|---------|----------------------|
+| `/` | **StateSurface 소개** — 4 핵심 개념 카드, 각 기능 페이지 링크 | `initial` SSR only, surface 문자열 조합 |
+| `/guide/[slug]` | **개념별 가이드** — surface, template, transition, action 문서 동적 로드 | Dynamic `[param]`, boot auto-run, full→partial 스트리밍 |
+| `/features/streaming` | **스트리밍 데모** — 프레임 흐름 실시간 시각화, 버튼으로 직접 프레임 발사 | Full/partial frames, `removed`, error frame |
+| `/features/actions` | **액션 플레이그라운드** — 버튼, 폼, scoped pending 직접 체험 | `data-action`, form submit, `data-pending-targets`, 다중 액션 |
+| `/search` | **기능/개념 검색** — StateSurface 기능 목록에서 검색 | Form `data-action`, pending 상태 |
+| `/chat` | **Q&A 챗봇** — StateSurface에 대해 질문하며 체험 | Abort previous, progressive streaming, cacheUpdate |
+
+**Target slot structure:**
+
+| Route | Page-specific slots | Shared (via baseSurface) |
+|-------|--------------------|-----------------------------|
+| `/` | `page:hero`, `page:concepts`, `page:features` | `page:header`, `system:error` |
+| `/guide/[slug]` | `guide:content`, `guide:toc` | `page:header`, `system:error` |
+| `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | `page:header`, `system:error` |
+| `/features/actions` | `actions:playground`, `actions:log` | `page:header`, `system:error` |
+| `/search` | `search:input`, `search:results` | `page:header`, `system:error` |
+| `/chat` | `chat:messages`, `chat:input`, `chat:typing` | `page:header`, `system:error` |
+
+**Feature coverage matrix:**
+
+```
+SSR + initial ─────────── all pages (especially /)
+Surface composition ───── all pages
+Template (TSX) ────────── all pages
+Dynamic route [param] ─── /guide/[slug]
+Boot auto-run ─────────── /guide/[slug]
+Full frame ────────────── /guide/[slug], /features/streaming
+Partial changed ───────── /guide/[slug], /features/streaming
+Partial removed ───────── /features/streaming
+Error frame ───────────── /features/streaming
+data-action declarative ─ /features/actions, /search
+Form submission ───────── /features/actions, /search
+Pending state ─────────── /features/actions, /search
+Scoped pending ────────── /features/actions
+Multiple actions ──────── /features/actions
+Abort previous ────────── /chat
+Progressive streaming ─── /chat
+cacheUpdate optimization─ /chat
+Debug overlay ─────────── all pages (?debug=1)
+```
 
 ---
 
