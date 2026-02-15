@@ -27,8 +27,8 @@ const SearchResults = ({ loading, query, items }: SearchResultsProps) => {
 
   return (
     <ul class="space-y-3">
-      {list.map(item => (
-        <li>
+      {list.map((item, i) => (
+        <li key={i}>
           <a
             href={item.url}
             class="block rounded-xl border border-slate-200 bg-white px-5 py-4 text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow"

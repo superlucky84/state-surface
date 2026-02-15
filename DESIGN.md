@@ -110,6 +110,15 @@ Design intent:
 * Views are **not programs**
 * Views are **static surfaces selected by state**
 
+User-facing concepts (the four things a developer defines):
+
+| Concept | What | Where |
+|---------|------|-------|
+| **Surface** | Page shell with `<h-state>` anchors (string HTML) | `routes/*.ts` layout, `layouts/` |
+| **Template** | Projection component inside each anchor (TSX) | `routes/**/templates/*.tsx` |
+| **Transition** | Server-side state generator (async generator) | `routes/**/transitions/*.ts` |
+| **Action** | Declarative trigger binding (HTML attributes) | `data-action` + `data-params` in templates |
+
 > **Data streams define UI flow**
 
 * Each frame in a transition stream carries **both state and data**
@@ -497,6 +506,120 @@ import { defineTransition } from '../server/transition.js';
 export default defineTransition('article-load', async function* (params) {
   // yield StateFrame objects
 });
+```
+
+---
+
+### 3.4 Actions (Client → Server Trigger)
+
+An **action** is the bridge between user intent on the client and a transition on the server.
+
+Transitions define *what happens* (server state generator).
+Actions define *when it happens* (user interaction trigger).
+
+#### 3.4.1 Declarative Action Binding
+
+Actions are declared in templates via HTML attributes — no imperative JS required:
+
+```tsx
+<button
+  data-action="article-load"
+  data-params='{"articleId": 1}'
+>
+  Load Article
+</button>
+```
+
+* `data-action` — the transition name to invoke
+* `data-params` — JSON-serialized params to send (optional, defaults to `{}`)
+
+The engine auto-discovers `[data-action]` elements and wires click/submit handlers.
+Users never call `surface.transition()` directly in application code.
+
+#### 3.4.2 Why Declarative
+
+* **Template is the single source of truth** — reading a template shows both
+  what it renders *and* what actions it can trigger.
+* **No JS event wiring in user code** — the engine handles delegation.
+* **Consistent with the philosophy** — "HTML declares existence conditions."
+  `data-action` declares "this element can trigger a state change."
+
+#### 3.4.3 Action Discovery (Engine)
+
+The engine uses a single delegated event listener on `document`:
+
+```js
+document.addEventListener('click', e => {
+  const el = (e.target as Element).closest('[data-action]');
+  if (!el) return;
+  const action = el.getAttribute('data-action')!;
+  const params = JSON.parse(el.getAttribute('data-params') ?? '{}');
+  surface.transition(action, params);
+});
+```
+
+No per-element binding. Works with SSR-rendered and CSR-rendered elements alike.
+Form submission (`<form data-action="...">`) is handled similarly via `submit` event.
+
+#### 3.4.4 Pending State (Transition In-Flight)
+
+When a transition is in flight (between action trigger and first frame arrival),
+the engine marks affected `<h-state>` anchors with a `data-pending` attribute:
+
+```
+User clicks [data-action] → engine adds data-pending to anchors
+→ first frame arrives → engine removes data-pending
+→ error/abort → engine removes data-pending
+```
+
+CSS handles visual feedback and interaction blocking:
+
+```css
+h-state[data-pending] {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+```
+
+**Pending scope:**
+
+* Default: **all anchors** are marked pending (most transitions replace full state).
+* Optional: `data-pending-targets` on the action element limits which anchors are marked.
+
+```tsx
+<button
+  data-action="load-comments"
+  data-params='{"articleId": 1}'
+  data-pending-targets="panel:comments"
+>
+  Load Comments
+</button>
+```
+
+If `data-pending-targets` is present, only the listed anchors receive `data-pending`.
+Multiple targets are comma-separated: `"panel:comments,page:content"`.
+
+#### 3.4.5 Action Lifecycle
+
+```
+[User clicks button with data-action]
+  ↓
+[Engine reads data-action, data-params]
+  ↓
+[Engine aborts previous in-flight transition]
+  ↓
+[Engine adds data-pending to target anchors]
+  ↓
+[Engine calls POST /transition/:name with params]
+  ↓
+[First NDJSON frame arrives]
+  ↓
+[Engine removes data-pending from anchors]
+  ↓
+[Frames apply to activeStates as usual]
+  ↓
+[done frame → stream ends]
 ```
 
 ---

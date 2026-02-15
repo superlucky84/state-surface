@@ -271,7 +271,57 @@ Per DESIGN.md Section 2.4 — each route must define only the `<h-state>` slots 
 - [x] Smoke check: each route renders only its own slots, no cross-page slot leakage.
 - [x] Smoke check: full site navigation works end-to-end across all routes.
 
-### Phase 11: Chatbot Demo Route
+### Phase 11: Action System + Pending State
+
+DESIGN.md Section 3.4에 정의된 선언적 액션 바인딩과 pending 상태를 구현한다.
+사용자는 template에서 `data-action` + `data-params`만 선언하면 되고,
+engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 처리한다.
+
+**User-facing API:**
+
+```tsx
+// template 안에서 선언만 하면 끝
+<button data-action="article-load" data-params='{"articleId": 1}'>
+  Load Article
+</button>
+
+// pending 범위 제한 (optional)
+<button data-action="load-comments" data-pending-targets="panel:comments">
+  Load Comments
+</button>
+```
+
+**Checklist:**
+
+- [ ] Implement action event delegation in engine:
+  - [ ] `click` listener on `document` — discover `[data-action]` elements.
+  - [ ] Parse `data-action` (transition name) + `data-params` (JSON → params object).
+  - [ ] Call `surface.transition(action, params)` automatically.
+  - [ ] `submit` listener for `<form data-action="...">` (prevent default + serialize).
+- [ ] Implement pending state in `StateSurface`:
+  - [ ] On `transition()` call: add `data-pending` attribute to target anchors.
+  - [ ] Default scope: all anchors. Optionally limited by `data-pending-targets`.
+  - [ ] On first frame arrival: remove `data-pending` from all anchors.
+  - [ ] On error/abort: remove `data-pending` from all anchors.
+- [ ] Add pending CSS to `client/styles.css`:
+  - [ ] `h-state[data-pending]` — opacity, pointer-events: none, transition.
+- [ ] Remove manual `surface.transition()` calls from `client/main.ts` (keep only boot auto-run).
+- [ ] Update existing templates with `data-action` attributes:
+  - [ ] Search page: input/button triggers `data-action="search"`.
+  - [ ] Article page: any in-page action buttons.
+- [ ] Add tests:
+  - [ ] Action discovery: click on `[data-action]` triggers transition.
+  - [ ] Params parsing: `data-params` JSON correctly passed.
+  - [ ] Pending state: `data-pending` added on transition start, removed on first frame.
+  - [ ] Pending targets: `data-pending-targets` limits scope.
+  - [ ] Form submission: `<form data-action>` submit triggers transition.
+  - [ ] Abort: pending cleared when new action aborts previous.
+- [ ] Smoke check: article page actions work end-to-end via `data-action`.
+- [ ] Smoke check: pending visual feedback visible during slow transitions.
+
+### Phase 12: Chatbot Demo Route
+
+(Phase 11 action system 완료 후 진행)
 
 StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑됨을 보여주는 데모 route.
 LLM 응답 스트리밍 → NDJSON partial frame → progressive UI construction.
@@ -338,7 +388,7 @@ const ChatMessage = mount<MessageProps>(renew => {
   - [ ] SSR initial render shows empty chat or welcome message.
 - [ ] Smoke check: full chat flow works end-to-end in dev server.
 
-### Phase 12: Engine/User Code Separation
+### Phase 13: Engine/User Code Separation
 
 프레임워크 내부 코어 코드를 `engine/`으로 통합하여, 사용자가 작성하는 영역과 명확히 분리한다.
 사용자는 **surface, template, transition, action** 4가지 개념만 신경 쓰면 되고,

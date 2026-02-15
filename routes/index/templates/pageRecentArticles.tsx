@@ -36,7 +36,7 @@ const RecentArticles = ({ heading, articles }: RecentArticlesProps) => {
       ) : (
         <ul class="grid gap-4 md:grid-cols-2">
           {list.map(article => (
-            <li>
+            <li key={article.id}>
               <a
                 href={article.href}
                 class="group block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow"
