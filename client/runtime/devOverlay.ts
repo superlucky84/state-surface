@@ -53,13 +53,17 @@ export function attachDevOverlay(surface: StateSurface): (() => void) | undefine
   }
 
   // Toggle button
-  overlay.querySelector<HTMLElement>('[data-action="toggle"]')!.addEventListener('click', () => {
-    const body = overlay.querySelector<HTMLElement>('[data-section="body"]')!;
-    body.style.display = body.style.display === 'none' ? '' : 'none';
-  });
+  overlay
+    .querySelector<HTMLElement>('[data-overlay-action="toggle"]')!
+    .addEventListener('click', () => {
+      const body = overlay.querySelector<HTMLElement>('[data-section="body"]')!;
+      body.style.display = body.style.display === 'none' ? '' : 'none';
+    });
 
   // Close button
-  overlay.querySelector<HTMLElement>('[data-action="close"]')!.addEventListener('click', detach);
+  overlay
+    .querySelector<HTMLElement>('[data-overlay-action="close"]')!
+    .addEventListener('click', detach);
 
   return detach;
 }
@@ -90,8 +94,8 @@ function createOverlayElement(): HTMLElement {
 
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#16213e;cursor:pointer;">
-      <strong data-action="toggle" style="cursor:pointer;">StateSurface Debug</strong>
-      <span data-action="close" style="cursor:pointer;padding:0 4px;">\u2715</span>
+      <strong data-overlay-action="toggle" style="cursor:pointer;">StateSurface Debug</strong>
+      <span data-overlay-action="close" style="cursor:pointer;padding:0 4px;">\u2715</span>
     </div>
     <div data-section="body">
       <div style="padding:6px 10px;border-bottom:1px solid #333;">

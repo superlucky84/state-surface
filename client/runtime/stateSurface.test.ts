@@ -34,9 +34,7 @@ function createMockSurface() {
 }
 
 function setupDOM(anchors: string[], stateJson?: Record<string, any>) {
-  document.body.innerHTML = anchors
-    .map(name => `<h-state name="${name}"></h-state>`)
-    .join('');
+  document.body.innerHTML = anchors.map(name => `<h-state name="${name}"></h-state>`).join('');
 
   if (stateJson) {
     const script = document.createElement('script');
@@ -338,6 +336,129 @@ describe('StateSurface', () => {
       // Queue should be drained
       expect(rendered).toHaveLength(1);
       expect(surface.activeStates).toEqual({ a: { v: 1 } });
+    });
+  });
+
+  // ── Pending State ──
+
+  describe('pending state', () => {
+    it('adds pending on transition start and clears on first frame', async () => {
+      setupDOM(['a', 'b']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
+
+      let resolveFetch!: (value: Response) => void;
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockReturnValue(new Promise(resolve => (resolveFetch = resolve)) as Promise<Response>);
+
+      const transitionPromise = surface.transition('demo');
+
+      expect(a.hasAttribute('data-pending')).toBe(true);
+      expect(b.hasAttribute('data-pending')).toBe(true);
+
+      resolveFetch(
+        new Response(
+          `${JSON.stringify({ type: 'state', states: { a: { v: 1 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
+          { status: 200 }
+        )
+      );
+
+      await transitionPromise;
+
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(b.hasAttribute('data-pending')).toBe(false);
+      fetchSpy.mockRestore();
+    });
+
+    it('limits pending scope with pendingTargets option', async () => {
+      setupDOM(['a', 'b']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(
+            `${JSON.stringify({ type: 'state', states: { b: { v: 2 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
+            { status: 200 }
+          )
+        );
+
+      const transitionPromise = surface.transition('demo', {}, { pendingTargets: ['b'] });
+
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(b.hasAttribute('data-pending')).toBe(true);
+
+      await transitionPromise;
+
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(b.hasAttribute('data-pending')).toBe(false);
+      fetchSpy.mockRestore();
+    });
+
+    it('keeps latest transition pending when previous transition is aborted', async () => {
+      setupDOM(['a', 'b']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
+
+      let resolveSecondFetch!: (value: Response) => void;
+      let callCount = 0;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+        callCount++;
+
+        if (callCount === 1) {
+          const signal = init?.signal as AbortSignal;
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                const err = new Error('Aborted');
+                err.name = 'AbortError';
+                reject(err);
+              },
+              { once: true }
+            );
+          }) as Promise<Response>;
+        }
+
+        return new Promise(resolve => {
+          resolveSecondFetch = resolve;
+        }) as Promise<Response>;
+      });
+
+      const firstTransition = surface.transition('first', {}, { pendingTargets: ['a'] });
+      expect(a.hasAttribute('data-pending')).toBe(true);
+      expect(b.hasAttribute('data-pending')).toBe(false);
+
+      const secondTransition = surface.transition('second', {}, { pendingTargets: ['b'] });
+
+      await Promise.resolve();
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(b.hasAttribute('data-pending')).toBe(true);
+
+      resolveSecondFetch(
+        new Response(
+          `${JSON.stringify({ type: 'state', states: { b: { v: 3 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
+          { status: 200 }
+        )
+      );
+
+      await secondTransition;
+      await firstTransition;
+
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(b.hasAttribute('data-pending')).toBe(false);
+      fetchSpy.mockRestore();
     });
   });
 });

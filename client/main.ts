@@ -1,6 +1,7 @@
 import { StateSurface } from './runtime/stateSurface.js';
 import { createLithentBridge } from './runtime/lithentBridge.js';
 import { attachDevOverlay } from './runtime/devOverlay.js';
+import { bindDeclarativeActions } from './runtime/actionDelegation.js';
 import './styles.css';
 import './templates/auto.js';
 
@@ -16,6 +17,9 @@ const surface = new StateSurface({
 // Discover anchors and bootstrap from SSR state
 surface.discoverAnchors();
 surface.bootstrap();
+
+// Declarative actions (data-action / data-params / data-pending-targets)
+bindDeclarativeActions(surface);
 
 // Auto-run transition if boot config is present
 const bootEl = document.getElementById('__BOOT__');

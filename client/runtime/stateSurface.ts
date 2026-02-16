@@ -23,6 +23,10 @@ export interface StateSurfaceOptions {
   trace?: (event: TraceEvent) => void;
 }
 
+export interface TransitionOptions {
+  pendingTargets?: string[];
+}
+
 // ── StateSurface ──
 
 export class StateSurface {
@@ -30,6 +34,7 @@ export class StateSurface {
   private frameQueue: StateFrameState[] = [];
   private anchors = new Map<string, HTMLElement>();
   private mounted = new Set<string>();
+  private pendingAnchors = new Set<string>();
   private flushScheduled = false;
   private abortController: AbortController | null = null;
   private maxQueue: number;
@@ -55,6 +60,7 @@ export class StateSurface {
   // ── Anchor Discovery ──
 
   discoverAnchors() {
+    this.clearPending();
     this.anchors.clear();
     const elements = document.querySelectorAll<HTMLElement>('h-state[name]');
     for (const el of elements) {
@@ -87,13 +93,21 @@ export class StateSurface {
 
   // ── Transitions ──
 
-  async transition(name: string, params: Record<string, unknown> = {}) {
+  async transition(
+    name: string,
+    params: Record<string, unknown> = {},
+    options: TransitionOptions = {}
+  ) {
     // Abort previous transition
     if (this.abortController) {
       this.abortController.abort();
+      this.clearPending();
     }
     this.abortController = new AbortController();
-    const { signal } = this.abortController;
+    const transitionController = this.abortController;
+    const { signal } = transitionController;
+    this.markPending(options.pendingTargets);
+    let firstFrameHandled = false;
 
     try {
       const res = await fetch(`/transition/${name}`, {
@@ -105,12 +119,23 @@ export class StateSurface {
 
       if (!res.ok || !res.body) {
         this.trace?.({ kind: 'error', detail: `HTTP ${res.status}` });
+        if (this.abortController === transitionController) {
+          this.clearPending();
+        }
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const parser = createNdjsonParser(frame => this.onFrame(frame, signal));
+      const parser = createNdjsonParser(frame => {
+        if (!firstFrameHandled) {
+          firstFrameHandled = true;
+          if (this.abortController === transitionController) {
+            this.clearPending();
+          }
+        }
+        this.onFrame(frame, signal);
+      });
 
       while (true) {
         const { done, value } = await reader.read();
@@ -120,9 +145,17 @@ export class StateSurface {
       }
 
       parser.flush();
+      if (!firstFrameHandled && this.abortController === transitionController) {
+        this.clearPending();
+      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         this.trace?.({ kind: 'error', detail: err });
+        if (this.abortController === transitionController) {
+          this.clearPending();
+        }
+      } else if (this.abortController === transitionController) {
+        this.clearPending();
       }
     }
   }
@@ -221,10 +254,7 @@ export class StateSurface {
     let merged = { ...first };
     let mergeCount = 0;
 
-    while (
-      this.frameQueue.length > 0 &&
-      this.frameQueue[0].full === false
-    ) {
+    while (this.frameQueue.length > 0 && this.frameQueue[0].full === false) {
       const next = this.frameQueue.shift()!;
       merged = {
         type: 'state',
@@ -264,11 +294,7 @@ export class StateSurface {
     });
   }
 
-  private sync(
-    nextStates: Record<string, any>,
-    changedKeys: string[],
-    removedKeys: string[]
-  ) {
+  private sync(nextStates: Record<string, any>, changedKeys: string[], removedKeys: string[]) {
     // Remove inactive templates
     for (const key of removedKeys) {
       if (this.mounted.has(key)) {
@@ -298,5 +324,30 @@ export class StateSurface {
     }
 
     this.activeStates = nextStates;
+  }
+
+  private markPending(targets?: string[]) {
+    this.clearPending();
+
+    const names = targets && targets.length > 0 ? targets : Array.from(this.anchors.keys());
+
+    for (const name of names) {
+      const el = this.anchors.get(name);
+      if (!el) continue;
+      el.setAttribute('data-pending', '');
+      this.pendingAnchors.add(name);
+    }
+  }
+
+  private clearPending() {
+    if (this.pendingAnchors.size === 0) return;
+
+    for (const name of this.pendingAnchors) {
+      const el = this.anchors.get(name);
+      if (!el) continue;
+      el.removeAttribute('data-pending');
+    }
+
+    this.pendingAnchors.clear();
   }
 }
