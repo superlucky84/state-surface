@@ -12,7 +12,7 @@ describe('fileToUrlPattern', () => {
   });
 
   it('converts [param].ts to /:param', () => {
-    expect(fileToUrlPattern('article/[id].ts')).toBe('/article/:id');
+    expect(fileToUrlPattern('guide/[slug].ts')).toBe('/guide/:slug');
   });
 
   it('converts nested index.ts to /dir', () => {
@@ -21,6 +21,10 @@ describe('fileToUrlPattern', () => {
 
   it('converts deeply nested dynamic segment', () => {
     expect(fileToUrlPattern('admin/users/[userId].ts')).toBe('/admin/users/:userId');
+  });
+
+  it('converts nested static route', () => {
+    expect(fileToUrlPattern('features/streaming.ts')).toBe('/features/streaming');
   });
 });
 
@@ -33,7 +37,9 @@ describe('scanRoutes', () => {
 
     expect(patterns).toContain('/');
     expect(patterns).toContain('/search');
-    expect(patterns).toContain('/article/:id');
+    expect(patterns).toContain('/guide/:slug');
+    expect(patterns).toContain('/features/streaming');
+    expect(patterns).toContain('/features/actions');
   });
 
   it('skips template files (.tsx)', async () => {

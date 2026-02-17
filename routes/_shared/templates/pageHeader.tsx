@@ -20,14 +20,17 @@ const Header = ({ title, nav }: HeaderProps) => (
         <a class={navLinkClass(nav === 'home')} href="/">
           Home
         </a>
-        <a class={navLinkClass(nav === 'article')} href="/article/1">
-          Article #1
+        <a class={navLinkClass(nav === 'guide')} href="/guide/surface">
+          Guide
+        </a>
+        <a class={navLinkClass(nav === 'streaming')} href="/features/streaming">
+          Streaming
+        </a>
+        <a class={navLinkClass(nav === 'actions')} href="/features/actions">
+          Actions
         </a>
         <a class={navLinkClass(nav === 'search')} href="/search">
           Search
-        </a>
-        <a class={navLinkClass(nav === 'about')} href="/about">
-          About
         </a>
       </nav>
     </div>

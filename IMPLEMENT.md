@@ -354,61 +354,61 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 
 **Checklist:**
 
-- [ ] Redesign home page (`/`):
-  - [ ] `routes/index.ts` — hero (framework intro) + concepts (4 카드) + features (데모 링크).
-  - [ ] `routes/index/templates/pageHero.tsx` — StateSurface 소개 히어로.
-  - [ ] `routes/index/templates/pageConcepts.tsx` — Surface, Template, Transition, Action 4 카드.
-  - [ ] `routes/index/templates/pageFeatures.tsx` — 기능 데모 페이지 링크 목록.
-  - [ ] `initial` only (transition 없음) — 정적 SSR의 모범 예시.
-- [ ] Create guide route (`/guide/[slug]`):
-  - [ ] `routes/guide/[slug].ts` — 개념 가이드 surface (guide:content, guide:toc).
-  - [ ] `routes/guide/transitions/guideLoad.ts`:
-    - [ ] Full frame: 가이드 메타 + TOC (즉시).
-    - [ ] Partial frame: 본문 콘텐츠 로드 (스트리밍 시연).
-  - [ ] `routes/guide/templates/guideContent.tsx` — 가이드 본문 렌더링.
-  - [ ] `routes/guide/templates/guideToc.tsx` — 목차 사이드바.
-  - [ ] Slug별 콘텐츠 데이터: `surface`, `template`, `transition`, `action`.
-  - [ ] `boot: { auto: true }` — SSR 후 자동 콘텐츠 로드.
-  - [ ] 가이드 콘텐츠는 해당 기능을 설명하는 텍스트.
-- [ ] Create streaming demo page (`/features/streaming`):
-  - [ ] `routes/features/streaming.ts` — 스트리밍 시각화 surface.
-  - [ ] `routes/features/streaming/transitions/streamDemo.ts`:
-    - [ ] Full frame → partial (changed) → partial (removed) → error → done 시퀀스.
-    - [ ] 각 프레임 타입을 의도적으로 시연.
-  - [ ] `routes/features/streaming/templates/demoControls.tsx` — 프레임 발사 버튼들.
-  - [ ] `routes/features/streaming/templates/demoTimeline.tsx` — 프레임 도착 타임라인.
-  - [ ] `routes/features/streaming/templates/demoOutput.tsx` — 현재 activeStates 시각화.
-  - [ ] `removed` 키 시연 (이전에 빠져있던 기능).
-  - [ ] Error frame 시연.
-- [ ] Create actions playground page (`/features/actions`):
-  - [ ] `routes/features/actions.ts` — 액션 플레이그라운드 surface.
-  - [ ] `routes/features/actions/transitions/actionDemo.ts` — 다양한 액션 처리.
-  - [ ] `routes/features/actions/templates/actionsPlayground.tsx`:
-    - [ ] 버튼 `data-action` 예제.
-    - [ ] Form `data-action` 제출 예제.
-    - [ ] `data-pending-targets` scoped pending 예제.
-    - [ ] 다중 action 버튼 예제.
-  - [ ] `routes/features/actions/templates/actionsLog.tsx` — 액션 이벤트 로그 표시.
-- [ ] Redesign search page (`/search`):
-  - [ ] `routes/search.ts` — StateSurface 기능/개념 검색으로 콘텐츠 변경.
-  - [ ] `routes/search/transitions/search.ts` — 기능 목록에서 검색.
-  - [ ] 검색 결과는 StateSurface 기능/개념 설명 + 해당 데모 페이지 링크.
-- [ ] Remove old routes:
-  - [ ] `routes/article/` 디렉터리 제거 (guide로 대체).
-  - [ ] 관련 transition (article-load) 제거.
-- [ ] Update navigation:
-  - [ ] `routes/_shared/templates/pageHeader.tsx` — 새 페이지 구조 반영.
-  - [ ] 모든 페이지 간 링크 동작 확인.
-- [ ] Update tests:
-  - [ ] 기존 article 관련 테스트 제거/교체.
-  - [ ] 각 새 route에 대한 SSR 테스트.
-  - [ ] Guide dynamic param 테스트.
-  - [ ] Streaming demo 프레임 시퀀스 테스트.
-  - [ ] Actions playground 테스트.
-  - [ ] Cross-page slot independence 재검증.
-- [ ] Smoke check: 모든 페이지 SSR 정상 렌더링.
-- [ ] Smoke check: 페이지 간 네비게이션 정상 동작.
-- [ ] Smoke check: 각 페이지에서 시연하는 기능이 실제로 동작.
+- [x] Redesign home page (`/`):
+  - [x] `routes/index.ts` — hero (framework intro) + concepts (4 카드) + features (데모 링크).
+  - [x] `routes/index/templates/pageHero.tsx` — StateSurface 소개 히어로.
+  - [x] `routes/index/templates/pageConcepts.tsx` — Surface, Template, Transition, Action 4 카드.
+  - [x] `routes/index/templates/pageFeatures.tsx` — 기능 데모 페이지 링크 목록.
+  - [x] `initial` only (transition 없음) — 정적 SSR의 모범 예시.
+- [x] Create guide route (`/guide/[slug]`):
+  - [x] `routes/guide/[slug].ts` — 개념 가이드 surface (guide:content, guide:toc).
+  - [x] `routes/guide/transitions/guideLoad.ts`:
+    - [x] Full frame: 가이드 메타 + TOC (즉시).
+    - [x] Partial frame: 본문 콘텐츠 로드 (스트리밍 시연).
+  - [x] `routes/guide/templates/guideContent.tsx` — 가이드 본문 렌더링.
+  - [x] `routes/guide/templates/guideToc.tsx` — 목차 사이드바.
+  - [x] Slug별 콘텐츠 데이터: `surface`, `template`, `transition`, `action`.
+  - [x] `boot: { auto: true }` — SSR 후 자동 콘텐츠 로드.
+  - [x] 가이드 콘텐츠는 해당 기능을 설명하는 텍스트.
+- [x] Create streaming demo page (`/features/streaming`):
+  - [x] `routes/features/streaming.ts` — 스트리밍 시각화 surface.
+  - [x] `routes/features/streaming/transitions/streamDemo.ts`:
+    - [x] Full frame → partial (changed) → partial (removed) → error → done 시퀀스.
+    - [x] 각 프레임 타입을 의도적으로 시연.
+  - [x] `routes/features/streaming/templates/demoControls.tsx` — 프레임 발사 버튼들.
+  - [x] `routes/features/streaming/templates/demoTimeline.tsx` — 프레임 도착 타임라인.
+  - [x] `routes/features/streaming/templates/demoOutput.tsx` — 현재 activeStates 시각화.
+  - [x] `removed` 키 시연 (이전에 빠져있던 기능).
+  - [x] Error frame 시연.
+- [x] Create actions playground page (`/features/actions`):
+  - [x] `routes/features/actions.ts` — 액션 플레이그라운드 surface.
+  - [x] `routes/features/actions/transitions/actionDemo.ts` — 다양한 액션 처리.
+  - [x] `routes/features/actions/templates/actionsPlayground.tsx`:
+    - [x] 버튼 `data-action` 예제.
+    - [x] Form `data-action` 제출 예제.
+    - [x] `data-pending-targets` scoped pending 예제.
+    - [x] 다중 action 버튼 예제.
+  - [x] `routes/features/actions/templates/actionsLog.tsx` — 액션 이벤트 로그 표시.
+- [x] Redesign search page (`/search`):
+  - [x] `routes/search.ts` — StateSurface 기능/개념 검색으로 콘텐츠 변경.
+  - [x] `routes/search/transitions/search.ts` — 기능 목록에서 검색.
+  - [x] 검색 결과는 StateSurface 기능/개념 설명 + 해당 데모 페이지 링크.
+- [x] Remove old routes:
+  - [x] `routes/article/` 디렉터리 제거 (guide로 대체).
+  - [x] 관련 transition (article-load) 제거.
+- [x] Update navigation:
+  - [x] `routes/_shared/templates/pageHeader.tsx` — 새 페이지 구조 반영.
+  - [x] 모든 페이지 간 링크 동작 확인.
+- [x] Update tests:
+  - [x] 기존 article 관련 테스트 제거/교체.
+  - [x] 각 새 route에 대한 SSR 테스트.
+  - [x] Guide dynamic param 테스트.
+  - [x] Streaming demo 프레임 시퀀스 테스트.
+  - [x] Actions playground 테스트.
+  - [x] Cross-page slot independence 재검증.
+- [x] Smoke check: 모든 페이지 SSR 정상 렌더링.
+- [x] Smoke check: 페이지 간 네비게이션 정상 동작.
+- [x] Smoke check: 각 페이지에서 시연하는 기능이 실제로 동작.
 
 ### Phase 13: Chatbot Demo Route
 

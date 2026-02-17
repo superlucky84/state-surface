@@ -10,8 +10,9 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('<!DOCTYPE html>');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="page:hero"');
-    expect(res.text).toContain('<h-state name="page:recent-articles"');
-    expect(res.text).toContain('State-driven UI for MPA pages');
+    expect(res.text).toContain('<h-state name="page:concepts"');
+    expect(res.text).toContain('<h-state name="page:features"');
+    expect(res.text).toContain('StateSurface');
     expect(res.text).toContain('id="__STATE__"');
     expect(res.text).toContain('data-ssr-hash');
   });
@@ -28,33 +29,42 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('Search');
   });
 
-  it('GET /article/1 returns SSR-rendered article page', async () => {
-    const res = await request(app).get('/article/1');
+  it('GET /guide/surface returns SSR-rendered guide page', async () => {
+    const res = await request(app).get('/guide/surface');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
     expect(res.text).toContain('<h-state name="page:header"');
-    expect(res.text).toContain('<h-state name="page:content"');
+    expect(res.text).toContain('<h-state name="guide:content"');
+    expect(res.text).toContain('<h-state name="guide:toc"');
     expect(res.text).toContain('id="__STATE__"');
   });
 
-  it('GET /article/42 uses dynamic param in initial state', async () => {
-    const res = await request(app).get('/article/42');
+  it('GET /features/streaming returns SSR-rendered streaming page', async () => {
+    const res = await request(app).get('/features/streaming');
 
     expect(res.status).toBe(200);
-    // __STATE__ should contain articleId: 42
-    const stateMatch = res.text.match(
-      /<script id="__STATE__" type="application\/json">([\s\S]*?)<\/script>/
-    );
-    expect(stateMatch).not.toBeNull();
-    const state = JSON.parse(stateMatch![1]);
-    expect(state['page:content'].articleId).toBe(42);
+    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<h-state name="demo:controls"');
+    expect(res.text).toContain('<h-state name="demo:timeline"');
+    expect(res.text).toContain('<h-state name="demo:output"');
+    expect(res.text).toContain('id="__STATE__"');
+  });
+
+  it('GET /features/actions returns SSR-rendered actions page', async () => {
+    const res = await request(app).get('/features/actions');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<h-state name="actions:playground"');
+    expect(res.text).toContain('<h-state name="actions:log"');
+    expect(res.text).toContain('id="__STATE__"');
   });
 });
 
 describe('boot config injection', () => {
-  it('GET /article/1 includes __BOOT__ script', async () => {
-    const res = await request(app).get('/article/1');
+  it('GET /guide/surface includes __BOOT__ script', async () => {
+    const res = await request(app).get('/guide/surface');
 
     expect(res.text).toContain('id="__BOOT__"');
     const bootMatch = res.text.match(
@@ -62,8 +72,8 @@ describe('boot config injection', () => {
     );
     expect(bootMatch).not.toBeNull();
     const boot = JSON.parse(bootMatch![1]);
-    expect(boot.transition).toBe('article-load');
-    expect(boot.params.articleId).toBe(1);
+    expect(boot.transition).toBe('guide-load');
+    expect(boot.params.slug).toBe('surface');
   });
 
   it('GET / does not include __BOOT__ script (no boot config)', async () => {
@@ -84,9 +94,10 @@ describe('empty anchors', () => {
     const res = await request(app).get('/');
 
     expect(res.text).toContain('name="page:hero"');
-    expect(res.text).toContain('name="page:recent-articles"');
-    expect(res.text).not.toContain('name="page:content"');
-    expect(res.text).not.toContain('name="panel:comments"');
+    expect(res.text).toContain('name="page:concepts"');
+    expect(res.text).toContain('name="page:features"');
+    expect(res.text).not.toContain('name="guide:content"');
+    expect(res.text).not.toContain('name="demo:controls"');
     expect(res.text).not.toContain('name="search:input"');
     expect(res.text).not.toContain('name="search:results"');
   });

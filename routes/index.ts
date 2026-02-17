@@ -5,7 +5,7 @@ export default {
   layout: stateScript => {
     const body = joinSurface(
       '<main class="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-8 pt-4 md:pt-6">',
-      stateSlots('page:hero', 'page:recent-articles'),
+      stateSlots('page:hero', 'page:concepts', 'page:features'),
       '</main>'
     );
     return baseSurface(body, stateScript);
@@ -14,37 +14,64 @@ export default {
   initial: () => ({
     'page:header': { title: 'StateSurface', nav: 'home' },
     'page:hero': {
-      badge: 'StateSurface v1',
-      title: 'State-driven UI for MPA pages',
+      badge: 'State-Layout Mapping Runtime',
+      title: 'StateSurface',
       description:
-        'Server transitions stream state frames, and each page surface projects only its own slots.',
-      primaryLabel: 'Open Article Demo',
-      primaryHref: '/article/1',
-      secondaryLabel: 'Try Search Demo',
-      secondaryHref: '/search',
+        'Server owns state. Client owns DOM projection. Pages are MPA, in-page updates come from NDJSON state streams. Define surfaces, templates, transitions, and actions — the engine handles the rest.',
+      primaryLabel: 'Read the Guide',
+      primaryHref: '/guide/surface',
+      secondaryLabel: 'Try Streaming Demo',
+      secondaryHref: '/features/streaming',
     },
-    'page:recent-articles': {
-      heading: 'Recent articles',
-      articles: [
+    'page:concepts': {
+      concepts: [
         {
-          id: 1,
-          title: 'Hydration Boundaries That Stay Stable',
-          summary: 'Observe SSR -> hydration -> streamed partial updates without remount flicker.',
-          href: '/article/1',
+          key: 'surface',
+          title: 'Surface',
+          description:
+            'Page shell with <h-state> anchors declared as plain HTML strings. Surfaces define structure — slots and layout, no business content.',
+          href: '/guide/surface',
         },
         {
-          id: 2,
-          title: 'Frame Precedence in Practice',
-          summary:
-            'See how full frames and partial frames keep UI updates deterministic and predictable.',
-          href: '/article/2',
+          key: 'template',
+          title: 'Template',
+          description:
+            'TSX projection components that render inside each <h-state> anchor. Templates are stateless by default — server state drives all content.',
+          href: '/guide/template',
         },
         {
-          id: 3,
-          title: 'Route-Level Surface Independence',
-          summary:
-            'Each route owns only its own slots, so page identity stays explicit across navigation.',
-          href: '/article/3',
+          key: 'transition',
+          title: 'Transition',
+          description:
+            'Server-side async generators that yield state frames. Full frames declare complete UI state; partial frames merge changes progressively.',
+          href: '/guide/transition',
+        },
+        {
+          key: 'action',
+          title: 'Action',
+          description:
+            'Declarative triggers via data-action attributes. No JS event wiring in user code — the engine handles delegation, pending states, and abort.',
+          href: '/guide/action',
+        },
+      ],
+    },
+    'page:features': {
+      features: [
+        {
+          title: 'Streaming Demo',
+          description: 'Watch full/partial frames, removed keys, and error frames in real time.',
+          href: '/features/streaming',
+        },
+        {
+          title: 'Actions Playground',
+          description:
+            'Try button actions, form submissions, scoped pending, and multiple actions.',
+          href: '/features/actions',
+        },
+        {
+          title: 'Search',
+          description: 'Search StateSurface features and concepts with form-based actions.',
+          href: '/search',
         },
       ],
     },

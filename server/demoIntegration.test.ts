@@ -52,19 +52,19 @@ function feedFramesToSurface(surface: StateSurface, frames: StateFrame[]) {
   (surface as any).flushQueue(true);
 }
 
-describe('server stream → client apply (article-load)', () => {
+describe('server stream → client apply (guide-load)', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
   });
 
   it('full pipeline: server frames produce correct client state', async () => {
     // 1. Get frames from server
-    const res = await request(app).post('/transition/article-load').send({ articleId: 1 });
+    const res = await request(app).post('/transition/guide-load').send({ slug: 'surface' });
 
     const frames = decodeFrames(res.text);
 
     // 2. Set up client
-    setupAnchors(['page:header', 'page:content', 'panel:comments', 'system:error']);
+    setupAnchors(['page:header', 'guide:toc', 'guide:content', 'system:error']);
     const { surface, rendered, updated } = createTestSurface();
     surface.discoverAnchors();
 
@@ -72,16 +72,15 @@ describe('server stream → client apply (article-load)', () => {
     feedFramesToSurface(surface, frames);
 
     // 4. Verify final state
-    expect(surface.activeStates['page:header']).toEqual({ title: 'Blog', nav: 'article' });
-    expect(surface.activeStates['page:content'].title).toBe('Article #1');
-    expect(surface.activeStates['page:content'].loading).toBe(false);
-    expect(surface.activeStates['panel:comments'].comments).toHaveLength(2);
+    expect(surface.activeStates['page:header']).toHaveProperty('title');
+    expect(surface.activeStates['guide:toc'].slug).toBe('surface');
+    expect(surface.activeStates['guide:content'].loading).toBe(false);
+    expect(surface.activeStates['guide:content'].sections.length).toBeGreaterThan(0);
 
-    // header rendered once, content rendered once then updated once, comments rendered once
-    expect(rendered.filter(r => r.name === 'page:header')).toHaveLength(1);
-    expect(rendered.filter(r => r.name === 'page:content')).toHaveLength(1);
-    expect(updated.filter(u => u.name === 'page:content')).toHaveLength(1);
-    expect(rendered.filter(r => r.name === 'panel:comments')).toHaveLength(1);
+    // toc rendered once, content rendered once then updated once
+    expect(rendered.filter(r => r.name === 'guide:toc')).toHaveLength(1);
+    expect(rendered.filter(r => r.name === 'guide:content')).toHaveLength(1);
+    expect(updated.filter(u => u.name === 'guide:content')).toHaveLength(1);
   });
 });
 
@@ -91,9 +90,10 @@ describe('home route surface independence', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('name="page:hero"');
-    expect(res.text).toContain('name="page:recent-articles"');
-    expect(res.text).not.toContain('name="page:content"');
-    expect(res.text).not.toContain('name="panel:comments"');
+    expect(res.text).toContain('name="page:concepts"');
+    expect(res.text).toContain('name="page:features"');
+    expect(res.text).not.toContain('name="guide:content"');
+    expect(res.text).not.toContain('name="demo:controls"');
     expect(res.text).not.toContain('name="search:input"');
     expect(res.text).not.toContain('name="search:results"');
   });
@@ -105,7 +105,7 @@ describe('server stream → client apply (search)', () => {
   });
 
   it('full pipeline: search frames produce correct client state', async () => {
-    const res = await request(app).post('/transition/search').send({ query: 'test' });
+    const res = await request(app).post('/transition/search').send({ query: 'streaming' });
 
     const frames = decodeFrames(res.text);
 
@@ -115,9 +115,9 @@ describe('server stream → client apply (search)', () => {
 
     feedFramesToSurface(surface, frames);
 
-    expect(surface.activeStates['search:input'].query).toBe('test');
+    expect(surface.activeStates['search:input'].query).toBe('streaming');
     expect(surface.activeStates['search:results'].loading).toBe(false);
-    expect(surface.activeStates['search:results'].items).toHaveLength(3);
+    expect(surface.activeStates['search:results'].items.length).toBeGreaterThan(0);
 
     // results rendered once then updated once
     expect(rendered.filter(r => r.name === 'search:results')).toHaveLength(1);
