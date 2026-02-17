@@ -395,6 +395,7 @@ Progressive streaming ─── /chat
 cacheUpdate optimization─ /chat
 Debug overlay ─────────── all pages (?debug=1)
 i18n (ko/en) ─────────── all pages
+basePath ─────────────── all pages (sub-path mounting)
 ```
 
 #### i18n: Korean / English Bilingual Content
@@ -426,6 +427,53 @@ i18n (ko/en) ─────────── all pages
 | 쿠키 | `lang` 쿠키 (기본값 `en`, 유효값 `ko` \| `en`) |
 | SSR | `initial(req)`에서 `req.cookies.lang` 읽어 해당 언어 데이터 반환 |
 | 콘텐츠 | 각 route의 transition과 initial 데이터에 ko/en 버전 병렬 보관 |
+
+#### Base Path: Sub-Path Mounting
+
+기존 서비스(예: Java Spring 기반 `https://www.example.com`)의 **서브 경로**에
+StateSurface 앱을 마운트할 수 있어야 한다.
+
+```
+https://www.example.com/state-surface/          → StateSurface 앱
+https://www.example.com/state-surface/guide/surface
+https://www.example.com/state-surface/transition/search   (POST)
+```
+
+Nginx 리버스 프록시 구성 예:
+```nginx
+location /state-surface/ {
+    proxy_pass http://localhost:3000/;
+}
+```
+
+**설계 원칙:**
+
+* **Single source of truth** — `shared/basePath.ts` 모듈이 basePath를 중앙 관리.
+  `setBasePath(path)`, `getBasePath()`, `prefixPath(url)` 헬퍼 제공.
+* **Zero-cost default** — basePath가 `''`(빈 문자열)이면 현재와 완전히 동일하게 동작.
+  기존 코드에 regression 없음.
+* **환경변수 구동** — `process.env.BASE_PATH`로 설정.
+  `BASE_PATH=/state-surface pnpm dev`로 즉시 서브 경로 모드 활성화.
+* **서버→클라이언트 전달** — SSR HTML에 `<script id="__BASE_PATH__">` JSON 태그 삽입.
+  클라이언트 부트스트랩 시 읽어서 `setBasePath()` 호출 + `StateSurface` 인스턴스에 전달.
+
+**영향 범위:**
+
+| 레이어 | 영향받는 부분 | 적용 방식 |
+|--------|-------------|----------|
+| 서버 라우트 | `app.get()`, `app.post('/transition/:name')` | `prefixPath(urlPattern)` |
+| 클라이언트 fetch | `fetch('/transition/${name}')` | `StateSurfaceOptions.basePath` |
+| 레이아웃 에셋 | `<script src="/client/main.ts">` | `prefixPath(clientEntry)` |
+| 콘텐츠 href | `shared/content.ts`의 모든 href | `prefixPath(href)` |
+| 템플릿 href | pageHeader, guideToc 등의 네비게이션 링크 | `prefixPath(href)` |
+| 쿠키 Path | `lang` 쿠키의 `Path=/` | `Path=${basePath \|\| '/'}` |
+| Vite | 에셋 번들 경로 | `vite.config.ts`의 `base` 옵션 연동 |
+
+**시연 가치:**
+
+* 실전 배포 시나리오 — 대부분의 프레임워크가 `basePath`/`base` 옵션을 제공하는 이유.
+* StateSurface 데모 사이트 자체도 서브 경로로 배포 예정.
+* MPA + NDJSON 스트리밍 모델에서 basePath가 올바르게 전파되는 것을 검증.
 
 ---
 

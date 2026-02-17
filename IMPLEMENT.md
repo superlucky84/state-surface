@@ -458,6 +458,53 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 - [ ] Smoke check: 모든 페이지에서 ko/en 전환 동작.
 - [ ] Smoke check: 언어 전환 후 MPA 네비게이션 시 쿠키 유지.
 
+### Phase 12.2: Base Path — Sub-Path Mounting
+
+(Phase 12.1 i18n 완료 후 진행)
+
+StateSurface 앱을 기존 서비스의 서브 경로(예: `/state-surface/`)에 마운트할 수 있도록
+basePath 설정 기능을 추가한다. 환경변수 `BASE_PATH`로 설정하면 서버/클라이언트/템플릿 전체에 자동 전파.
+
+**설계:**
+
+* `shared/basePath.ts` — `setBasePath()`, `getBasePath()`, `prefixPath()` 중앙 헬퍼.
+* 서버: `process.env.BASE_PATH` 읽어서 Express 라우트 + transition 엔드포인트에 prefix.
+* 클라이언트: SSR HTML의 `<script id="__BASE_PATH__">` → `client/main.ts`에서 읽어서
+  `StateSurface` 인스턴스와 `setBasePath()`에 전달.
+* basePath='' (기본값)이면 현재와 완전히 동일하게 동작 (zero-cost default).
+
+**Checklist:**
+
+- [ ] `shared/basePath.ts` 생성:
+  - [ ] `setBasePath(path)` — 정규화 (앞에 `/`, 뒤에 `/` 제거).
+  - [ ] `getBasePath()` — 현재 basePath 반환.
+  - [ ] `prefixPath(url)` — basePath + url 조합.
+- [ ] 서버 적용:
+  - [ ] `server/index.ts` — `process.env.BASE_PATH` 읽어서 `setBasePath()` 호출.
+  - [ ] `server/index.ts` — `app.get(prefixPath(route.urlPattern))` 라우트 마운트.
+  - [ ] `server/index.ts` — `app.post(prefixPath('/transition/:name'))` 엔드포인트.
+  - [ ] `layouts/surface.ts` — `<script src>` 에셋 경로에 `prefixPath()` 적용.
+  - [ ] `shared/i18n.ts` — 쿠키 `Path`에 basePath 반영.
+- [ ] SSR → 클라이언트 전달:
+  - [ ] `server/ssr.ts` — `buildBasePathScript(basePath)` 함수 추가.
+  - [ ] `server/routeHandler.ts` — stateScript에 basePathScript 포함.
+- [ ] 클라이언트 적용:
+  - [ ] `client/runtime/stateSurface.ts` — `StateSurfaceOptions.basePath` 추가, fetch URL prefix.
+  - [ ] `client/main.ts` — `__BASE_PATH__` 읽어서 `setBasePath()` + `StateSurface` 전달.
+- [ ] 콘텐츠/템플릿 href:
+  - [ ] `shared/content.ts` — 모든 href에 `prefixPath()` 적용.
+  - [ ] `routes/_shared/templates/pageHeader.tsx` — 네비게이션 href에 `prefixPath()`.
+  - [ ] `routes/index/templates/pageHero.tsx` — fallback href에 `prefixPath()`.
+  - [ ] `routes/guide/templates/guideToc.tsx` — `/guide/${item}`에 `prefixPath()`.
+  - [ ] `routes/guide/templates/guideContent.tsx` — `/guide/${s}`에 `prefixPath()`.
+- [ ] Vite 설정:
+  - [ ] `vite.config.ts` — `base: process.env.BASE_PATH || '/'` 설정.
+- [ ] 테스트:
+  - [ ] `shared/basePath.test.ts` — prefixPath 유틸 테스트.
+  - [ ] basePath='' 기본값에서 기존 테스트 전체 통과 (regression 없음).
+  - [ ] basePath 설정 후 Express 라우트 접근, transition URL, 쿠키 Path 검증.
+- [ ] Smoke check: `BASE_PATH=/demo pnpm dev`로 전체 사이트 동작 확인.
+
 ### Phase 13: Chatbot Demo Route
 
 (Phase 12.1 i18n 완료 후 진행)
