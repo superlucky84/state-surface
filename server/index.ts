@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
 import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
+import { isValidLang, langCookie } from '../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
@@ -42,6 +43,11 @@ app.post('/transition/:name', async (req, res) => {
   if (!handler) {
     res.status(404).json({ error: `Transition "${req.params.name}" not found` });
     return;
+  }
+
+  // Set language cookie for switch-lang transition
+  if (req.params.name === 'switch-lang' && isValidLang(req.body?.lang)) {
+    res.setHeader('Set-Cookie', langCookie(req.body.lang));
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson');

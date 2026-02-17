@@ -394,7 +394,38 @@ Abort previous ────────── /chat
 Progressive streaming ─── /chat
 cacheUpdate optimization─ /chat
 Debug overlay ─────────── all pages (?debug=1)
+i18n (ko/en) ─────────── all pages
 ```
+
+#### i18n: Korean / English Bilingual Content
+
+모든 데모 페이지는 **한국어(ko)와 영어(en)** 두 언어를 지원한다.
+헤더에 언어 전환 버튼이 있고, 선택한 언어로 모든 콘텐츠가 표시된다.
+
+**설계 원칙:**
+
+* 언어 전환은 **transition** 으로 처리 — StateSurface 모델 그대로 활용.
+  버튼 클릭 → `data-action="switch-lang"` → 서버가 해당 언어 콘텐츠로 full frame yield.
+* 언어 상태는 **쿠키(`lang=ko|en`)** 에 저장 — MPA 네비게이션 시에도 유지.
+* `initial(req)`에서 쿠키를 읽어 SSR 시점부터 올바른 언어로 렌더링.
+* 콘텐츠 데이터는 `{ ko: ..., en: ... }` 구조로 서버에 보관.
+  클라이언트는 언어를 알 필요 없음 — 서버가 선택한 언어의 데이터만 전송.
+
+**시연 가치:**
+
+* "서버가 상태를 소유한다"의 실전 사례 — 언어 선택은 서버 상태.
+* 모든 페이지가 transition 한 번으로 전체 콘텐츠를 교체하는 full frame 활용 예시.
+* `data-action` 선언적 바인딩의 자연스러운 확장.
+
+**구현 범위:**
+
+| 항목 | 설명 |
+|------|------|
+| 전환 버튼 | `page:header` 템플릿에 ko/en 토글 버튼 추가 |
+| 전환 transition | `_shared/transitions/switchLang.ts` — 현재 라우트의 모든 슬롯을 해당 언어로 full frame |
+| 쿠키 | `lang` 쿠키 (기본값 `en`, 유효값 `ko` \| `en`) |
+| SSR | `initial(req)`에서 `req.cookies.lang` 읽어 해당 언어 데이터 반환 |
+| 콘텐츠 | 각 route의 transition과 initial 데이터에 ko/en 버전 병렬 보관 |
 
 ---
 

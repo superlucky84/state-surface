@@ -1,5 +1,7 @@
 import type { RouteModule } from '../../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
+import { getLang } from '../../shared/i18n.js';
+import { guideLoadingState } from '../../shared/content.js';
 
 const VALID_SLUGS = ['surface', 'template', 'transition', 'action'];
 
@@ -28,19 +30,12 @@ export default {
 
   transition: 'guide-load',
 
-  params: req => ({ slug: parseSlug(req) }),
+  params: req => ({ slug: parseSlug(req), lang: getLang(req) }),
 
-  initial: req => {
-    const slug = parseSlug(req);
-    return {
-      'page:header': { title: 'Guide', nav: 'guide' },
-      'guide:toc': { slug, items: VALID_SLUGS },
-      'guide:content': { slug, loading: true },
-    };
-  },
+  initial: req => guideLoadingState(parseSlug(req), getLang(req)),
 
   boot: {
     auto: true,
-    params: req => ({ slug: parseSlug(req) }),
+    params: req => ({ slug: parseSlug(req), lang: getLang(req) }),
   },
 } satisfies RouteModule;

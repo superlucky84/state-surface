@@ -1,5 +1,7 @@
 import type { StateFrame } from '../../../../shared/protocol.js';
 import { defineTransition } from '../../../../server/transition.js';
+import { isValidLang } from '../../../../shared/i18n.js';
+import type { Lang } from '../../../../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -7,13 +9,15 @@ async function* streamDemo(
   params: Record<string, unknown>
 ): AsyncGenerator<StateFrame, void, unknown> {
   const mode = (params.mode as string) ?? 'full-sequence';
+  const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
+  const headerTitle = lang === 'ko' ? '스트리밍 데모' : 'Streaming Demo';
 
   if (mode === 'error-demo') {
     // Demonstrate error frame
     yield {
       type: 'state',
       states: {
-        'page:header': { title: 'Streaming Demo', nav: 'streaming' },
+        'page:header': { title: headerTitle, nav: 'streaming', lang },
         'demo:controls': {
           description: 'Error demo in progress...',
         },
@@ -42,7 +46,7 @@ async function* streamDemo(
   yield {
     type: 'state',
     states: {
-      'page:header': { title: 'Streaming Demo', nav: 'streaming' },
+      'page:header': { title: headerTitle, nav: 'streaming', lang },
       'demo:controls': {
         description: 'Streaming in progress... Full frame sent.',
       },
@@ -104,7 +108,7 @@ async function* streamDemo(
   yield {
     type: 'state',
     states: {
-      'page:header': { title: 'Streaming Demo', nav: 'streaming' },
+      'page:header': { title: headerTitle, nav: 'streaming', lang },
       'demo:controls': {
         description: 'Sequence complete! All frame types demonstrated. Try again or trigger an error.',
       },

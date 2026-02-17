@@ -1,5 +1,7 @@
 import type { RouteModule } from '../../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
+import { getLang } from '../../shared/i18n.js';
+import { actionsContent } from '../../shared/content.js';
 
 export default {
   layout: stateScript => {
@@ -13,14 +15,5 @@ export default {
 
   transition: 'action-demo',
 
-  initial: () => ({
-    'page:header': { title: 'Actions Playground', nav: 'actions' },
-    'actions:playground': {
-      lastAction: null,
-      lastParams: null,
-    },
-    'actions:log': {
-      entries: [],
-    },
-  }),
+  initial: req => actionsContent(getLang(req)),
 } satisfies RouteModule;

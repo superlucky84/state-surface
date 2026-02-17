@@ -1,5 +1,7 @@
 import type { RouteModule } from '../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+import { getLang } from '../shared/i18n.js';
+import { searchContent } from '../shared/content.js';
 
 export default {
   layout: stateScript => {
@@ -13,8 +15,5 @@ export default {
 
   transition: 'search',
 
-  initial: () => ({
-    'page:header': { title: 'Search', nav: 'search' },
-    'search:input': { query: '' },
-  }),
+  initial: req => searchContent(getLang(req)),
 } satisfies RouteModule;

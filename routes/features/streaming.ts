@@ -1,5 +1,7 @@
 import type { RouteModule } from '../../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
+import { getLang } from '../../shared/i18n.js';
+import { streamingContent } from '../../shared/content.js';
 
 export default {
   layout: stateScript => {
@@ -13,13 +15,5 @@ export default {
 
   transition: 'stream-demo',
 
-  initial: () => ({
-    'page:header': { title: 'Streaming Demo', nav: 'streaming' },
-    'demo:controls': {
-      description:
-        'Click a button to fire a transition that demonstrates different frame types. Watch the timeline and output update in real time.',
-    },
-    'demo:timeline': { frames: [] },
-    'demo:output': { activeKeys: [] },
-  }),
+  initial: req => streamingContent(getLang(req)),
 } satisfies RouteModule;

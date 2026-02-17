@@ -34,6 +34,32 @@ describe('demo SSR page', () => {
     expect(res.text).not.toContain('name="search:input"');
     expect(res.text).not.toContain('name="search:results"');
   });
+
+  it('GET / without lang cookie defaults to English content', async () => {
+    const res = await request(app).get('/');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('State-Layout Mapping Runtime');
+    expect(res.text).toContain('Read the Guide');
+    expect(res.text).not.toContain('상태-레이아웃 매핑 런타임');
+  });
+
+  it('GET / with lang=ko cookie renders Korean content', async () => {
+    const res = await request(app).get('/').set('Cookie', 'lang=ko');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('상태-레이아웃 매핑 런타임');
+    expect(res.text).toContain('가이드 읽기');
+    expect(res.text).not.toContain('State-Layout Mapping Runtime');
+  });
+
+  it('GET /search with lang=ko cookie renders Korean labels', async () => {
+    const res = await request(app).get('/search').set('Cookie', 'lang=ko');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('검색');
+    expect(res.text).toContain('StateSurface 기능과 개념 검색');
+  });
 });
 
 describe('demo transitions', () => {
@@ -120,6 +146,55 @@ describe('demo transitions', () => {
     expect(lines[3].full).not.toBe(false);
 
     expect(lines[4].type).toBe('done');
+  });
+
+  it('switch-lang transition yields full frame with target language', async () => {
+    const res = await request(app)
+      .post('/transition/switch-lang')
+      .send({ lang: 'ko', page: 'home' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+
+    // Verify Set-Cookie header
+    const cookies = res.headers['set-cookie'];
+    expect(cookies).toBeDefined();
+    const cookieStr = Array.isArray(cookies) ? cookies.join('; ') : cookies;
+    expect(cookieStr).toContain('lang=ko');
+
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
+
+    // Full frame with Korean content
+    expect(lines[0].type).toBe('state');
+    expect(lines[0].states['page:header'].lang).toBe('ko');
+    expect(lines[0].states['page:hero'].badge).toContain('상태-레이아웃');
+
+    expect(lines[1].type).toBe('done');
+  });
+
+  it('switch-lang to English yields English content', async () => {
+    const res = await request(app)
+      .post('/transition/switch-lang')
+      .send({ lang: 'en', page: 'home' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+
+    const cookieStr = Array.isArray(res.headers['set-cookie'])
+      ? res.headers['set-cookie'].join('; ')
+      : res.headers['set-cookie'];
+    expect(cookieStr).toContain('lang=en');
+
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
+
+    expect(lines[0].states['page:header'].lang).toBe('en');
+    expect(lines[0].states['page:hero'].badge).toBe('State-Layout Mapping Runtime');
   });
 
   it('action-demo streams correct NDJSON frames', async () => {

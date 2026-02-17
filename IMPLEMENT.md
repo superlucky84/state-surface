@@ -410,9 +410,57 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 - [x] Smoke check: 페이지 간 네비게이션 정상 동작.
 - [x] Smoke check: 각 페이지에서 시연하는 기능이 실제로 동작.
 
-### Phase 13: Chatbot Demo Route
+### Phase 12.1: i18n — Korean / English Bilingual Content
 
 (Phase 12 demo site 완료 후 진행)
+
+모든 데모 페이지에 한/영 전환 기능을 추가한다.
+헤더 상단에 언어 전환 버튼, 쿠키 기반 언어 유지, SSR 시점부터 올바른 언어 렌더링.
+
+**설계:**
+
+* 언어 전환은 `data-action="switch-lang"` transition으로 처리.
+* 언어 상태는 `lang` 쿠키에 저장 (`ko` | `en`, 기본값 `en`).
+* `initial(req)`에서 쿠키를 읽어 해당 언어 데이터로 SSR.
+* 콘텐츠 데이터는 서버에 `{ ko, en }` 구조로 보관, 선택된 언어만 클라이언트에 전송.
+
+**Checklist:**
+
+- [x] 언어 콘텐츠 데이터 구조 정의:
+  - [x] 각 route의 콘텐츠를 `{ ko: ..., en: ... }` 형태로 재구성.
+  - [x] 홈(`/`): hero, concepts, features 한글 콘텐츠 작성.
+  - [x] 가이드(`/guide/[slug]`): surface, template, transition, action 한글 가이드.
+  - [x] 스트리밍(`/features/streaming`): controls, timeline 라벨 한글화.
+  - [x] 액션(`/features/actions`): playground, log 라벨 한글화.
+  - [x] 검색(`/search`): 검색 항목 + UI 라벨 한글화.
+- [x] 쿠키 인프라:
+  - [x] Express에 `cookie-parser` 미들웨어 추가 (또는 수동 파싱).
+  - [x] `req.cookies.lang` 읽기 헬퍼 (기본값 `en`).
+- [x] 언어 전환 transition:
+  - [x] `routes/_shared/transitions/switchLang.ts` 생성.
+  - [x] 현재 라우트의 모든 슬롯을 해당 언어로 full frame yield.
+  - [x] 응답 헤더에 `Set-Cookie: lang=ko|en` 설정.
+- [x] 헤더 전환 버튼:
+  - [x] `pageHeader.tsx`에 ko/en 토글 버튼 추가.
+  - [x] `data-action="switch-lang"` + `data-params='{"lang":"ko"}'`.
+  - [x] 현재 언어 상태를 props로 전달 받아 활성 표시.
+- [x] 각 route의 `initial(req)` 업데이트:
+  - [x] 쿠키에서 언어를 읽어 해당 언어 데이터 반환.
+  - [x] 홈, 가이드, 스트리밍, 액션, 검색 모든 route 적용.
+- [x] 각 route의 transition 업데이트:
+  - [x] params에서 `lang` 수신 또는 기본값 사용.
+  - [x] 해당 언어 콘텐츠로 frame yield.
+- [x] 테스트:
+  - [x] SSR: `lang=ko` 쿠키 → 한국어 콘텐츠 렌더링 확인.
+  - [x] SSR: 쿠키 없음 → 영어 기본 렌더링 확인.
+  - [x] Transition: `switch-lang` → full frame으로 전체 언어 전환 확인.
+  - [x] 쿠키 설정: 전환 후 `Set-Cookie` 헤더 확인.
+- [ ] Smoke check: 모든 페이지에서 ko/en 전환 동작.
+- [ ] Smoke check: 언어 전환 후 MPA 네비게이션 시 쿠키 유지.
+
+### Phase 13: Chatbot Demo Route
+
+(Phase 12.1 i18n 완료 후 진행)
 
 StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑됨을 보여주는 데모 route.
 LLM 응답 스트리밍 → NDJSON partial frame → progressive UI construction.
