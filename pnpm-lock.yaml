@@ -12,8 +12,8 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       lithent:
-        specifier: ^1.21.6
-        version: 1.21.6
+        specifier: ^1.21.7
+        version: 1.21.7
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.18
@@ -864,8 +864,8 @@ packages:
     resolution: {integrity: sha512-utfs7Pr5uJyyvDETitgsaqSyjCb2qNRAtuqUeWIAKztsOYdcACf2KtARYXg2pSvhkt+9NfoaNY7fxjl6nuMjIQ==}
     engines: {node: '>= 12.0.0'}
 
-  lithent@1.21.6:
-    resolution: {integrity: sha512-NtQFkr0j1usAvmRaTLydTruIRXu1sFtO3xSYKrcOtS1jBUojCcho8yrD+aYqCe+0IAAdmXR8LaBxDHC7Ft/MpA==}
+  lithent@1.21.7:
+    resolution: {integrity: sha512-o93x4xdGxVmCecBWgR1TB2GHiNx8kzDtdcjRxESOjyKAUOulZFHLPehMJwVVsqvya3g+ijDRxQSnOxcTpTsVww==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -1920,7 +1920,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.30.2
       lightningcss-win32-x64-msvc: 1.30.2
 
-  lithent@1.21.6: {}
+  lithent@1.21.7: {}
 
   magic-string@0.30.21:
     dependencies:

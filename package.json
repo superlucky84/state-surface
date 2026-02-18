@@ -35,6 +35,6 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "lithent": "^1.21.6"
+    "lithent": "^1.21.7"
   }
 }
