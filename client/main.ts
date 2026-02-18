@@ -2,13 +2,20 @@ import { StateSurface } from './runtime/stateSurface.js';
 import { createLithentBridge } from './runtime/lithentBridge.js';
 import { attachDevOverlay } from './runtime/devOverlay.js';
 import { bindDeclarativeActions } from './runtime/actionDelegation.js';
+import { setBasePath } from '../shared/basePath.js';
 import './styles.css';
 import './templates/auto.js';
+
+// Bootstrap basePath from SSR-embedded script tag (must happen before hydration)
+const basePathEl = document.getElementById('__BASE_PATH__');
+const basePath = basePathEl?.textContent ? (JSON.parse(basePathEl.textContent) as string) : '';
+setBasePath(basePath);
 
 // Create StateSurface with Lithent bridge
 const bridge = createLithentBridge({ fallbackTemplate: 'system:error' });
 const surface = new StateSurface({
   ...bridge,
+  basePath,
   trace: event => {
     console.log('[StateSurface]', event.kind, event.detail ?? '');
   },

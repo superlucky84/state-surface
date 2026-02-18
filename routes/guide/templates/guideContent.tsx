@@ -1,4 +1,5 @@
 import { defineTemplate } from '../../../shared/templateRegistry.js';
+import { prefixPath } from '../../../shared/basePath.js';
 
 type Section = {
   id: string;
@@ -39,7 +40,7 @@ const GuideContent = ({ slug, loading, title, sections }: GuideContentProps) => 
           .map(s => (
             <a
               key={s}
-              href={`/guide/${s}`}
+              href={prefixPath(`/guide/${s}`)}
               class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
             >
               {s.charAt(0).toUpperCase() + s.slice(1)} Guide

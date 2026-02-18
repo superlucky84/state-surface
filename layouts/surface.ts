@@ -1,3 +1,5 @@
+import { prefixPath } from '../shared/basePath.js';
+
 type SurfaceBlock = string | false | null | undefined;
 
 export interface SurfaceDocumentOptions {
@@ -42,7 +44,7 @@ ${styles}
 <body>
 ${body}
 ${stateScript}
-  <script type="module" src="${clientEntry}"></script>
+  <script type="module" src="${prefixPath(clientEntry)}"></script>
 </body>
 </html>`;
 }
@@ -62,7 +64,7 @@ ${body}
 <h-state name="system:error"></h-state>
 </div>
 ${stateScript}
-  <script type="module" src="/client/main.ts"></script>
+  <script type="module" src="${prefixPath('/client/main.ts')}"></script>
 </body>
 </html>`;
 }

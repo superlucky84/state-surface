@@ -1,4 +1,5 @@
 import type { Lang } from './i18n.js';
+import { prefixPath } from './basePath.js';
 
 // ── Bilingual text helper ──
 
@@ -29,9 +30,9 @@ export function homeContent(lang: Lang) {
         lang
       ),
       primaryLabel: t({ ko: '가이드 읽기', en: 'Read the Guide' }, lang),
-      primaryHref: '/guide/surface',
+      primaryHref: prefixPath('/guide/surface'),
       secondaryLabel: t({ ko: '스트리밍 데모', en: 'Try Streaming Demo' }, lang),
-      secondaryHref: '/features/streaming',
+      secondaryHref: prefixPath('/features/streaming'),
     },
     'page:concepts': {
       concepts: [
@@ -45,7 +46,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/guide/surface',
+          href: prefixPath('/guide/surface'),
         },
         {
           key: 'template',
@@ -57,7 +58,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/guide/template',
+          href: prefixPath('/guide/template'),
         },
         {
           key: 'transition',
@@ -69,7 +70,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/guide/transition',
+          href: prefixPath('/guide/transition'),
         },
         {
           key: 'action',
@@ -81,7 +82,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/guide/action',
+          href: prefixPath('/guide/action'),
         },
       ],
     },
@@ -96,7 +97,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/features/streaming',
+          href: prefixPath('/features/streaming'),
         },
         {
           title: t({ ko: '액션 플레이그라운드', en: 'Actions Playground' }, lang),
@@ -107,7 +108,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/features/actions',
+          href: prefixPath('/features/actions'),
         },
         {
           title: t({ ko: '검색', en: 'Search' }, lang),
@@ -118,7 +119,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: '/search',
+          href: prefixPath('/search'),
         },
       ],
     },
@@ -448,8 +449,8 @@ export function searchResults(lang: Lang, query: string) {
         .map(f => ({ ...f, score: matchScore(f, query) }))
         .filter(f => f.score > 0)
         .sort((a, b) => b.score - a.score)
-        .map(({ score: _s, tags: _t, ...rest }) => rest)
-    : features.map(({ tags: _t, ...rest }) => rest);
+        .map(({ score: _s, tags: _t, ...rest }) => ({ ...rest, href: prefixPath(rest.href) }))
+    : features.map(({ tags: _t, ...rest }) => ({ ...rest, href: prefixPath(rest.href) }));
   return items;
 }
 

@@ -8,7 +8,11 @@ import { isValidLang, langCookie } from '../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
+import { setBasePath, prefixPath } from '../shared/basePath.js';
 import type { RouteModule } from '../shared/routeModule.js';
+
+// Initialize basePath from environment variable (must be done before any route/content import)
+setBasePath(process.env.BASE_PATH ?? '');
 
 const app = express();
 const PORT = 3000;
@@ -33,11 +37,11 @@ const scannedRoutes = await scanRoutes(routesDir);
 for (const route of scannedRoutes) {
   const mod = await import(pathToFileURL(route.filePath).href);
   const routeModule = extractRouteModule(mod);
-  app.get(route.urlPattern, createRouteHandler(routeModule));
+  app.get(prefixPath(route.urlPattern), createRouteHandler(routeModule));
 }
 
 // POST /transition/:name — NDJSON streaming endpoint
-app.post('/transition/:name', async (req, res) => {
+app.post(prefixPath('/transition/:name'), async (req, res) => {
   const handler = getTransition(req.params.name);
 
   if (!handler) {

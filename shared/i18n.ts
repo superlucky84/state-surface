@@ -1,3 +1,5 @@
+import { getBasePath } from './basePath.js';
+
 export type Lang = 'ko' | 'en';
 
 const VALID_LANGS: readonly Lang[] = ['ko', 'en'];
@@ -19,5 +21,6 @@ export function isValidLang(value: unknown): value is Lang {
 }
 
 export function langCookie(lang: Lang): string {
-  return `lang=${lang}; Path=/; SameSite=Lax; Max-Age=31536000`;
+  const cookiePath = getBasePath() || '/';
+  return `lang=${lang}; Path=${cookiePath}; SameSite=Lax; Max-Age=31536000`;
 }

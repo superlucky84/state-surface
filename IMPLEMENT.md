@@ -475,33 +475,33 @@ basePath 설정 기능을 추가한다. 환경변수 `BASE_PATH`로 설정하면
 
 **Checklist:**
 
-- [ ] `shared/basePath.ts` 생성:
-  - [ ] `setBasePath(path)` — 정규화 (앞에 `/`, 뒤에 `/` 제거).
-  - [ ] `getBasePath()` — 현재 basePath 반환.
-  - [ ] `prefixPath(url)` — basePath + url 조합.
-- [ ] 서버 적용:
-  - [ ] `server/index.ts` — `process.env.BASE_PATH` 읽어서 `setBasePath()` 호출.
-  - [ ] `server/index.ts` — `app.get(prefixPath(route.urlPattern))` 라우트 마운트.
-  - [ ] `server/index.ts` — `app.post(prefixPath('/transition/:name'))` 엔드포인트.
-  - [ ] `layouts/surface.ts` — `<script src>` 에셋 경로에 `prefixPath()` 적용.
-  - [ ] `shared/i18n.ts` — 쿠키 `Path`에 basePath 반영.
-- [ ] SSR → 클라이언트 전달:
-  - [ ] `server/ssr.ts` — `buildBasePathScript(basePath)` 함수 추가.
-  - [ ] `server/routeHandler.ts` — stateScript에 basePathScript 포함.
-- [ ] 클라이언트 적용:
-  - [ ] `client/runtime/stateSurface.ts` — `StateSurfaceOptions.basePath` 추가, fetch URL prefix.
-  - [ ] `client/main.ts` — `__BASE_PATH__` 읽어서 `setBasePath()` + `StateSurface` 전달.
-- [ ] 콘텐츠/템플릿 href:
-  - [ ] `shared/content.ts` — 모든 href에 `prefixPath()` 적용.
-  - [ ] `routes/_shared/templates/pageHeader.tsx` — 네비게이션 href에 `prefixPath()`.
-  - [ ] `routes/index/templates/pageHero.tsx` — fallback href에 `prefixPath()`.
-  - [ ] `routes/guide/templates/guideToc.tsx` — `/guide/${item}`에 `prefixPath()`.
-  - [ ] `routes/guide/templates/guideContent.tsx` — `/guide/${s}`에 `prefixPath()`.
-- [ ] Vite 설정:
-  - [ ] `vite.config.ts` — `base: process.env.BASE_PATH || '/'` 설정.
-- [ ] 테스트:
-  - [ ] `shared/basePath.test.ts` — prefixPath 유틸 테스트.
-  - [ ] basePath='' 기본값에서 기존 테스트 전체 통과 (regression 없음).
+- [x] `shared/basePath.ts` 생성:
+  - [x] `setBasePath(path)` — 정규화 (앞에 `/`, 뒤에 `/` 제거).
+  - [x] `getBasePath()` — 현재 basePath 반환.
+  - [x] `prefixPath(url)` — basePath + url 조합.
+- [x] 서버 적용:
+  - [x] `server/index.ts` — `process.env.BASE_PATH` 읽어서 `setBasePath()` 호출.
+  - [x] `server/index.ts` — `app.get(prefixPath(route.urlPattern))` 라우트 마운트.
+  - [x] `server/index.ts` — `app.post(prefixPath('/transition/:name'))` 엔드포인트.
+  - [x] `layouts/surface.ts` — `<script src>` 에셋 경로에 `prefixPath()` 적용.
+  - [x] `shared/i18n.ts` — 쿠키 `Path`에 basePath 반영.
+- [x] SSR → 클라이언트 전달:
+  - [x] `server/ssr.ts` — `buildBasePathScript(basePath)` 함수 추가.
+  - [x] `server/routeHandler.ts` — stateScript에 basePathScript 포함.
+- [x] 클라이언트 적용:
+  - [x] `client/runtime/stateSurface.ts` — `StateSurfaceOptions.basePath` 추가, fetch URL prefix.
+  - [x] `client/main.ts` — `__BASE_PATH__` 읽어서 `setBasePath()` + `StateSurface` 전달.
+- [x] 콘텐츠/템플릿 href:
+  - [x] `shared/content.ts` — 모든 href에 `prefixPath()` 적용 (함수 반환 시점, static const 제외).
+  - [x] `routes/_shared/templates/pageHeader.tsx` — 네비게이션 href에 `prefixPath()`.
+  - [x] `routes/index/templates/pageHero.tsx` — fallback href에 `prefixPath()`.
+  - [x] `routes/guide/templates/guideToc.tsx` — `/guide/${item}`에 `prefixPath()`.
+  - [x] `routes/guide/templates/guideContent.tsx` — `/guide/${s}`에 `prefixPath()`.
+- [x] Vite 설정:
+  - [x] `vite.config.ts` — `base: process.env.BASE_PATH || '/'` 설정.
+- [x] 테스트:
+  - [x] `shared/basePath.test.ts` — prefixPath 유틸 테스트 (12 tests).
+  - [x] basePath='' 기본값에서 기존 테스트 전체 통과 (186 tests, 0 regressions).
   - [ ] basePath 설정 후 Express 라우트 접근, transition URL, 쿠키 Path 검증.
 - [ ] Smoke check: `BASE_PATH=/demo pnpm dev`로 전체 사이트 동작 확인.
 
@@ -668,3 +668,4 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - 2026-02-11: Locked surface/projection asymmetry and added surface composition tasks.
 - 2026-02-14: Phase 8 complete — file-based route discovery, per-route SSR, boot config, demo migration (145 tests passing).
 - 2026-02-14: Phase 9 complete — static page route, param validation, 404 handling, cross-route nav (160 tests passing).
+- 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR __BASE_PATH__ script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).

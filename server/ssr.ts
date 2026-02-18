@@ -64,6 +64,14 @@ export function buildBootScript(boot: {
   return `<script id="__BOOT__" type="application/json">${safeStateJSON(boot)}</script>`;
 }
 
+/**
+ * Build the __BASE_PATH__ script tag for client basePath bootstrap.
+ * Embedded in SSR HTML; client reads it in main.ts before hydration.
+ */
+export function buildBasePathScript(basePath: string): string {
+  return `<script id="__BASE_PATH__" type="application/json">${safeStateJSON(basePath)}</script>`;
+}
+
 // ── SSR Hash ──
 
 /**

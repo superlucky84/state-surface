@@ -1,4 +1,5 @@
 import { defineTemplate } from '../../../shared/templateRegistry.js';
+import { prefixPath } from '../../../shared/basePath.js';
 
 type HeaderProps = {
   title: string;
@@ -58,19 +59,19 @@ const Header = ({ title, nav, lang }: HeaderProps) => {
           </div>
         </div>
         <nav class="flex flex-wrap items-center gap-2">
-          <a class={navLinkClass(nav === 'home')} href="/">
+          <a class={navLinkClass(nav === 'home')} href={prefixPath('/')}>
             Home
           </a>
-          <a class={navLinkClass(nav === 'guide')} href="/guide/surface">
+          <a class={navLinkClass(nav === 'guide')} href={prefixPath('/guide/surface')}>
             Guide
           </a>
-          <a class={navLinkClass(nav === 'streaming')} href="/features/streaming">
+          <a class={navLinkClass(nav === 'streaming')} href={prefixPath('/features/streaming')}>
             Streaming
           </a>
-          <a class={navLinkClass(nav === 'actions')} href="/features/actions">
+          <a class={navLinkClass(nav === 'actions')} href={prefixPath('/features/actions')}>
             Actions
           </a>
-          <a class={navLinkClass(nav === 'search')} href="/search">
+          <a class={navLinkClass(nav === 'search')} href={prefixPath('/search')}>
             Search
           </a>
         </nav>

@@ -21,6 +21,7 @@ export interface StateSurfaceOptions {
   maxQueue?: number;
   frameBudgetMs?: number;
   trace?: (event: TraceEvent) => void;
+  basePath?: string;
 }
 
 export interface TransitionOptions {
@@ -44,6 +45,7 @@ export class StateSurface {
   private hydrateTemplate: TemplateHydrator;
   private updateTemplate: TemplateUpdater;
   private unmountTemplate: (name: string, el: HTMLElement) => void;
+  private basePath: string;
 
   trace?: (event: TraceEvent) => void;
 
@@ -55,6 +57,7 @@ export class StateSurface {
     this.maxQueue = options.maxQueue ?? 20;
     this.frameBudgetMs = options.frameBudgetMs ?? 33;
     this.trace = options.trace;
+    this.basePath = options.basePath ?? '';
   }
 
   // ── Anchor Discovery ──
@@ -110,7 +113,7 @@ export class StateSurface {
     let firstFrameHandled = false;
 
     try {
-      const res = await fetch(`/transition/${name}`, {
+      const res = await fetch(`${this.basePath}/transition/${name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),

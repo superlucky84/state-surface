@@ -1,4 +1,5 @@
 import { defineTemplate } from '../../../shared/templateRegistry.js';
+import { prefixPath } from '../../../shared/basePath.js';
 
 type HeroProps = {
   badge?: string;
@@ -27,13 +28,13 @@ const Hero = ({
     <p class="mt-4 max-w-3xl text-base leading-7 text-slate-600">{description}</p>
     <div class="mt-6 flex flex-wrap gap-3">
       <a
-        href={primaryHref ?? '/guide/surface'}
+        href={primaryHref ?? prefixPath('/guide/surface')}
         class="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
       >
         {primaryLabel ?? 'Read the Guide'}
       </a>
       <a
-        href={secondaryHref ?? '/features/streaming'}
+        href={secondaryHref ?? prefixPath('/features/streaming')}
         class="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
       >
         {secondaryLabel ?? 'Try Streaming Demo'}

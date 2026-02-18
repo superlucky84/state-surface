@@ -1,4 +1,5 @@
 import { defineTemplate } from '../../../shared/templateRegistry.js';
+import { prefixPath } from '../../../shared/basePath.js';
 
 type TocProps = {
   slug: string;
@@ -11,7 +12,7 @@ const GuideToc = ({ slug, items }: TocProps) => (
     {items.map(item => (
       <a
         key={item}
-        href={`/guide/${item}`}
+        href={prefixPath(`/guide/${item}`)}
         class={
           item === slug
             ? 'block rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white'
