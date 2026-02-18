@@ -551,27 +551,27 @@ const ChatMessage = mount<MessageProps>(renew => {
 
 **Checklist:**
 
-- [ ] Create `routes/chat.ts` with chat-specific surface (`chat:messages`, `chat:input`, `chat:typing`).
-- [ ] Create `routes/chat/transitions/chat.ts`:
-  - [ ] Yield full frame: user message + typing indicator.
-  - [ ] Yield partial frames: bot 응답 토큰 누적 (simulated LLM stream).
-  - [ ] Yield final partial: 완성된 응답 + typing 제거 (`removed`).
-  - [ ] Yield `done`.
-- [ ] Create chat templates:
-  - [ ] `routes/chat/templates/chatMessages.tsx` — message list with `cacheUpdate` per message.
-  - [ ] `routes/chat/templates/chatInput.tsx` — input form.
-  - [ ] `routes/chat/templates/chatTyping.tsx` — typing indicator.
+- [x] Create `routes/chat.ts` with chat-specific surface (`chat:messages`, `chat:input`, `chat:typing`).
+- [x] Create `routes/chat/transitions/chat.ts`:
+  - [x] Yield full frame: user message + typing indicator.
+  - [x] Yield partial frames: bot 응답 토큰 누적 (simulated LLM stream).
+  - [x] Yield final partial: 완성된 응답 + typing 제거 (`removed`).
+  - [x] Yield `done`.
+- [x] Create chat templates:
+  - [x] `routes/chat/templates/chatMessages.tsx` — message list with `cacheUpdate` per message.
+  - [x] `routes/chat/templates/chatInput.tsx` — input form.
+  - [x] `routes/chat/templates/chatTyping.tsx` — typing indicator.
 - [ ] Verify `abort previous` works as "cancel generation":
   - [ ] Send new message during bot streaming → previous stream cancels.
   - [ ] Only latest conversation state survives.
 - [ ] Performance verification:
   - [ ] 100+ messages: old messages produce zero DOM mutations.
   - [ ] `cacheUpdate` dependency check confirms skip for unchanged messages.
-- [ ] Update `pageHeader.tsx` nav with `/chat` link.
-- [ ] Add tests:
-  - [ ] Transition yields correct frame sequence (full → partial\* → done).
+- [x] Update `pageHeader.tsx` nav with `/chat` link.
+- [x] Add tests:
+  - [x] Transition yields correct frame sequence (full → partial\* → done).
   - [ ] Abort mid-stream produces clean state.
-  - [ ] SSR initial render shows empty chat or welcome message.
+  - [x] SSR initial render shows empty chat or welcome message.
 - [ ] Smoke check: full chat flow works end-to-end in dev server.
 
 ### Phase 14: Engine/User Code Separation

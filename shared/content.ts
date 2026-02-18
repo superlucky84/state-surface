@@ -454,9 +454,43 @@ export function searchResults(lang: Lang, query: string) {
   return items;
 }
 
+// ── Chatbot demo page ──
+
+export function chatContent(lang: Lang) {
+  return {
+    'page:header': {
+      title: lang === 'ko' ? '챗봇 데모' : 'Chatbot Demo',
+      nav: 'chat',
+      lang,
+    },
+    'chat:messages': {
+      messages: [],
+      welcomeText: t(
+        {
+          ko: '메시지를 보내 대화를 시작하세요. Surface, Template, Transition, Action, Streaming, Hydration, Abort에 대해 물어보세요!',
+          en: 'Send a message to start the conversation. Ask about Surface, Template, Transition, Action, Streaming, Hydration, or Abort!',
+        },
+        lang
+      ),
+    },
+    'chat:input': {
+      placeholder: t({ ko: '메시지를 입력하세요...', en: 'Type a message...' }, lang),
+      submitLabel: t({ ko: '전송', en: 'Send' }, lang),
+      hint: t(
+        {
+          ko: '새 메시지를 보내면 진행 중인 응답이 취소됩니다 (abort previous 정책).',
+          en: 'Sending a new message cancels any in-progress response (abort previous policy).',
+        },
+        lang
+      ),
+      lang,
+    },
+  };
+}
+
 // ── Switch-lang: page content lookup by route key ──
 
-export type PageKey = 'home' | 'guide' | 'streaming' | 'actions' | 'search';
+export type PageKey = 'home' | 'guide' | 'streaming' | 'actions' | 'search' | 'chat';
 
 export function pageContent(
   page: PageKey,
@@ -488,6 +522,8 @@ export function pageContent(
       return actionsContent(lang);
     case 'search':
       return { ...searchContent(lang), 'search:results': undefined };
+    case 'chat':
+      return chatContent(lang);
     default:
       return homeContent(lang);
   }

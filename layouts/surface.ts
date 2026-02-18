@@ -49,6 +49,31 @@ ${stateScript}
 </html>`;
 }
 
+/**
+ * Full-viewport layout for chat-style pages.
+ * body = h-screen overflow-hidden, outer div = h-full flex-col.
+ * Consumers are expected to make their main element flex-1 min-h-0.
+ */
+export function chatSurface(body: string, stateScript: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StateSurface</title>
+</head>
+<body class="h-screen overflow-hidden bg-slate-100 text-slate-900 antialiased">
+<div class="mx-auto flex h-full w-full max-w-6xl flex-col px-4 pt-6 md:px-8">
+<h-state name="page:header"></h-state>
+${body}
+<h-state name="system:error"></h-state>
+</div>
+${stateScript}
+  <script type="module" src="${prefixPath('/client/main.ts')}"></script>
+</body>
+</html>`;
+}
+
 export function baseSurface(body: string, stateScript: string): string {
   return `<!DOCTYPE html>
 <html lang="en">

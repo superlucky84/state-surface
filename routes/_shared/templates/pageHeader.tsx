@@ -13,6 +13,7 @@ const NAV_PAGES: Record<string, string> = {
   streaming: 'streaming',
   actions: 'actions',
   search: 'search',
+  chat: 'chat',
 };
 
 function navLinkClass(active: boolean): string {
@@ -73,6 +74,9 @@ const Header = ({ title, nav, lang }: HeaderProps) => {
           </a>
           <a class={navLinkClass(nav === 'search')} href={prefixPath('/search')}>
             Search
+          </a>
+          <a class={navLinkClass(nav === 'chat')} href={prefixPath('/chat')}>
+            Chat
           </a>
         </nav>
       </div>
