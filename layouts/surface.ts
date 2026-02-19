@@ -32,6 +32,7 @@ export function surfaceDocument({
 ${styles}
   </style>`
     : '';
+  const stylesheetLink = `<link rel="stylesheet" href="${prefixPath('/client/styles.css')}">`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -39,6 +40,7 @@ ${styles}
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
+  ${stylesheetLink}
   ${styleBlock}
 </head>
 <body>
@@ -61,6 +63,7 @@ export function chatSurface(body: string, stateScript: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StateSurface</title>
+  <link rel="stylesheet" href="${prefixPath('/client/styles.css')}">
 </head>
 <body class="h-screen overflow-hidden bg-slate-100 text-slate-900 antialiased">
 <div class="mx-auto flex h-full w-full max-w-6xl flex-col px-4 pt-6 md:px-8">
@@ -81,6 +84,7 @@ export function baseSurface(body: string, stateScript: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StateSurface</title>
+  <link rel="stylesheet" href="${prefixPath('/client/styles.css')}">
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
 <div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-6 md:px-8">

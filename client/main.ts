@@ -3,7 +3,6 @@ import { createLithentBridge } from '../engine/client/lithentBridge.js';
 import { attachDevOverlay } from '../engine/client/devOverlay.js';
 import { bindDeclarativeActions } from '../engine/client/actionDelegation.js';
 import { setBasePath } from '../shared/basePath.js';
-import './styles.css';
 import './templates/auto.js';
 
 // Bootstrap basePath from SSR-embedded script tag (must happen before hydration)
