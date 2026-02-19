@@ -25,7 +25,7 @@ export async function bootstrapServer(options: BootstrapOptions = {}) {
 
 function resolveRootDir(): string {
   try {
-    return fileURLToPath(new URL('..', import.meta.url));
+    return fileURLToPath(new URL('../..', import.meta.url));
   } catch {
     return process.cwd();
   }
@@ -102,4 +102,3 @@ function loadModulesFromGlob(
     return null;
   }
 }
-

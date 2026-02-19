@@ -1,6 +1,6 @@
-import type { StateFrame, StateFrameState } from '../../shared/protocol.js';
-import { applyFrame } from '../../shared/protocol.js';
-import { createNdjsonParser } from '../../shared/ndjson.js';
+import type { StateFrame, StateFrameState } from '../shared/protocol.js';
+import { applyFrame } from '../shared/protocol.js';
+import { createNdjsonParser } from '../shared/ndjson.js';
 
 // ── Types ──
 

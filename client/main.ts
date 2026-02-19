@@ -1,7 +1,7 @@
-import { StateSurface } from './runtime/stateSurface.js';
-import { createLithentBridge } from './runtime/lithentBridge.js';
-import { attachDevOverlay } from './runtime/devOverlay.js';
-import { bindDeclarativeActions } from './runtime/actionDelegation.js';
+import { StateSurface } from '../engine/client/stateSurface.js';
+import { createLithentBridge } from '../engine/client/lithentBridge.js';
+import { attachDevOverlay } from '../engine/client/devOverlay.js';
+import { bindDeclarativeActions } from '../engine/client/actionDelegation.js';
 import { setBasePath } from '../shared/basePath.js';
 import './styles.css';
 import './templates/auto.js';

@@ -1,7 +1,7 @@
 import { h, render, mount, componentUpdate } from 'lithent';
 import type { TagFunction, Props } from 'lithent';
 import { hydration } from 'lithent/ssr';
-import { getTemplate } from '../../shared/templateRegistry.js';
+import { getTemplate } from '../shared/templateRegistry.js';
 import type { StateSurfaceOptions } from './stateSurface.js';
 
 type MountInfo = {

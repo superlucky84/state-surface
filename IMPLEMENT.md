@@ -573,7 +573,7 @@ const ChatMessage = mount<MessageProps>(renew => {
   - [x] Transition yields correct frame sequence (full → partial\* → done).
   - [x] Abort mid-stream produces clean state.
   - [x] SSR initial render shows empty chat or welcome message.
-- [ ] Smoke check: full chat flow works end-to-end in dev server.
+- [x] Smoke check: full chat flow works end-to-end in dev server.
 
 ### Phase 14: Engine/User Code Separation
 
@@ -617,37 +617,37 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 
 **Checklist:**
 
-- [ ] Create `engine/` directory structure (`engine/server/`, `engine/client/`, `engine/shared/`).
-- [ ] Move server engine code:
-  - [ ] `server/ssr.ts` → `engine/server/ssr.ts`
-  - [ ] `server/bootstrap.ts` → `engine/server/bootstrap.ts`
-  - [ ] `server/routeScanner.ts` → `engine/server/routeScanner.ts`
-  - [ ] `server/routeHandler.ts` → `engine/server/routeHandler.ts`
-  - [ ] `server/initialStates.ts` → `engine/server/initialStates.ts`
-  - [ ] `server/transition.ts` → `engine/server/transition.ts`
-  - [ ] `server/fsUtils.ts` → `engine/server/fsUtils.ts`
-- [ ] Move client engine code:
-  - [ ] `client/runtime/stateSurface.ts` → `engine/client/stateSurface.ts`
-  - [ ] `client/runtime/lithentBridge.ts` → `engine/client/lithentBridge.ts`
-  - [ ] `client/runtime/devOverlay.ts` → `engine/client/devOverlay.ts`
-- [ ] Move shared engine code:
-  - [ ] `shared/protocol.ts` → `engine/shared/protocol.ts`
-  - [ ] `shared/ndjson.ts` → `engine/shared/ndjson.ts`
-  - [ ] `shared/templateRegistry.ts` → `engine/shared/templateRegistry.ts`
-  - [ ] `shared/templateCheck.ts` → `engine/shared/templateCheck.ts`
-  - [ ] `shared/routeModule.ts` → `engine/shared/routeModule.ts`
-- [ ] Keep user-facing entry points thin:
-  - [ ] `server/index.ts` — 얇은 진입점, `engine/server/`에서 import하여 조합만.
-  - [ ] `client/main.ts` — 얇은 진입점, `engine/client/`에서 import하여 bootstrap + action 바인딩만.
-- [ ] Move test files alongside engine code:
-  - [ ] `server/*.test.ts` → `engine/server/*.test.ts`
-  - [ ] `client/runtime/*.test.ts` → `engine/client/*.test.ts`
-  - [ ] `shared/*.test.ts` → `engine/shared/*.test.ts`
-- [ ] Update all import paths across the codebase.
-- [ ] Update `tsconfig.json` include paths.
-- [ ] Update `CLAUDE.md` folder structure documentation.
-- [ ] Verify all tests pass after migration (zero regressions).
-- [ ] Smoke check: `pnpm dev` serves all routes correctly after restructure.
+- [x] Create `engine/` directory structure (`engine/server/`, `engine/client/`, `engine/shared/`).
+- [x] Move server engine code:
+  - [x] `server/ssr.ts` → `engine/server/ssr.ts`
+  - [x] `server/bootstrap.ts` → `engine/server/bootstrap.ts`
+  - [x] `server/routeScanner.ts` → `engine/server/routeScanner.ts`
+  - [x] `server/routeHandler.ts` → `engine/server/routeHandler.ts`
+  - [x] `server/initialStates.ts` → `engine/server/initialStates.ts`
+  - [x] `server/transition.ts` → `engine/server/transition.ts`
+  - [x] `server/fsUtils.ts` → `engine/server/fsUtils.ts`
+- [x] Move client engine code:
+  - [x] `client/runtime/stateSurface.ts` → `engine/client/stateSurface.ts`
+  - [x] `client/runtime/lithentBridge.ts` → `engine/client/lithentBridge.ts`
+  - [x] `client/runtime/devOverlay.ts` → `engine/client/devOverlay.ts`
+- [x] Move shared engine code:
+  - [x] `shared/protocol.ts` → `engine/shared/protocol.ts`
+  - [x] `shared/ndjson.ts` → `engine/shared/ndjson.ts`
+  - [x] `shared/templateRegistry.ts` → `engine/shared/templateRegistry.ts`
+  - [x] `shared/templateCheck.ts` → `engine/shared/templateCheck.ts`
+  - [x] `shared/routeModule.ts` → `engine/shared/routeModule.ts`
+- [x] Keep user-facing entry points thin:
+  - [x] `server/index.ts` — 얇은 진입점, `engine/server/`에서 import하여 조합만.
+  - [x] `client/main.ts` — 얇은 진입점, `engine/client/`에서 import하여 bootstrap + action 바인딩만.
+- [x] Move test files alongside engine code:
+  - [x] `server/*.test.ts` → `engine/server/*.test.ts`
+  - [x] `client/runtime/*.test.ts` → `engine/client/*.test.ts`
+  - [x] `shared/*.test.ts` → `engine/shared/*.test.ts`
+- [x] Update all import paths across the codebase.
+- [x] Update `tsconfig.json` include paths.
+- [x] Update `CLAUDE.md` folder structure documentation.
+- [x] Verify all tests pass after migration (zero regressions).
+- [x] Smoke check: `pnpm dev` serves all routes correctly after restructure.
 
 ## Definition of Done (v1 Prototype)
 
@@ -670,3 +670,4 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - 2026-02-14: Phase 8 complete — file-based route discovery, per-route SSR, boot config, demo migration (145 tests passing).
 - 2026-02-14: Phase 9 complete — static page route, param validation, 404 handling, cross-route nav (160 tests passing).
 - 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR **BASE_PATH** script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).
+- 2026-02-19: Phase 14 runtime smoke fixed — bootstrap root resolution corrected (`engine/server/bootstrap.ts`), transition compatibility export fixed (`server/transition.ts`), and `pnpm dev` verified for all routes + chat/search NDJSON transitions.

@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { registerTemplate } from '../../shared/templateRegistry.js';
+import { registerTemplate } from '../shared/templateRegistry.js';
 import { createLithentBridge } from './lithentBridge.js';
 import chatMessagesTemplate from '../../routes/chat/templates/chatMessages.js';
 

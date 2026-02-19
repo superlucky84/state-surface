@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { registerTemplate, clearRegistry } from '../../shared/templateRegistry.js';
+import { registerTemplate, clearRegistry } from '../shared/templateRegistry.js';
 import { createLithentBridge } from './lithentBridge.js';
 import { h, mount } from 'lithent';
 import type { TagFunction } from 'lithent';

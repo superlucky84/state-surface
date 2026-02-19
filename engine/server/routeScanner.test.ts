@@ -29,7 +29,7 @@ describe('fileToUrlPattern', () => {
 });
 
 describe('scanRoutes', () => {
-  const routesDir = path.resolve(import.meta.dirname ?? process.cwd(), '..', 'routes');
+  const routesDir = path.resolve(import.meta.dirname ?? process.cwd(), '..', '..', 'routes');
 
   it('discovers route modules from routes/ directory', async () => {
     const routes = await scanRoutes(routesDir);

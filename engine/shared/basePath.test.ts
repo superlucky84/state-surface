@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { setBasePath, getBasePath, prefixPath } from './basePath.js';
+import { setBasePath, getBasePath, prefixPath } from '../../shared/basePath.js';
 
 afterEach(() => {
   // Reset singleton after each test
