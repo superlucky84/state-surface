@@ -649,6 +649,79 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - [x] Verify all tests pass after migration (zero regressions).
 - [x] Smoke check: `pnpm dev` serves all routes correctly after restructure.
 
+### Phase 15: Guide Onboarding Clarity Upgrade
+
+(Phase 14 안정화 완료 후 진행)
+
+현재 가이드(`/guide/surface|template|transition|action`)는 개념 소개 중심이라,
+처음 보는 사용자가 "무엇을 어떤 순서로 작성해야 하는지"를 빠르게 따라가기에 정보 밀도가 부족하다.
+Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로 재구성한다.
+
+**목표:**
+
+- 가이드 하나만 읽고도 최소 기능(SSR + template + transition + action)을 재현할 수 있다.
+- 각 개념 페이지가 "언제 쓰는지 / 어떻게 쓰는지 / 어디서 디버깅하는지"를 명확히 전달한다.
+- ko/en 콘텐츠 깊이와 구조를 동일하게 유지한다.
+
+**학습 설계 원칙:**
+
+- Learn-by-doing: 모든 설명을 실제 파일 경로와 연결.
+- Progressive depth: 한 화면 요약 → 단계별 작성법 → 실패 케이스/디버깅.
+- Frame-first mental model: Transition/Action은 NDJSON frame 관점으로 설명.
+- Copy-safe snippets: 복붙 가능한 최소 코드 예시 제공.
+
+**Target guide structure (slug별 공통):**
+
+1. 한 줄 정의 (TL;DR)
+2. 언제 쓰나 / 언제 쓰지 않나
+3. 단계별 구현 절차 (파일 단위, 5~7 steps)
+4. 최소 동작 코드 예시 (surface/template/transition/action)
+5. 실행 시퀀스 (요청 → frame → DOM 반영)
+6. 흔한 실수 + 빠른 점검 체크리스트
+7. 다음 실습 링크 (관련 demo route)
+
+**구현 범위:**
+
+- 데이터 모델 확장: 단순 문단 배열을 블록 기반 구조(문단/리스트/코드/체크리스트/주의)로 전환.
+- 가이드 템플릿 강화: 블록 타입별 렌더링 컴포넌트와 코드 가독성 스타일 추가.
+- 콘텐츠 재작성: 4개 slug × 2개 언어(en/ko) 모두 단계형 서술로 전면 개편.
+- 검증 자동화: 가이드 품질 규칙(필수 블록 존재, 언어 동등성)을 테스트로 고정.
+
+**Checklist:**
+
+- [ ] 정보 구조(IA) 확정:
+  - [ ] slug별 공통 섹션(요약/절차/코드/디버깅/실습 링크) 스키마 확정.
+  - [ ] 각 섹션의 최소 품질 기준 정의(최소 step 수, 코드 예시 개수, 체크리스트 개수).
+- [ ] `shared/content.ts` 가이드 데이터 모델 개편:
+  - [ ] `GuideSection` 기반 단일 `body` 문자열 구조를 블록 배열 구조로 전환.
+  - [ ] 블록 타입 정의(`paragraph`, `bullets`, `code`, `checklist`, `warning`, `sequence`) 추가.
+  - [ ] en/ko 데이터 모두 동일한 블록 순서/개수 규칙을 따르도록 정리.
+- [ ] 가이드 콘텐츠 재작성 (EN):
+  - [ ] `surface`: 파일 구조 + 슬롯 설계 + 예시 + 실패 케이스.
+  - [ ] `template`: props/무상태 원칙 + template 등록/자동발견 + 예시.
+  - [ ] `transition`: full/partial/removed 규칙 + NDJSON 시퀀스 + 예시.
+  - [ ] `action`: `data-action`, `data-params`, `data-pending-targets`, abort 흐름 + 예시.
+- [ ] 가이드 콘텐츠 재작성 (KO):
+  - [ ] `surface` 한글 단계형 가이드 작성.
+  - [ ] `template` 한글 단계형 가이드 작성.
+  - [ ] `transition` 한글 단계형 가이드 작성.
+  - [ ] `action` 한글 단계형 가이드 작성.
+- [ ] `routes/guide/templates/guideContent.tsx` 강화:
+  - [ ] 블록 타입별 렌더러 추가(문단/리스트/코드/체크리스트/주의/시퀀스).
+  - [ ] 코드 블록 스타일(가독성/스크롤/모바일 대응) 보강.
+  - [ ] "다음 실습" CTA를 demo route와 연결.
+- [ ] 테스트 추가:
+  - [ ] 콘텐츠 스키마 검증: slug별 필수 블록 존재 확인.
+  - [ ] i18n 동등성 검증: en/ko 블록 구조 mismatch 방지.
+  - [ ] SSR 검증: 각 guide 페이지에 단계형 섹션/코드 블록 렌더 확인.
+- [ ] 문서 동기화:
+  - [ ] `CLAUDE.md`의 guide 설명을 새 학습 구조에 맞게 업데이트.
+  - [ ] `README.md`에 "Guide로 시작하기" 섹션(학습 순서 + 예상 소요시간) 추가.
+- [ ] Smoke check:
+  - [ ] `/guide/surface|template|transition|action`에서 단계형 콘텐츠가 모두 표시된다.
+  - [ ] ko/en 전환 시 가이드 구조(섹션 순서/코드 수)가 동일하게 유지된다.
+  - [ ] 모바일 폭에서도 코드 블록과 체크리스트가 깨지지 않는다.
+
 ## Definition of Done (v1 Prototype)
 
 - [x] End-to-end demo works with real NDJSON streamed transitions.
@@ -657,6 +730,7 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - [x] Debug trace + overlay available in dev mode.
 - [x] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
+- [ ] Guide pages provide step-by-step onboarding with runnable examples.
 
 ## Open Questions (Keep Short)
 
@@ -671,3 +745,4 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - 2026-02-14: Phase 9 complete — static page route, param validation, 404 handling, cross-route nav (160 tests passing).
 - 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR **BASE_PATH** script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).
 - 2026-02-19: Phase 14 runtime smoke fixed — bootstrap root resolution corrected (`engine/server/bootstrap.ts`), transition compatibility export fixed (`server/transition.ts`), and `pnpm dev` verified for all routes + chat/search NDJSON transitions.
+- 2026-02-19: Added Phase 15 plan for guide onboarding clarity upgrade (step-by-step structure, richer content model, quality tests, smoke checklist).
