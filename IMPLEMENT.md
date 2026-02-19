@@ -722,6 +722,57 @@ Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로
   - [ ] ko/en 전환 시 가이드 구조(섹션 순서/코드 수)가 동일하게 유지된다.
   - [ ] 모바일 폭에서도 코드 블록과 체크리스트가 깨지지 않는다.
 
+### Phase 16: `createLithent` CLI Scaffolding & Distribution
+
+(Phase 15 가이드 강화와 병행 가능, 릴리스 전 완료)
+
+목표는 `../lithent/createLithent`에 StateSurface 프로젝트 템플릿을 추가해,
+신규 사용자가 CLI 한 번으로 현재 데모 사이트(라우트/템플릿/트랜지션/스타일/문서)를 그대로 설치해 실행할 수 있게 만드는 것이다.
+
+**배포 목표:**
+
+- `createLithent` CLI에서 StateSurface 템플릿 선택 가능.
+- 생성 직후 `pnpm dev`로 현재 데모와 동일한 동작/화면을 재현.
+- 가이드/예제 페이지(`/`, `/guide/*`, `/features/*`, `/search`, `/chat`)가 모두 포함.
+
+**Template scope (설치 포함 대상):**
+
+- 엔진/런타임: `engine/`, `server/`, `client/`, `shared/`, `layouts/`, `routes/`.
+- 설정: `package.json`, `tsconfig.json`, `vite.config.ts`, 필수 스크립트/의존성.
+- 문서: 최소 `README.md` + 가이드 시작 경로 안내.
+- 테스트: 핵심 회귀를 보장하는 smoke/test 세트 포함.
+
+**Checklist:**
+
+- [ ] createLithent 연동 설계:
+  - [ ] CLI 템플릿 키/이름 확정 (예: `state-surface-demo`).
+  - [ ] 옵션 정책 확정 (기본: full demo 포함, 선택 옵션 최소화).
+  - [ ] 생성 후 안내 문구(`cd`, `pnpm i`, `pnpm dev`) 확정.
+- [ ] 템플릿 소스 구성 (`../lithent/createLithent`):
+  - [ ] StateSurface 템플릿 디렉토리 생성.
+  - [ ] 현재 프로젝트 구조를 템플릿 파일로 반영.
+  - [ ] 템플릿 내 불필요한 로컬/실험 파일 제외 규칙 적용.
+- [ ] 치환/초기화 처리:
+  - [ ] 프로젝트명/설명/라이선스 기본값 치환.
+  - [ ] Git 초기화 전후 동작(불필요 캐시/락 파일 처리) 점검.
+  - [ ] Node/pnpm 최소 버전 안내 자동 삽입.
+- [ ] demo parity 보장:
+  - [ ] 생성 프로젝트에서 라우트 목록이 기준과 동일한지 검증.
+  - [ ] chat/search/features/guide 동작이 기준 데모와 기능적으로 동일한지 검증.
+  - [ ] ko/en 전환, pending, abort previous, NDJSON 스트리밍이 동일하게 동작하는지 검증.
+- [ ] 자동 검증 파이프라인:
+  - [ ] 템플릿 스캐폴딩 e2e 테스트 추가 (생성 → 설치 → 테스트/스모크).
+  - [ ] 생성 프로젝트에서 `pnpm test` 통과 검증.
+  - [ ] 생성 프로젝트에서 `pnpm dev` 최소 스모크 검증(주요 route 200 + transition 응답).
+- [ ] 문서/배포:
+  - [ ] `createLithent` 사용 문서에 StateSurface 템플릿 추가.
+  - [ ] 본 저장소 `README.md`에 \"CLI로 시작하기\" 섹션 추가.
+  - [ ] 버전/릴리스 노트에 신규 템플릿 제공 사실 명시.
+- [ ] Smoke check:
+  - [ ] 완전히 빈 디렉토리에서 CLI 1회 실행으로 프로젝트 생성.
+  - [ ] 설치 후 5분 내 `pnpm dev` + 핵심 페이지 확인 가능.
+  - [ ] 생성 결과물이 현재 레퍼런스 데모와 시각/동작상 큰 차이 없이 일치.
+
 ## Definition of Done (v1 Prototype)
 
 - [x] End-to-end demo works with real NDJSON streamed transitions.
@@ -731,6 +782,7 @@ Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로
 - [x] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
 - [ ] Guide pages provide step-by-step onboarding with runnable examples.
+- [ ] `createLithent` can scaffold the full StateSurface demo project via CLI.
 
 ## Open Questions (Keep Short)
 
@@ -746,3 +798,4 @@ Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로
 - 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR **BASE_PATH** script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).
 - 2026-02-19: Phase 14 runtime smoke fixed — bootstrap root resolution corrected (`engine/server/bootstrap.ts`), transition compatibility export fixed (`server/transition.ts`), and `pnpm dev` verified for all routes + chat/search NDJSON transitions.
 - 2026-02-19: Added Phase 15 plan for guide onboarding clarity upgrade (step-by-step structure, richer content model, quality tests, smoke checklist).
+- 2026-02-19: Added Phase 16 plan for `createLithent` CLI scaffolding/distribution so the full StateSurface demo can be generated and run from a fresh directory.
