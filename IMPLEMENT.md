@@ -651,76 +651,255 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 
 ### Phase 15: Guide Onboarding Clarity Upgrade
 
-(Phase 14 안정화 완료 후 진행)
+(Phase 14 안정화 완료 후 진행 — Phase 15A 핵심 구현 완료, 15B~15D 진행 중)
 
-현재 가이드(`/guide/surface|template|transition|action`)는 개념 소개 중심이라,
-처음 보는 사용자가 "무엇을 어떤 순서로 작성해야 하는지"를 빠르게 따라가기에 정보 밀도가 부족하다.
-Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로 재구성한다.
+**목표: 프레임워크를 처음 보는 사람이 가이드 하나만 읽고 직접 실행 가능한 페이지를 만들 수 있어야 한다.**
 
-**목표:**
+StateSurface는 독창적인 개념("Surface", "Transition", "서버가 상태 소유")을 사용하기 때문에,
+React/Vue/HTMX 경험자도 첫 5분 안에 "이게 뭔지"를 이해하지 못하면 이탈한다.
+Phase 15 전체는 이 첫 5분 → 10분 → 30분 이해 경로를 가이드로 완전히 커버하는 것을 목표로 한다.
 
-- 가이드 하나만 읽고도 최소 기능(SSR + template + transition + action)을 재현할 수 있다.
-- 각 개념 페이지가 "언제 쓰는지 / 어떻게 쓰는지 / 어디서 디버깅하는지"를 명확히 전달한다.
-- ko/en 콘텐츠 깊이와 구조를 동일하게 유지한다.
+---
 
-**학습 설계 원칙:**
+#### 학습 경로 설계
 
-- Learn-by-doing: 모든 설명을 실제 파일 경로와 연결.
-- Progressive depth: 한 화면 요약 → 단계별 작성법 → 실패 케이스/디버깅.
-- Frame-first mental model: Transition/Action은 NDJSON frame 관점으로 설명.
-- Copy-safe snippets: 복붙 가능한 최소 코드 예시 제공.
+```
+첫 방문자 학습 순서:
+  /guide/quickstart   ← 10분: "Hello World" — 파일 4개로 동작하는 페이지 완성
+  /guide/surface      ← 15분: 페이지 셸 설계 깊이 이해
+  /guide/template     ← 15분: DOM 프로젝션 컴포넌트 작성법
+  /guide/transition   ← 20분: 서버 스트리밍 상태 머신 이해
+  /guide/action       ← 15분: 선언적 이벤트 바인딩 이해
+  /features/*         ← 실습: 각 개념을 브라우저에서 직접 조작
+```
 
-**Target guide structure (slug별 공통):**
+**각 가이드의 정보 밀도 기준:**
+- 초보자가 읽으면 "아 이거구나" 하는 **비유/비교** 필수 포함.
+- 용어 설명 없이 전문 용어 사용 금지 (첫 등장 시 항상 설명).
+- 모든 코드 예시는 **그대로 복붙해서 동작** 가능해야 함 (실제 파일 경로 명시).
+- 흔한 실수는 **증상 → 원인 → 해결법** 3단 구조로 작성.
+- 모든 개념 가이드 끝에는 **다음 단계 학습 경로**와 **브라우저 실습 링크** 필수.
 
-1. 한 줄 정의 (TL;DR)
-2. 언제 쓰나 / 언제 쓰지 않나
-3. 단계별 구현 절차 (파일 단위, 5~7 steps)
-4. 최소 동작 코드 예시 (surface/template/transition/action)
-5. 실행 시퀀스 (요청 → frame → DOM 반영)
-6. 흔한 실수 + 빠른 점검 체크리스트
-7. 다음 실습 링크 (관련 demo route)
+---
 
-**구현 범위:**
+#### Phase 15A: 블록 모델 + 7섹션 단계형 구조 ✅ (완료)
 
-- 데이터 모델 확장: 단순 문단 배열을 블록 기반 구조(문단/리스트/코드/체크리스트/주의)로 전환.
-- 가이드 템플릿 강화: 블록 타입별 렌더링 컴포넌트와 코드 가독성 스타일 추가.
-- 콘텐츠 재작성: 4개 slug × 2개 언어(en/ko) 모두 단계형 서술로 전면 개편.
-- 검증 자동화: 가이드 품질 규칙(필수 블록 존재, 언어 동등성)을 테스트로 고정.
+- [x] Block 기반 데이터 모델 (`paragraph/bullets/code/checklist/warning/sequence`) 구현.
+- [x] 4개 slug × 2개 언어 → 7섹션(tldr/when/steps/example/sequence/mistakes/next) 재작성.
+- [x] `guideContent.tsx` 블록 렌더러 + 다크 코드 블록 + demo CTA 버튼 구현.
+- [x] 96개 품질/i18n/SSR 검증 테스트 통과.
 
-**Checklist:**
+---
 
-- [ ] 정보 구조(IA) 확정:
-  - [ ] slug별 공통 섹션(요약/절차/코드/디버깅/실습 링크) 스키마 확정.
-  - [ ] 각 섹션의 최소 품질 기준 정의(최소 step 수, 코드 예시 개수, 체크리스트 개수).
-- [ ] `shared/content.ts` 가이드 데이터 모델 개편:
-  - [ ] `GuideSection` 기반 단일 `body` 문자열 구조를 블록 배열 구조로 전환.
-  - [ ] 블록 타입 정의(`paragraph`, `bullets`, `code`, `checklist`, `warning`, `sequence`) 추가.
-  - [ ] en/ko 데이터 모두 동일한 블록 순서/개수 규칙을 따르도록 정리.
-- [ ] 가이드 콘텐츠 재작성 (EN):
-  - [ ] `surface`: 파일 구조 + 슬롯 설계 + 예시 + 실패 케이스.
-  - [ ] `template`: props/무상태 원칙 + template 등록/자동발견 + 예시.
-  - [ ] `transition`: full/partial/removed 규칙 + NDJSON 시퀀스 + 예시.
-  - [ ] `action`: `data-action`, `data-params`, `data-pending-targets`, abort 흐름 + 예시.
-- [ ] 가이드 콘텐츠 재작성 (KO):
-  - [ ] `surface` 한글 단계형 가이드 작성.
-  - [ ] `template` 한글 단계형 가이드 작성.
-  - [ ] `transition` 한글 단계형 가이드 작성.
-  - [ ] `action` 한글 단계형 가이드 작성.
-- [ ] `routes/guide/templates/guideContent.tsx` 강화:
-  - [ ] 블록 타입별 렌더러 추가(문단/리스트/코드/체크리스트/주의/시퀀스).
-  - [ ] 코드 블록 스타일(가독성/스크롤/모바일 대응) 보강.
-  - [ ] "다음 실습" CTA를 demo route와 연결.
-- [ ] 테스트 추가:
-  - [ ] 콘텐츠 스키마 검증: slug별 필수 블록 존재 확인.
-  - [ ] i18n 동등성 검증: en/ko 블록 구조 mismatch 방지.
-  - [ ] SSR 검증: 각 guide 페이지에 단계형 섹션/코드 블록 렌더 확인.
-- [ ] 문서 동기화:
-  - [ ] `CLAUDE.md`의 guide 설명을 새 학습 구조에 맞게 업데이트.
-  - [ ] `README.md`에 "Guide로 시작하기" 섹션(학습 순서 + 예상 소요시간) 추가.
-- [ ] Smoke check:
-  - [ ] `/guide/surface|template|transition|action`에서 단계형 콘텐츠가 모두 표시된다.
-  - [ ] ko/en 전환 시 가이드 구조(섹션 순서/코드 수)가 동일하게 유지된다.
-  - [ ] 모바일 폭에서도 코드 블록과 체크리스트가 깨지지 않는다.
+#### Phase 15B: Quickstart 페이지 신설 (`/guide/quickstart`)
+
+초보자가 처음 접하는 페이지. "Hello World"에 해당하는 미니 튜토리얼.
+기존 guide slug 라우트에 `quickstart`를 추가하거나 별도 라우트로 분리.
+
+**Quickstart 콘텐츠 구성 (EN/KO 동일 구조):**
+
+```
+섹션 1: 무엇을 만드는가
+  - "이 튜토리얼에서 파일 4개로 버튼을 누르면 서버에서 데이터를 가져와 화면을 바꾸는 페이지를 만든다."
+  - 완성 후 결과물 미리보기 (텍스트 다이어그램으로 표현)
+
+섹션 2: 전제 조건
+  - Node.js, pnpm, StateSurface 설치 확인
+  - 알아두면 좋은 사전 지식 (TypeScript 기초, JSX 기초)
+
+섹션 3: 파일 1 — Surface 만들기
+  - routes/hello.ts 파일 생성
+  - layout 함수 작성 (stateSlots 2개: 'hello:status', 'hello:result')
+  - "Surface = 콘센트 판. 여기에 Template이라는 가전제품을 꽂는다."
+  - 이 시점에서 pnpm dev 실행 → 빈 페이지 확인
+
+섹션 4: 파일 2 — Template 만들기
+  - routes/hello/templates/helloResult.tsx 파일 생성
+  - defineTemplate('hello:result', ...) 작성
+  - loading prop / items prop 렌더링
+  - "Template = React 컴포넌트와 같은데, props를 서버가 결정한다."
+  - 이 시점에서 SSR에 loading skeleton이 보임
+
+섹션 5: 파일 3 — Transition 만들기
+  - routes/hello/transitions/helloFetch.ts 파일 생성
+  - async function*으로 full frame → partial frame → done 순서 작성
+  - 첫 frame: { loading: true }, 1초 후 frame: { loading: false, items: [...] }
+  - "Transition = 서버 측 유튜브 자막 스트림. 상태가 줄 단위로 흘러온다."
+  - 이 시점에서 POST /transition/hello-fetch → NDJSON 응답 확인
+
+섹션 6: 파일 4 — Action 연결하기
+  - routes/hello/templates/helloStatus.tsx에 버튼 추가
+  - data-action="hello-fetch" 속성 추가
+  - 버튼 클릭 → 스켈레톤 → 결과 렌더링 확인
+  - "Action = HTML form처럼 동작하지만 JS 없이 어떤 요소에도 붙일 수 있다."
+
+섹션 7: 전체 흐름 정리 (다이어그램)
+  - 버튼 클릭 → Action → POST → Transition generator → NDJSON → frame → Template re-render
+  - 4개 파일과 각각의 역할을 한눈에 보여주는 텍스트 다이어그램
+
+섹션 8: 다음 단계
+  - 각 개념 가이드 링크 (Surface/Template/Transition/Action)
+  - 실습 페이지 링크 (/features/streaming, /features/actions)
+```
+
+**구현 항목:**
+
+- [ ] `quickstart` slug를 기존 guide 라우트에 추가 또는 `routes/guide-quickstart/` 신설 결정.
+- [ ] `shared/content.ts`에 quickstart EN/KO 콘텐츠 추가 (8섹션, 각 섹션 복수 블록).
+- [ ] quickstart에 필요한 신규 블록 타입 추가:
+  - [ ] `diagram` 블록: 모노스페이스 텍스트 다이어그램 (ASCII 흐름도).
+  - [ ] `callout` 블록: tip/info/note 아이콘과 함께 강조 박스.
+- [ ] `guideContent.tsx`에 `diagram`/`callout` 렌더러 추가.
+- [ ] TOC(`guideToc.tsx`)에 `quickstart` 항목을 최상단에 표시.
+- [ ] quickstart 콘텐츠 EN 작성 (8섹션 × 복수 블록, 코드 복붙 가능).
+- [ ] quickstart 콘텐츠 KO 작성 (EN과 동일 구조, 섹션/블록 수 일치).
+- [ ] 스키마 테스트에 quickstart slug 추가.
+
+---
+
+#### Phase 15C: 기존 4개 가이드 심화 — 비유/이유/디버깅 보강
+
+현재 7섹션 구조는 "무엇을/어떻게"는 다루지만 "왜/왜 이런 이름/왜 이렇게 동작하는가"가 부족하다.
+초보자는 "왜 POST인가?", "왜 Surface라고 부르는가?", "왜 첫 frame이 full이어야 하는가?"를
+이해해야 확신을 갖고 쓸 수 있다. 아래 항목을 **각 가이드의 기존 7섹션에 통합**한다.
+
+**추가할 섹션/블록 유형:**
+
+```
+analogy 섹션 (why/mental-model):
+  surface  : "Surface = 인테리어 전 건물 뼈대. <h-state>는 콘센트 구멍."
+             "Template은 콘센트에 꽂는 가전. 콘센트 위치는 안 바뀌고, 가전은 언제든 교체."
+  template : "Template = React 컴포넌트인데 props를 서버가 준다. useState 없음."
+             "SSR과 CSR이 같은 함수를 쓴다 — 서버에서 HTML로, 브라우저에서 DOM diff로."
+  transition: "Transition = 서버가 보내는 자막 스트림. 영상 자체(HTML)는 바뀌지 않고 자막(상태)만 업데이트."
+              "왜 POST인가: GET은 캐시된다. 상태 변경은 부작용이므로 POST가 맞다."
+              "왜 첫 frame이 full이어야 하는가: 클라이언트가 빈 activeStates에서 시작하므로
+               full frame 없이 partial을 받으면 'merge할 기준 상태'가 없다."
+  action   : "Action = HTML form의 진화형. form은 GET/POST 네비게이션만 하지만,
+              data-action은 페이지 내 상태 업데이트를 declarative하게 트리거한다."
+              "왜 JS 이벤트 바인딩이 필요 없는가: 엔진이 document 레벨에서
+               click/submit을 위임 방식으로 감청한다."
+
+why 섹션 (용어/설계 이유):
+  surface  : "왜 'Surface'라고 부르는가: 사용자가 보는 '표면'(surface)이지만 내용은 없다.
+              구조만 있는 껍데기. Template이 내용을 채운다."
+  template : "왜 'Template'인가: 서버가 보낸 데이터를 '투영(project)'하는 틀(template).
+              스스로 데이터를 가져오지 않는다."
+  transition: "왜 'Transition'인가: 한 UI 상태에서 다른 UI 상태로 '전환'하는 서버 로직.
+               CSS transition과 이름이 같아 혼동될 수 있다 — 여기서는 '상태 전환 생성기'를 뜻한다."
+  action   : "왜 'Action'인가: 사용자 액션(버튼 클릭, 폼 제출)을 서버 transition에 연결하는 선언."
+
+debug 섹션 (증상 → 원인 → 해결 3단):
+  surface  : 증상1: 페이지는 뜨는데 anchor 안이 비어있다
+               원인: stateSlots()에 슬롯 이름이 없거나 transition이 같은 이름을 쓰지 않는다
+               해결: <h-state name="..."> 값과 defineTemplate('...') 값을 비교
+             증상2: 스타일이 깨진다
+               원인: Tailwind 클래스가 surface 문자열 안에서 purge됨
+               해결: tailwind.config에 routes/**/*.ts safelist 추가
+  template : 증상1: 버튼 클릭해도 아무것도 안 변한다
+               원인: defineTemplate 이름이 <h-state name>과 불일치
+               해결: 두 값을 정확히 비교 (대소문자, 콜론 포함)
+             증상2: hydration 에러가 발생한다
+               원인: SSR HTML과 CSR 렌더 결과가 다르다 (조건부 렌더링에 클라이언트 전용 값 사용)
+               해결: props를 기반으로만 렌더링, window/document 참조는 mount() 내부로 이동
+  transition: 증상1: 클라이언트가 프레임을 무시한다
+               원인: 첫 프레임이 partial (full: false)로 시작됨
+               해결: 첫 yield에서 full 생략 또는 true로 설정
+             증상2: 두 번째 프레임부터 화면이 안 바뀐다
+               원인: partial frame에 changed 배열이 누락됨
+               해결: full: false인 프레임에 changed: ['slot-name'] 추가
+             증상3: 스트림이 끊기지 않는다
+               원인: yield { type: 'done' } 누락
+               해결: generator 마지막에 done 프레임 추가
+  action   : 증상1: 버튼 클릭해도 transition이 실행되지 않는다
+               원인: data-params 값이 유효하지 않은 JSON
+               해결: JSON.parse(data-params 값)이 에러 없이 동작하는지 확인
+             증상2: 폼 필드 값이 params에 안 들어온다
+               원인: <input>에 name 속성이 없음
+               해결: <input name="fieldName"> 추가
+             증상3: pending 표시가 모든 앵커에 동시에 붙는다
+               원인: data-pending-targets 미지정 시 기본값이 전체 앵커
+               해결: data-pending-targets="slot1,slot2"로 범위 제한
+```
+
+**구현 항목:**
+
+- [x] `analogy` 블록 타입 추가 (`shared/content.ts` 타입 + `guideContent.tsx` 렌더러).
+- [x] `debug` 블록 타입 추가 (증상/원인/해결 3단 구조, `guideContent.tsx` 렌더러).
+- [x] 4개 가이드 EN 콘텐츠에 `analogy` 섹션 + `debug` 섹션 추가.
+- [x] 4개 가이드 KO 콘텐츠에 동일 섹션 추가 (EN과 섹션/블록 수 일치).
+- [x] 섹션 ID 스키마 업데이트: `analogy`, `debug` 추가 (9섹션).
+- [x] 테스트: analogy/debug 섹션 존재 + 블록 타입 검증 (116/116).
+
+---
+
+#### Phase 15D: 가이드 UI 개선
+
+가이드 페이지 읽기 경험을 개선한다.
+
+**TOC (가이드 목록) 개선:**
+
+- [ ] `guideToc.tsx`에 quickstart를 최상단에 "시작하기" 레이블로 표시.
+- [ ] 현재 가이드 페이지의 섹션 목록도 TOC에 표시 (섹션 앵커 jump 링크).
+  - `sections` props를 guideToc에 전달하여 섹션별 앵커 링크 렌더링.
+  - 모바일에서는 섹션 목록 TOC 숨김 (slug 목록만 표시).
+
+**콘텐츠 영역 개선:**
+
+- [ ] 각 섹션 헤딩에 섹션 ID 기반 앵커 링크(`#tldr`, `#steps` 등) 자동 부여.
+- [ ] `analogy` 블록: 구분되는 배경색(eg. indigo-50), 인용 아이콘.
+- [ ] `callout` 블록: 아이콘 종류(tip=💡, info=ℹ, warn=⚠) 구분.
+- [ ] `diagram` 블록: 모노스페이스 폰트, 배경색, 가로 스크롤.
+- [ ] `debug` 블록: 증상/원인/해결을 시각적으로 구분하는 카드 레이아웃.
+- [ ] 코드 블록에 "파일 경로" 라벨 클립보드 복사 버튼 (JS 필요 → `mount()` 활용).
+
+**홈 페이지 연결:**
+
+- [ ] `/` 홈 페이지의 "Read the Guide" 버튼 → `/guide/quickstart`로 변경.
+- [ ] "개념 카드 4개" 아래에 "10분 퀵스타트로 시작하기" 링크 추가.
+
+---
+
+#### Phase 15 전체 Checklist
+
+**15A — 완료 ✅**
+
+- [x] Block 기반 데이터 모델 + 블록 렌더러 구현.
+- [x] 4 slug × 2 lang → 7섹션 단계형 튜토리얼 재작성.
+- [x] 96개 품질/i18n/SSR 테스트 통과.
+
+**15B — Quickstart ✅**
+
+- [x] quickstart slug 라우트 결정 및 파일 구조 확정.
+- [x] `diagram` / `callout` 블록 타입 추가 (content.ts + guideContent.tsx).
+- [x] quickstart EN 콘텐츠 작성 (8섹션, 4개 파일 단계형).
+- [x] quickstart KO 콘텐츠 작성 (EN과 동일 구조).
+- [x] TOC에 quickstart 최상단 표시 (emerald 스타일, 구분선).
+- [x] 홈 페이지 CTA → quickstart 링크 ('10-Min Quickstart' / '10분 퀵스타트').
+- [x] 스키마/i18n 테스트에 quickstart 포함 (116 tests).
+
+**15C — 심화 콘텐츠 ✅**
+
+- [x] `analogy` / `debug` 블록 타입 추가 (content.ts + guideContent.tsx).
+- [x] 4개 가이드 EN에 analogy + debug 섹션 추가.
+- [x] 4개 가이드 KO에 동일 섹션 추가 (블록 수/타입 일치).
+- [x] 섹션 ID 스키마(테스트) 업데이트 (7→9섹션).
+
+**15D — UI 개선 ✅**
+
+- [x] TOC에 현재 페이지 섹션 앵커 목록 추가 (sections props).
+- [x] 신규 블록(analogy/callout/diagram/debug) 렌더러 스타일 완성.
+- [x] 코드 블록 클립보드 복사 버튼 (onclick handler).
+- [x] 홈 페이지 quickstart CTA 연결.
+
+**공통 완료 조건:**
+
+- [ ] 문서 동기화: `CLAUDE.md`의 guide 설명을 새 학습 구조에 맞게 업데이트.
+- [ ] 문서 동기화: `README.md`에 "Guide로 시작하기" 섹션 추가.
+- [ ] Smoke check: `/guide/quickstart`에서 4단계 튜토리얼이 전부 표시된다.
+- [ ] Smoke check: `/guide/surface|template|transition|action`에서 analogy/debug 섹션이 보인다.
+- [ ] Smoke check: ko/en 전환 시 구조가 동일하게 유지된다.
+- [ ] Smoke check: 모바일 폭에서 코드 블록/다이어그램/debug 카드가 깨지지 않는다.
 
 ### Phase 16: `createLithent` CLI Scaffolding & Distribution
 
@@ -799,3 +978,5 @@ Phase 15에서는 가이드를 "설명"에서 "실행 가능한 튜토리얼"로
 - 2026-02-19: Phase 14 runtime smoke fixed — bootstrap root resolution corrected (`engine/server/bootstrap.ts`), transition compatibility export fixed (`server/transition.ts`), and `pnpm dev` verified for all routes + chat/search NDJSON transitions.
 - 2026-02-19: Added Phase 15 plan for guide onboarding clarity upgrade (step-by-step structure, richer content model, quality tests, smoke checklist).
 - 2026-02-19: Added Phase 16 plan for `createLithent` CLI scaffolding/distribution so the full StateSurface demo can be generated and run from a fresh directory.
+- 2026-02-19: Phase 15A complete — block-based guide data model (paragraph/bullets/code/checklist/warning/sequence), 4 slugs × 2 langs rewritten as 7-section step-by-step tutorials, guideContent.tsx block renderers with code styling and demo CTA, 96 quality/i18n/SSR tests passing (292 total).
+- 2026-02-19: Phase 15 plan expanded — added 15B (Quickstart /guide/quickstart, diagram/callout blocks), 15C (analogy/why/debug depth per guide), 15D (TOC section anchors, clipboard copy, home CTA) to IMPLEMENT.md.

@@ -29,8 +29,8 @@ export function homeContent(lang: Lang) {
         },
         lang
       ),
-      primaryLabel: t({ ko: '가이드 읽기', en: 'Read the Guide' }, lang),
-      primaryHref: prefixPath('/guide/surface'),
+      primaryLabel: t({ ko: '10분 퀵스타트', en: '10-Min Quickstart' }, lang),
+      primaryHref: prefixPath('/guide/quickstart'),
       secondaryLabel: t({ ko: '스트리밍 데모', en: 'Try Streaming Demo' }, lang),
       secondaryHref: prefixPath('/features/streaming'),
     },
@@ -128,88 +128,1011 @@ export function homeContent(lang: Lang) {
 
 // ── Guide page ──
 
-type GuideSection = { id: string; heading: string; body: string };
-type GuideEntry = { title: string; sections: GuideSection[] };
+export type ParagraphBlock = { type: 'paragraph'; text: string };
+export type BulletsBlock = { type: 'bullets'; items: string[] };
+export type CodeBlock = { type: 'code'; lang?: string; label?: string; text: string };
+export type ChecklistBlock = { type: 'checklist'; items: string[] };
+export type WarningBlock = { type: 'warning'; text: string };
+export type SequenceBlock = { type: 'sequence'; steps: string[] };
+export type DiagramBlock = { type: 'diagram'; text: string; label?: string };
+export type CalloutBlock = { type: 'callout'; kind: 'tip' | 'info' | 'note'; text: string };
+export type AnalogyBlock = { type: 'analogy'; text: string };
+export type DebugItem = { symptom: string; cause: string; fix: string };
+export type DebugBlock = { type: 'debug'; items: DebugItem[] };
+export type Block =
+  | ParagraphBlock
+  | BulletsBlock
+  | CodeBlock
+  | ChecklistBlock
+  | WarningBlock
+  | SequenceBlock
+  | DiagramBlock
+  | CalloutBlock
+  | AnalogyBlock
+  | DebugBlock;
+
+type GuideSection = { id: string; heading: string; blocks: Block[] };
+type GuideEntry = { title: string; demoHref: string; demoLabel: string; sections: GuideSection[] };
 
 const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
   en: {
     surface: {
       title: 'Surface',
+      demoHref: '/features/streaming',
+      demoLabel: 'Streaming Demo',
       sections: [
         {
-          id: 'what',
-          heading: 'What is a Surface?',
-          body: 'A surface is the page shell — plain HTML strings that declare <h-state> anchors and static structure. Surfaces define where dynamic content can appear, not what it contains.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'A surface is the fixed page shell — plain HTML strings that declare <h-state name="..."> anchors and static layout. Surfaces define where dynamic content appears, not what it contains.',
+            },
+          ],
         },
         {
-          id: 'authoring',
-          heading: 'Authoring Surfaces',
-          body: 'Surfaces are written as TypeScript string builders using helpers like stateSlots(), joinSurface(), and baseSurface(). They compose the full HTML document including shared layout (header, error) and page-specific slots.',
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Think of a Surface as the building skeleton before interior work — it defines the room layout and where the power outlets are drilled. The <h-state> tags are the outlets. Templates are the appliances you plug in. The wall positions never change; what you plug in can change any time.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Why "Surface"? The name refers to the visible surface of a page — structure without content. Unlike an SPA where a JS bundle paints the whole page, StateSurface pre-renders a real HTML surface with named holes. Templates fill the holes; the surface itself stays constant.',
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: 'Why a plain HTML string instead of JSX? The surface never changes during a page visit — no Virtual DOM diffing needed. String concatenation is the fastest and simplest way to SSR static structure.',
+            },
+          ],
         },
         {
-          id: 'decision',
-          heading: 'Surface vs Template Decision',
-          body: 'Ask: "Will this content change while the user stays on this page?" If no, it belongs in the surface. If yes, create an <h-state> anchor and a template. When in doubt, use a template — demoting back to surface is trivial.',
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for every route: layout, navigation, footer, and <h-state> anchor placement.',
+                'Use for content that does NOT change while the user stays on the page.',
+                "Don't use for conditionally-updating content — that belongs in a Template.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Create routes/my-page.ts and export a RouteModule.',
+                'Import baseSurface, stateSlots, joinSurface from layouts/surface.js.',
+                "Define layout: stateScript => string — call stateSlots('slot-name') for each dynamic anchor.",
+                'Wrap the assembled body with baseSurface(body, stateScript).',
+                'Add a matching Template file for each slot name you declared.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/my-page.ts',
+              text: `import type { RouteModule } from '../shared/routeModule.js';
+import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+
+export default {
+  layout: stateScript => {
+    const body = joinSurface(
+      '<main class="max-w-4xl mx-auto p-6">',
+      stateSlots('page:hero', 'page:content'),
+      '</main>',
+    );
+    return baseSurface(body, stateScript);
+  },
+  transition: 'my-page-load',
+} satisfies RouteModule;`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'GET /my-page — server resolves initial state.',
+                'layout(stateScript) renders the full HTML shell string.',
+                'SSR fills each <h-state> anchor with initial template output.',
+                'Browser renders the complete HTML page (MPA).',
+                'Client hydrates each <h-state> anchor independently.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'Hardcoding dynamic content in the surface string is the most common mistake. If the content might change while the user stays on the page, it needs an <h-state> anchor and a Template.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                '<h-state name="..."> attribute matches the template registry key exactly.',
+                'stateScript parameter is passed into baseSurface(body, stateScript).',
+                'stateSlots() called for every anchor you plan to use.',
+                'All conditionally-changing data is in templates, not the surface string.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Troubleshooting',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'The page loads but the anchor area is completely empty.',
+                  cause: 'The slot name in stateSlots() does not match the name in defineTemplate().',
+                  fix: 'Compare <h-state name="..."> value with the first argument of defineTemplate("..."). They must be character-for-character identical including the colon.',
+                },
+                {
+                  symptom: 'Tailwind styles are applied in dev but break in production.',
+                  cause: 'Tailwind purges classes it cannot detect in surface string templates at build time.',
+                  fix: "Add the surface file pattern to tailwind.config content array (e.g. './routes/**/*.ts') or use safelist for dynamic class strings.",
+                },
+                {
+                  symptom: 'Anchor content flashes on first load.',
+                  cause: 'SSR hash mismatch — the server-rendered HTML differs from the client hydration output.',
+                  fix: 'Ensure the template renders identically server-side and client-side. Avoid window/document references at render time; move them inside mount().',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Open the Streaming Demo to watch multiple <h-state> anchors update independently in real time — full frames replace all anchors, partial frames patch only changed ones.',
+            },
+          ],
         },
       ],
     },
     template: {
       title: 'Template',
+      demoHref: '/features/actions',
+      demoLabel: 'Actions Playground',
       sections: [
         {
-          id: 'what',
-          heading: 'What is a Template?',
-          body: 'A template is a TSX projection component that renders inside an <h-state> anchor. Templates receive data from the server via state frames and project it into DOM. They are stateless by default.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'A template is a stateless TSX function that renders inside one <h-state> anchor. It receives props from the server via state frames — it owns DOM projection, the server owns data.',
+            },
+          ],
         },
         {
-          id: 'authoring',
-          heading: 'Writing Templates',
-          body: 'Use defineTemplate(name, Component) to register a template. The component receives typed props matching the data from state frames. Prefer pure, stateless functions — use mount/lmount only for client-only UI state like focus or scroll.',
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Think of a Template like a React component — except the server decides the props, not the component itself. There is no useState for server data, no useEffect to fetch, no context provider. The server sends what to render; the template just renders it.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Why "Template"? The name refers to a rendering template — a mold that shapes data into HTML. StateSurface templates are pure projections: given specific props, they always produce the same output. SSR and CSR use the exact same function; the only difference is output format (string vs DOM patch).',
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'The loading prop pattern: have the transition yield { loading: true } in the first frame to show a skeleton, then yield actual data in the second frame to show content. The server controls loading UX timing completely.',
+            },
+          ],
         },
         {
-          id: 'registry',
-          heading: 'Template Registry',
-          body: 'Templates are auto-discovered from routes/**/templates/**/*.tsx at startup. The same registry is shared by SSR and CSR. No manual registration required — just place the file in the right directory.',
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for every <h-state> anchor that needs visual content.',
+                'Use for anything driven by server data: loading states, content, errors.',
+                "Don't use for content that never changes per-user — put it in the surface.",
+                "Don't store server-driven data in local state — use props only.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Create routes/my-page/templates/myContent.tsx.',
+                'Import defineTemplate from shared/templateRegistry.js.',
+                'Define props type matching the data your transition sends in states.',
+                'Write a pure stateless function component.',
+                "Export: export default defineTemplate('slot-name', Component) — name must match <h-state name>.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/my-page/templates/myContent.tsx',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { title: string; items: string[]; loading?: boolean };
+
+const MyContent = ({ title, items, loading }: Props) => {
+  if (loading) return <div class="animate-pulse h-8 bg-slate-200 rounded" />;
+  return (
+    <section>
+      <h2 class="text-xl font-semibold">{title}</h2>
+      <ul class="mt-2 space-y-1">
+        {items.map(i => <li key={i}>{i}</li>)}
+      </ul>
+    </section>
+  );
+};
+
+export default defineTemplate('page:content', MyContent);`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                "Server yields frame: states: { 'page:content': { title, items } }.",
+                "Client looks up 'page:content' in the template registry.",
+                'Template function is called with props from the frame data.',
+                'Lithent diffs the result against current DOM inside the anchor.',
+                'Only changed nodes are patched inside <h-state name="page:content">.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'The name in defineTemplate(\'name\', ...) must exactly match the <h-state name="..."> attribute. A mismatch silently skips the render — no error is thrown.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                'File is under routes/**/templates/*.tsx (auto-discovery path).',
+                "defineTemplate('name', ...) name matches <h-state name=\"...\"> exactly.",
+                'Props type matches what the transition sends in states.',
+                'Lists use key prop to prevent incorrect diffing.',
+                'No server-driven data stored in local state.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Troubleshooting',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'Clicking a button does nothing — the anchor never re-renders.',
+                  cause: "The name in defineTemplate('name', ...) does not match the <h-state name=\"...\"> attribute.",
+                  fix: 'Copy the exact string from <h-state name="..."> and paste it as the first argument to defineTemplate. Check for typos, missing colons, or case mismatches.',
+                },
+                {
+                  symptom: 'Content renders on the first load but breaks after a transition.',
+                  cause: 'Props type mismatch — the transition sends different shape data than the template expects.',
+                  fix: 'Align the TypeScript type in the template with exactly what the transition yields in states. Add console.log(props) inside the template to inspect received data.',
+                },
+                {
+                  symptom: 'Hydration error in the browser console.',
+                  cause: 'The SSR output and CSR output differ — usually caused by using Date.now(), Math.random(), or window inside the render function.',
+                  fix: 'Move any client-only logic (window, document, random values) inside mount() so it runs only after hydration, not during render.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Go to the Actions Playground to see templates re-rendered by user interactions — button clicks and form submissions drive template updates through the full action → transition → frame → DOM pipeline.',
+            },
+          ],
         },
       ],
     },
     transition: {
       title: 'Transition',
+      demoHref: '/features/streaming',
+      demoLabel: 'Streaming Demo',
       sections: [
         {
-          id: 'what',
-          heading: 'What is a Transition?',
-          body: 'A transition is a server-side async generator that yields state frames. It defines the sequence of UI states that should appear as data becomes available. Transitions are the "state machine" of your page.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: "A transition is a server-side async function* that yields StateFrame objects as NDJSON. It defines the progressive sequence of UI states as data becomes available — the server's state machine.",
+            },
+          ],
         },
         {
-          id: 'frames',
-          heading: 'Frame Types',
-          body: 'Full frames (full: true or omitted) replace all active states. Partial frames (full: false) merge changes via "changed" and "removed" arrays. The first frame must be full. Frames are streamed as NDJSON over HTTP POST.',
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Think of a Transition like a live subtitle feed for a video. The video (HTML page) stays the same; only the subtitles (UI state) stream in line by line. Each yield sends one JSON line over HTTP — the client applies it to the matching <h-state> anchor immediately.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Why "Transition"? It describes the server-side transition from one UI state to another — a sequence of frames that move the page from "loading" to "loaded" to "done". Be aware: this has nothing to do with CSS transitions. If you find the name confusing, think of it as a "StateStream" or "SceneScript".',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Why POST instead of GET? State transitions are side effects — they compute and stream data that may depend on session, body params, or external APIs. GET requests are cached and bookmarkable; in-page state updates are neither. POST signals intent: "run this server logic now".',
+            },
+          ],
         },
         {
-          id: 'progressive',
-          heading: 'Progressive Construction',
-          body: 'Yield frames as data arrives: loading state first, then content, then supplementary data. The UI constructs itself progressively. No loading flags needed — the stream IS the loading sequence.',
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for every user action that updates in-page state: data loading, form submission, button click.',
+                'Use for progressive rendering: show loading states first, then content.',
+                "Don't use for navigation to a different page — use MPA <a href> instead.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Create routes/my-page/transitions/myTransition.ts.',
+                'Import defineTransition from server/transition.js and StateFrame from shared/protocol.js.',
+                'Write async function*(params): AsyncGenerator<StateFrame>.',
+                'First yield must be a full frame (omit full or set full: true) — declares complete UI state.',
+                'Use full: false + changed/removed arrays for subsequent partial updates.',
+                'End with yield { type: "done" } to close the stream.',
+                "Export: export default defineTransition('name', fn).",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/my-page/transitions/myTransition.ts',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* myTransition(
+  params: Record<string, unknown>
+): AsyncGenerator<StateFrame> {
+  // Frame 1: full — loading state (required first)
+  yield {
+    type: 'state',
+    states: { 'page:content': { loading: true, items: [] } },
+  };
+
+  const data = await fetchData(params.query as string);
+
+  // Frame 2: partial — content ready
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['page:content'],
+    states: { 'page:content': { loading: false, items: data } },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('my-transition', myTransition);`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Client POSTs to /transition/my-transition with JSON params body.',
+                'Server starts the async generator, begins streaming NDJSON.',
+                'Full frame → client replaces all activeStates, re-renders all templates.',
+                'Partial frame → client merges only changed keys, skips unchanged anchors.',
+                'done frame → stream closes, data-pending removed from all anchors.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'Every stream must start with a full frame. Yielding a partial frame first (full: false) is a protocol violation — the client will reject the entire stream.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                'First yielded frame is full (no full: false).',
+                'Partial frames include full: false AND at least one of changed/removed.',
+                'Keys in changed exist in states; keys in removed do NOT.',
+                'No key appears in both changed and removed.',
+                'Generator ends with yield { type: "done" }.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Troubleshooting',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'The client receives the stream but the UI never updates.',
+                  cause: 'The first yielded frame has full: false — the client rejects partial-first streams.',
+                  fix: "Remove full: false from the first yield, or omit the full field entirely. Full is the default. Only set full: false on frames after the first.",
+                },
+                {
+                  symptom: 'A partial frame fires but the target anchor does not re-render.',
+                  cause: 'The changed array is missing or the slot name is misspelled.',
+                  fix: "Add changed: ['slot-name'] to the partial frame. The name must exactly match the <h-state name> attribute and the defineTemplate key.",
+                },
+                {
+                  symptom: 'The loading spinner spins forever — the stream never closes.',
+                  cause: 'yield { type: "done" } is missing at the end of the generator.',
+                  fix: 'Add yield { type: "done" } as the last statement in the async generator function.',
+                },
+                {
+                  symptom: 'An error thrown inside the generator silently swallows without user feedback.',
+                  cause: 'Unhandled errors in async generators close the stream without sending an error frame.',
+                  fix: "Wrap async operations in try/catch and yield { type: 'error', template: 'system:error', data: { message } } to surface errors to the UI.",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Open the Streaming Demo to visualize the frame sequence in real time — watch full frames replace all anchors, partial frames patch specific keys, and error frames appear as inline errors.',
+            },
+          ],
         },
       ],
     },
     action: {
       title: 'Action',
+      demoHref: '/features/actions',
+      demoLabel: 'Actions Playground',
       sections: [
         {
-          id: 'what',
-          heading: 'What is an Action?',
-          body: 'An action is a declarative trigger that connects user interaction to a server transition. Add data-action="name" to any element — the engine handles event delegation, transition invocation, and pending states automatically.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Add data-action="name" to any element — the engine handles click/submit delegation, transition invocation, abort of previous streams, and pending indicators automatically. No imperative JS needed.',
+            },
+          ],
         },
         {
-          id: 'binding',
-          heading: 'Declarative Binding',
-          body: 'Use data-action for the transition name, data-params for JSON parameters, and data-pending-targets to scope which anchors show pending state. Forms with data-action automatically serialize and submit field data.',
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Action = hotel room TV remote. The remote (HTML attribute) sends a signal; the TV (engine) does the actual work of switching channels (transitions). You never wire up the signal yourself — you just label buttons.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Compare: in a React app, a button calls a JS handler → fetch → setState. In StateSurface, a button has data-action="name" → engine POSTs → server yields frames → DOM updates. The wiring is built-in; you only name the transition.',
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'If you are coming from React: think of data-action as a pre-wired onClick that sends the form to the server and streams the response back automatically. No useCallback, no fetch, no useState.',
+            },
+          ],
         },
         {
-          id: 'lifecycle',
-          heading: 'Action Lifecycle',
-          body: 'Click → engine reads attributes → abort previous transition → add data-pending → POST /transition/:name → first frame arrives → remove data-pending → frames apply → done. The concurrency policy is "abort previous".',
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for any user interaction that triggers a server transition: button clicks, form submits.',
+                'Use data-pending-targets to scope the loading indicator to specific anchors.',
+                "Don't use for page navigation — use <a href> for MPA transitions.",
+                "Don't use imperative fetch/POST calls when data-action covers the use case.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                "Add data-action=\"transition-name\" to a <button> or <form>.",
+                "Add data-params='{\"key\":\"value\"}' for static JSON params (optional).",
+                'For forms, <input name="..."> field values auto-merge with data-params.',
+                'Add data-pending-targets="slot1,slot2" to scope the pending indicator (optional; defaults to all anchors).',
+                'No JS required — the engine listens via delegated click/submit on document.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'html',
+              label: 'In any template TSX file',
+              text: `{/* Button action */}
+<button data-action="search" data-params='{"category":"all"}'>
+  Search
+</button>
+
+{/* Form action — field values merge into params */}
+<form data-action="search">
+  <input name="query" placeholder="Search..." />
+  <button type="submit">Go</button>
+</form>
+
+{/* Scoped pending — only this anchor shows loading state */}
+<button
+  data-action="load-comments"
+  data-pending-targets="page:comments"
+>
+  Load Comments
+</button>`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'User clicks data-action element (or submits data-action form).',
+                'Engine reads data-action, data-params, field values, data-pending-targets.',
+                'Previous in-flight transition aborted (abort-previous policy).',
+                'data-pending added to target <h-state> anchors.',
+                'POST /transition/:name with merged params as JSON body.',
+                'Frames arrive → DOM updates progressively.',
+                'done frame → data-pending cleared from all target anchors.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: "data-params must be valid JSON with double-quoted keys. data-params=\"{query: 'foo'}\" silently fails — use data-params='{\"query\":\"foo\"}'.",
+            },
+            {
+              type: 'checklist',
+              items: [
+                'Transition named in data-action is registered (file exists in transitions/).',
+                'data-params is valid JSON (double-quoted keys and string values).',
+                'Form <input name="..."> attributes match what the transition expects in params.',
+                'data-pending-targets uses comma-separated slot names with no spaces.',
+                'For abort-sensitive operations, the transition handles early completion gracefully.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Debugging checklist',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'Click does nothing — no network request appears in DevTools.',
+                  cause: 'data-action typo or missing attribute; element may be inside a shadow DOM that blocks delegation.',
+                  fix: 'Check the attribute name (data-action, not data-transition or action). Inspect the element in DevTools to confirm the attribute is present.',
+                },
+                {
+                  symptom: 'POST fires but server responds 404.',
+                  cause: 'Transition file is missing or named differently from the data-action value.',
+                  fix: 'Confirm that routes/<page>/transitions/<name>.ts exists and that <name> matches the data-action string exactly.',
+                },
+                {
+                  symptom: 'Form submit sends empty params — input values are not included.',
+                  cause: 'Form inputs are missing name attributes, or data-action is on the button instead of the <form>.',
+                  fix: 'Add name="..." to every <input>. Place data-action on the <form> element, not the submit button.',
+                },
+                {
+                  symptom: 'Pending spinner stays forever after action completes.',
+                  cause: 'Server generator exited without yielding a done frame, or an uncaught error killed the stream.',
+                  fix: 'Ensure the transition generator has a finally block that yields { type: "done" }. Wrap async operations in try/catch.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Try the Actions Playground to experiment with button actions, form submissions, scoped pending indicators, and observe the abort-previous policy when multiple actions fire rapidly.',
+            },
+          ],
+        },
+      ],
+    },
+    quickstart: {
+      title: '10-Minute Quickstart',
+      demoHref: '/features/streaming',
+      demoLabel: 'Streaming Demo',
+      sections: [
+        {
+          id: 'preview',
+          heading: 'What you will build',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Create 4 files and you have a page where clicking a button streams data from the server and updates the UI — no page reload, no client-side fetch, no state management library.',
+            },
+            {
+              type: 'diagram',
+              label: 'End result',
+              text: `┌──────────────────────────────────┐
+│  /hello page                     │
+│                                  │
+│  ┌──────────────────────────┐    │
+│  │ <h-state name="hello:btn">    │    │
+│  │  [ Load Data button ]    │    │
+│  └──────────────────────────┘    │
+│                                  │
+│  ┌──────────────────────────┐    │
+│  │ <h-state name="hello:result"> │    │
+│  │  ① Before click: empty   │    │
+│  │  ② Loading: skeleton     │    │
+│  │  ③ Done: item list       │    │
+│  └──────────────────────────┘    │
+└──────────────────────────────────┘`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'These 4 files (Surface, 2 Templates, Transition) are all of StateSurface. No complex setup — just repeat this pattern for every new page.',
+            },
+          ],
+        },
+        {
+          id: 'prereqs',
+          heading: 'Before you start',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Node.js 20+, pnpm installed (node --version, pnpm --version).',
+                'StateSurface repo cloned and pnpm install completed.',
+                'Basic TypeScript and JSX syntax helps but is not required.',
+                'If you have used React or Vue before, Templates will feel immediately familiar.',
+              ],
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'Keep pnpm dev running — the server auto-restarts on every file save. Open one terminal and leave it there.',
+            },
+          ],
+        },
+        {
+          id: 'step1',
+          heading: 'File 1 — Create the Surface',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Surface = building skeleton before interior work. The <h-state> tags are power outlets drilled into the walls. The outlet positions are fixed; Templates are the appliances you plug in.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/hello.ts  ← create this file',
+              text: `import type { RouteModule } from '../shared/routeModule.js';
+import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+
+export default {
+  layout: stateScript => {
+    const body = joinSurface(
+      '<main class="mx-auto max-w-xl p-8 space-y-6">',
+      stateSlots('hello:btn', 'hello:result'),  // declare 2 slots
+      '</main>',
+    );
+    return baseSurface(body, stateScript);
+  },
+  transition: 'hello-load',  // name of the Transition you will create next
+} satisfies RouteModule;`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'After saving, visit http://localhost:5173/hello — a blank page is expected. The two <h-state> anchors are in the DOM but nothing fills them yet.',
+            },
+          ],
+        },
+        {
+          id: 'step2',
+          heading: 'Files 2 & 3 — Create 2 Templates',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Template = React component, but the server decides the props. You do not fetch data with useState — the server sends props via NDJSON and you just render them.',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/hello/templates/helloBtn.tsx  ← button slot',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { label?: string };
+
+const HelloBtn = ({ label = 'Load Data' }: Props) => (
+  <div>
+    <button
+      class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+      data-action="hello-load"
+    >
+      {label}
+    </button>
+    <p class="mt-2 text-xs text-slate-400">
+      Click to stream data from the server.
+    </p>
+  </div>
+);
+
+// 'hello:btn' must exactly match stateSlots('hello:btn') in the Surface
+export default defineTemplate('hello:btn', HelloBtn);`,
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/hello/templates/helloResult.tsx  ← result slot',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { loading?: boolean; items?: string[] };
+
+const HelloResult = ({ loading, items }: Props) => {
+  if (!items && !loading) {
+    return <p class="text-sm text-slate-400">Click the button to load data.</p>;
+  }
+  if (loading) {
+    return (
+      <div class="space-y-2">
+        {[1, 2, 3].map(i => (
+          <div key={i} class="h-5 animate-pulse rounded bg-slate-200" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <ul class="space-y-1">
+      {(items ?? []).map(item => (
+        <li key={item} class="text-sm text-slate-700">• {item}</li>
+      ))}
+    </ul>
+  );
+};
+
+export default defineTemplate('hello:result', HelloResult);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Any file under routes/**/templates/*.tsx is auto-registered at startup. No import statement needed.',
+            },
+          ],
+        },
+        {
+          id: 'step3',
+          heading: 'File 4 — Create the Transition',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Transition = server-side subtitle stream. The HTML page (the "video") stays the same; only the subtitles (state) are updated line by line. Each yield is one NDJSON line = one UI update.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/hello/transitions/helloLoad.ts  ← server logic',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* helloLoad(): AsyncGenerator<StateFrame> {
+  // Frame 1 (full) — must be first, declares the complete UI state
+  yield {
+    type: 'state',
+    states: {
+      'hello:btn': { label: 'Loading...' },
+      'hello:result': { loading: true },
+    },
+  };
+
+  // Simulate server work (real app: DB query, API call, etc.)
+  await new Promise(r => setTimeout(r, 800));
+
+  const items = ['Surface — page skeleton', 'Template — DOM projection', 'Transition — state stream'];
+
+  // Frame 2 (partial) — update only changed slots
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['hello:btn', 'hello:result'],
+    states: {
+      'hello:btn': { label: 'Load Again' },
+      'hello:result': { loading: false, items },
+    },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('hello-load', helloLoad);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'The first yield must always be a full frame (omit full or set full: true). From the second yield onward, use full: false + changed array for partial updates.',
+            },
+          ],
+        },
+        {
+          id: 'flow',
+          heading: 'Full pipeline at a glance',
+          blocks: [
+            {
+              type: 'diagram',
+              label: 'Button click → DOM update pipeline',
+              text: `[ Button click ]
+    │  reads data-action="hello-load"
+    ▼
+[ Action engine ]
+    │  abort previous request → add data-pending
+    │  POST /transition/hello-load
+    ▼
+[ Server: helloLoad() runs ]
+    │  yield { frame 1: loading state }  ──→  sends 1 NDJSON line
+    │  (800ms wait)
+    │  yield { frame 2: real data }      ──→  sends 1 NDJSON line
+    │  yield { type: 'done' }            ──→  stream closes
+    ▼
+[ Client: applies frames ]
+    │  frame 1: re-renders HelloBtn + HelloResult
+    │  frame 2: re-renders HelloBtn + HelloResult again
+    ▼
+[ <h-state name="hello:btn">, <h-state name="hello:result"> DOM patched ]`,
+            },
+            {
+              type: 'paragraph',
+              text: 'This pipeline is the entirety of StateSurface. Surface fixes the slots, Template renders each slot, Transition streams state from the server, Action connects user events to Transitions.',
+            },
+          ],
+        },
+        {
+          id: 'verify',
+          heading: 'Verify it works',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Make sure pnpm dev is running.',
+                'Visit http://localhost:5173/hello.',
+                'Click the "Load Data" button.',
+                'A loading skeleton appears briefly, then the item list renders — success.',
+                'Confirm the button label changed to "Load Again".',
+              ],
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: 'Open DevTools → Network tab, click the /transition/hello-load request — you can watch the NDJSON stream arrive in real time.',
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next steps',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Quickstart complete. Read the concept guides in order to understand each piece deeply.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'Surface guide — slot design, shared layout, baseSurface/stateSlots helpers.',
+                'Template guide — prop types, stateless principle, hydration, auto-discovery.',
+                'Transition guide — full/partial/removed frame rules, NDJSON protocol.',
+                'Action guide — data-params, form serialization, data-pending-targets, abort-previous.',
+                'Streaming Demo (/features/streaming) — visualize the frame sequence live.',
+                'Actions Playground (/features/actions) — experiment with every action pattern.',
+              ],
+            },
+          ],
         },
       ],
     },
@@ -217,81 +1140,976 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
   ko: {
     surface: {
       title: 'Surface',
+      demoHref: '/features/streaming',
+      demoLabel: '스트리밍 데모',
       sections: [
         {
-          id: 'what',
-          heading: 'Surface란?',
-          body: 'Surface는 페이지 셸입니다 — <h-state> 앵커와 정적 구조를 선언하는 순수 HTML 문자열입니다. Surface는 동적 콘텐츠가 나타날 수 있는 위치를 정의하며, 내용 자체는 포함하지 않습니다.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Surface는 고정된 페이지 셸입니다 — <h-state name="..."> 앵커와 정적 레이아웃을 선언하는 순수 HTML 문자열입니다. Surface는 동적 콘텐츠가 나타날 위치를 정의하며, 내용 자체는 포함하지 않습니다.',
+            },
+          ],
         },
         {
-          id: 'authoring',
-          heading: 'Surface 작성하기',
-          body: 'Surface는 stateSlots(), joinSurface(), baseSurface() 같은 헬퍼를 사용하여 TypeScript 문자열 빌더로 작성합니다. 공유 레이아웃(header, error)과 페이지별 슬롯을 포함하는 전체 HTML 문서를 구성합니다.',
+          id: 'analogy',
+          heading: '비유로 이해하기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Surface = 건물 뼈대 공사. <h-state> 태그는 벽에 미리 뚫어 놓은 콘센트 구멍입니다. 구멍 위치는 고정이고 — Template은 나중에 꽂는 가전제품입니다.',
+            },
+            {
+              type: 'paragraph',
+              text: 'React의 app.tsx나 Vue의 App.vue처럼 최상위 레이아웃 파일이라고 생각하세요. 차이점은 StateSurface의 Surface는 순수 HTML 문자열로 서버에서 한 번만 렌더링되며, 이후 내용 갱신은 <h-state> 앵커를 통해서만 이루어집니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: '왜 HTML 문자열인가? Surface는 페이지 수명 내내 변하지 않기 때문에 Virtual DOM이 필요 없습니다. 문자열 조합으로 가장 빠르고 단순하게 SSR됩니다.',
+            },
+          ],
         },
         {
-          id: 'decision',
-          heading: 'Surface vs Template 결정',
-          body: '"이 콘텐츠가 사용자가 이 페이지에 있는 동안 변할까?"라고 물어보세요. 아니오면 surface에 넣고, 예이면 <h-state> 앵커와 template을 만드세요. 확실하지 않으면 template을 사용하세요 — surface로 되돌리기는 간단합니다.',
+          id: 'when',
+          heading: '언제 사용하나',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                '모든 라우트에 사용: 레이아웃, 내비게이션, 푸터, <h-state> 앵커 배치.',
+                '사용자가 페이지에 머무는 동안 변하지 않는 콘텐츠에 사용.',
+                '조건부로 갱신되는 콘텐츠에는 사용하지 마세요 — Template을 사용하세요.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 구현',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'routes/my-page.ts를 만들고 RouteModule을 export합니다.',
+                'layouts/surface.js에서 baseSurface, stateSlots, joinSurface를 import합니다.',
+                "layout: stateScript => string을 정의합니다 — 동적 앵커마다 stateSlots('slot-name')을 호출합니다.",
+                'baseSurface(body, stateScript)로 조립된 body를 감쌉니다.',
+                '선언한 슬롯 이름마다 대응하는 Template 파일을 추가합니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예시',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/my-page.ts',
+              text: `import type { RouteModule } from '../shared/routeModule.js';
+import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+
+export default {
+  layout: stateScript => {
+    const body = joinSurface(
+      '<main class="max-w-4xl mx-auto p-6">',
+      stateSlots('page:hero', 'page:content'),
+      '</main>',
+    );
+    return baseSurface(body, stateScript);
+  },
+  transition: 'my-page-load',
+} satisfies RouteModule;`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'GET /my-page — 서버가 initial 상태를 결정합니다.',
+                'layout(stateScript)가 전체 HTML 셸 문자열을 렌더링합니다.',
+                'SSR이 각 <h-state> 앵커를 초기 템플릿 출력으로 채웁니다.',
+                '브라우저가 완성된 HTML 페이지를 렌더링합니다 (MPA).',
+                '클라이언트가 각 <h-state> 앵커를 독립적으로 hydrate합니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '흔한 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'Surface 문자열에 동적 콘텐츠를 하드코딩하는 것이 가장 흔한 실수입니다. 사용자가 페이지에 머무는 동안 변할 수 있는 콘텐츠라면 <h-state> 앵커와 Template이 필요합니다.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                '<h-state name="..."> 속성이 template 레지스트리 키와 정확히 일치합니다.',
+                'stateScript 파라미터가 baseSurface(body, stateScript)에 전달됩니다.',
+                '사용할 모든 앵커에 stateSlots()가 호출됩니다.',
+                '조건부로 변하는 모든 데이터는 surface 문자열이 아닌 template에 있습니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '디버깅 체크리스트',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: '페이지가 빈 화면으로 렌더링됩니다 — <h-state> 안에 아무것도 보이지 않습니다.',
+                  cause: 'stateSlots()가 surface 문자열에서 누락되었거나 transition이 해당 슬롯 이름에 상태를 보내지 않습니다.',
+                  fix: 'layout에서 각 앵커에 stateSlots("slot-name")이 있는지 확인하세요. SSR HTML 소스에서 <h-state name="slot-name">을 검색해 확인하세요.',
+                },
+                {
+                  symptom: 'Hydration 오류 — 콘솔에 mismatch 경고가 표시됩니다.',
+                  cause: 'SSR에서 렌더링된 내용이 클라이언트 재렌더링 결과와 다릅니다. 가장 흔한 원인은 surface에 동적 값이 직접 포함된 경우입니다.',
+                  fix: '동적 콘텐츠는 surface 문자열에서 제거하고 <h-state> + Template을 통해 주입하세요.',
+                },
+                {
+                  symptom: '특정 앵커만 갱신되지 않습니다.',
+                  cause: '<h-state name> 속성이 defineTemplate 등록 이름 또는 transition states 키와 다릅니다.',
+                  fix: '세 위치의 이름이 완전히 일치하는지 확인하세요: stateSlots("name"), defineTemplate("name", ...), states["name"].',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '스트리밍 데모에서 여러 <h-state> 앵커가 독립적으로 갱신되는 모습을 실시간으로 확인하세요 — full 프레임은 모든 앵커를 교체하고, partial 프레임은 변경된 앵커만 패치합니다.',
+            },
+          ],
         },
       ],
     },
     template: {
       title: 'Template',
+      demoHref: '/features/actions',
+      demoLabel: '액션 플레이그라운드',
       sections: [
         {
-          id: 'what',
-          heading: 'Template이란?',
-          body: 'Template은 <h-state> 앵커 안에서 렌더링되는 TSX 프로젝션 컴포넌트입니다. 서버에서 상태 프레임을 통해 데이터를 받아 DOM으로 투영합니다. 기본적으로 무상태입니다.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Template은 하나의 <h-state> 앵커 안에서 렌더링되는 무상태 TSX 함수입니다. 서버로부터 상태 프레임을 통해 props를 받습니다 — DOM 프로젝션은 template이, 데이터는 서버가 담당합니다.',
+            },
+          ],
         },
         {
-          id: 'authoring',
-          heading: 'Template 작성하기',
-          body: 'defineTemplate(name, Component)으로 template을 등록합니다. 컴포넌트는 상태 프레임의 데이터와 일치하는 타입된 props를 받습니다. 순수 무상태 함수를 선호하세요 — mount/lmount는 포커스나 스크롤 같은 클라이언트 전용 UI 상태에만 사용합니다.',
+          id: 'analogy',
+          heading: '비유로 이해하기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Template = TV 화면 렌더러. 리모컨(Action)이 채널을 누르면, 서버(Transition)가 영상 신호를 보내고, TV 화면(Template)이 그 신호를 화면에 뿌립니다. 화면은 신호가 오기 전까지 아무것도 모릅니다.',
+            },
+            {
+              type: 'paragraph',
+              text: 'React 컴포넌트와 비슷하지만 중요한 차이가 있습니다: 로컬 state가 없습니다. useState, useEffect, fetch — 이 모두가 없습니다. 데이터는 항상 서버에서 props로 도착합니다. Template은 오직 "이 데이터를 어떻게 보여줄까"만 담당합니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'loading prop 패턴: transition이 첫 프레임에 { loading: true }를 보내면 skeleton을 표시하고, 두 번째 프레임에 실제 데이터를 보내면 콘텐츠를 표시하세요. 서버가 로딩 UX 타이밍을 완전히 제어합니다.',
+            },
+          ],
         },
         {
-          id: 'registry',
-          heading: 'Template Registry',
-          body: 'Template은 시작 시 routes/**/templates/**/*.tsx에서 자동 발견됩니다. 동일한 레지스트리가 SSR과 CSR에서 공유됩니다. 수동 등록이 필요 없으며, 올바른 디렉토리에 파일을 배치하면 됩니다.',
+          id: 'when',
+          heading: '언제 사용하나',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                '시각적 콘텐츠가 필요한 모든 <h-state> 앵커에 사용합니다.',
+                '로딩 상태, 콘텐츠, 에러 등 서버 데이터로 구동되는 모든 것에 사용합니다.',
+                '사용자마다 변하지 않는 콘텐츠에는 사용하지 마세요 — surface에 넣으세요.',
+                '서버 구동 데이터를 로컬 상태에 저장하지 마세요 (props만 사용하세요).',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 구현',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'routes/my-page/templates/myContent.tsx를 만듭니다.',
+                'shared/templateRegistry.js에서 defineTemplate을 import합니다.',
+                'transition이 states에 보낼 데이터와 일치하는 props 타입을 정의합니다.',
+                '순수 무상태 함수형 컴포넌트를 작성합니다.',
+                "export default defineTemplate('slot-name', Component)으로 export합니다 — 이름이 <h-state name>과 일치해야 합니다.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예시',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/my-page/templates/myContent.tsx',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { title: string; items: string[]; loading?: boolean };
+
+const MyContent = ({ title, items, loading }: Props) => {
+  if (loading) return <div class="animate-pulse h-8 bg-slate-200 rounded" />;
+  return (
+    <section>
+      <h2 class="text-xl font-semibold">{title}</h2>
+      <ul class="mt-2 space-y-1">
+        {items.map(i => <li key={i}>{i}</li>)}
+      </ul>
+    </section>
+  );
+};
+
+export default defineTemplate('page:content', MyContent);`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                "서버가 프레임을 yield합니다: states: { 'page:content': { title, items } }.",
+                "클라이언트가 template 레지스트리에서 'page:content'를 조회합니다.",
+                '프레임 데이터로부터 props를 받아 template 함수가 호출됩니다.',
+                'Lithent가 결과를 앵커 내부의 현재 DOM과 비교합니다.',
+                '<h-state name="page:content"> 내부에서 변경된 노드만 패치됩니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '흔한 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: "defineTemplate('name', ...)의 이름은 <h-state name=\"...\"> 속성과 정확히 일치해야 합니다. 불일치 시 렌더링이 자동으로 건너뛰어집니다 — 에러가 발생하지 않습니다.",
+            },
+            {
+              type: 'checklist',
+              items: [
+                '파일이 routes/**/templates/*.tsx 하위에 있습니다 (자동 발견 경로).',
+                "defineTemplate('name', ...)의 이름이 <h-state name=\"...\">와 정확히 일치합니다.",
+                'props 타입이 transition의 states에서 보내는 것과 정확히 일치합니다.',
+                '리스트는 key prop을 사용하여 올바른 diff를 보장합니다.',
+                '서버 구동 데이터가 로컬 상태에 저장되지 않습니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '디버깅 체크리스트',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'Template이 전혀 렌더링되지 않습니다 — 앵커가 빈 상태입니다.',
+                  cause: "defineTemplate('name', ...)의 이름이 <h-state name=\"...\"> 속성과 다르거나 템플릿 파일이 routes/**/templates/ 경로에 없습니다.",
+                  fix: "두 이름이 완전히 동일한지 확인하세요. 파일 경로가 routes/my-page/templates/myContent.tsx 형식인지 확인하세요.",
+                },
+                {
+                  symptom: 'TypeScript 오류: props 타입이 맞지 않습니다.',
+                  cause: 'transition에서 yield하는 states 객체의 필드명/타입이 Template의 props 타입 정의와 다릅니다.',
+                  fix: 'transition 파일의 states 객체 구조와 Template의 Props 타입을 나란히 놓고 필드 이름과 타입을 맞추세요.',
+                },
+                {
+                  symptom: '리스트 아이템이 갱신 시 깜빡이거나 순서가 틀립니다.',
+                  cause: '리스트 아이템에 key prop이 없어 Lithent diff가 인덱스 기반으로 동작합니다.',
+                  fix: "items.map(item => <li key={item.id}>{item.name}</li>) 처럼 안정적인 고유 key를 사용하세요.",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '액션 플레이그라운드에서 사용자 상호작용으로 template이 다시 렌더링되는 모습을 확인하세요 — 버튼 클릭과 폼 제출이 action → transition → frame → DOM 전체 파이프라인을 통해 template 갱신을 구동합니다.',
+            },
+          ],
         },
       ],
     },
     transition: {
       title: 'Transition',
+      demoHref: '/features/streaming',
+      demoLabel: '스트리밍 데모',
       sections: [
         {
-          id: 'what',
-          heading: 'Transition이란?',
-          body: 'Transition은 상태 프레임을 yield하는 서버 측 async generator입니다. 데이터가 도착할 때 나타나야 하는 UI 상태의 시퀀스를 정의합니다. Transition이 곧 페이지의 "상태 머신"입니다.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Transition은 StateFrame 객체를 NDJSON으로 yield하는 서버 측 async function*입니다. 데이터가 도착하는 순서에 따라 UI 상태가 점진적으로 구성되는 시퀀스를 정의합니다 — 서버의 상태 머신입니다.',
+            },
+          ],
         },
         {
-          id: 'frames',
-          heading: '프레임 유형',
-          body: 'Full 프레임(full: true 또는 생략)은 모든 활성 상태를 교체합니다. Partial 프레임(full: false)은 "changed"와 "removed" 배열을 통해 변경사항을 병합합니다. 첫 프레임은 반드시 full이어야 합니다. 프레임은 HTTP POST를 통해 NDJSON으로 스트리밍됩니다.',
+          id: 'analogy',
+          heading: '비유로 이해하기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Transition = 주방 셰프. 주문이 들어오면(Action) 셰프가 요리 과정을 순서대로 진행합니다: 재료 준비(로딩 상태 yield) → 요리 완성(데이터 yield) → 서빙 완료(done yield). 손님(Template)은 각 단계마다 업데이트된 화면을 받습니다.',
+            },
+            {
+              type: 'paragraph',
+              text: 'React의 useEffect + fetch 패턴과 비교: React에서는 클라이언트가 요청하고 기다렸다가 setState. StateSurface에서는 서버가 async generator로 단계별 프레임을 push. 제어권이 클라이언트에서 서버로 이동합니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'CSS transition(애니메이션)과 다른 개념입니다. StateSurface의 Transition은 서버 측 상태 변환 함수입니다. 네이밍이 혼란스러울 수 있지만 — 서버 state를 "전환(transition)"한다는 의미입니다.',
+            },
+          ],
         },
         {
-          id: 'progressive',
-          heading: '점진적 구성',
-          body: '데이터가 도착하는 대로 프레임을 yield합니다: 먼저 로딩 상태, 그 다음 콘텐츠, 마지막으로 보충 데이터. UI가 점진적으로 자체 구성됩니다. 로딩 플래그가 필요 없습니다 — 스트림 자체가 로딩 시퀀스입니다.',
+          id: 'when',
+          heading: '언제 사용하나',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                '페이지 내 상태를 변경하는 모든 사용자 액션에 사용합니다: 데이터 로딩, 폼 제출, 버튼 클릭.',
+                '점진적 렌더링에 사용합니다: 로딩 상태를 먼저 표시한 후 콘텐츠를 표시합니다.',
+                '다른 페이지로 이동할 때는 사용하지 마세요 — MPA <a href>를 사용하세요.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 구현',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'routes/my-page/transitions/myTransition.ts를 만듭니다.',
+                'server/transition.js에서 defineTransition을, shared/protocol.js에서 StateFrame을 import합니다.',
+                'async function*(params): AsyncGenerator<StateFrame>을 작성합니다.',
+                '첫 yield는 반드시 full 프레임이어야 합니다 (full 생략 또는 true) — 전체 UI 상태를 선언합니다.',
+                '이후 부분 업데이트에는 full: false + changed/removed 배열을 사용합니다.',
+                'yield { type: "done" }으로 스트림을 종료합니다.',
+                "export default defineTransition('name', fn)으로 export합니다.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예시',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/my-page/transitions/myTransition.ts',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* myTransition(
+  params: Record<string, unknown>
+): AsyncGenerator<StateFrame> {
+  // 프레임 1: full — 로딩 상태 (반드시 첫 번째)
+  yield {
+    type: 'state',
+    states: { 'page:content': { loading: true, items: [] } },
+  };
+
+  const data = await fetchData(params.query as string);
+
+  // 프레임 2: partial — 콘텐츠 준비 완료
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['page:content'],
+    states: { 'page:content': { loading: false, items: data } },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('my-transition', myTransition);`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                '클라이언트가 JSON params를 body로 /transition/my-transition에 POST합니다.',
+                '서버가 async generator를 시작하고 NDJSON 스트리밍을 시작합니다.',
+                'Full 프레임 → 클라이언트가 모든 activeStates를 교체하고 모든 template을 다시 렌더링합니다.',
+                'Partial 프레임 → 클라이언트가 changed 키만 병합하고 변경되지 않은 앵커는 건너뜁니다.',
+                'done 프레임 → 스트림이 닫히고 모든 앵커에서 data-pending이 제거됩니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '흔한 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: '모든 스트림은 full 프레임으로 시작해야 합니다. partial 프레임(full: false)을 먼저 yield하는 것은 프로토콜 위반입니다 — 클라이언트가 전체 스트림을 거부합니다.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                '첫 번째 yield된 프레임이 full입니다 (full: false 없음).',
+                'Partial 프레임에 full: false가 있고 changed/removed 중 최소 하나 이상이 있습니다.',
+                'changed의 키는 states에 존재하고, removed의 키는 states에 존재하지 않습니다.',
+                'changed와 removed에 동일한 키가 없습니다.',
+                'generator가 yield { type: "done" }으로 종료됩니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '디버깅 체크리스트',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: '첫 프레임 직후 클라이언트가 스트림 전체를 무시합니다.',
+                  cause: '첫 프레임이 full: false (partial)로 yield되었습니다. 프로토콜 위반입니다.',
+                  fix: '첫 yield 프레임에서 full: false를 제거하거나 full: true를 명시하세요. 모든 스트림은 full 프레임으로 시작해야 합니다.',
+                },
+                {
+                  symptom: 'Partial 프레임이 적용되지 않습니다 — 특정 앵커가 갱신되지 않습니다.',
+                  cause: 'changed 배열에 해당 키가 없거나, states 객체에 해당 키가 없습니다.',
+                  fix: "changed: ['slot-name']과 states: { 'slot-name': data } 양쪽을 모두 확인하세요. 키가 정확히 일치해야 합니다.",
+                },
+                {
+                  symptom: 'async 작업 중 오류가 나면 스트림이 아무 응답 없이 끊깁니다.',
+                  cause: 'async generator 내부에서 예외가 발생했지만 catch되지 않았습니다.',
+                  fix: "async 작업을 try/catch로 감싸고 catch 블록에서 yield { type: 'error', ... }를 yield한 뒤 finally에서 yield { type: 'done' }을 보내세요.",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '스트리밍 데모에서 프레임 시퀀스를 실시간으로 시각화하세요 — full 프레임이 모든 앵커를 교체하고, partial 프레임이 특정 키만 패치하고, error 프레임이 인라인 에러로 나타나는 것을 확인할 수 있습니다.',
+            },
+          ],
         },
       ],
     },
     action: {
       title: 'Action',
+      demoHref: '/features/actions',
+      demoLabel: '액션 플레이그라운드',
       sections: [
         {
-          id: 'what',
-          heading: 'Action이란?',
-          body: 'Action은 사용자 상호작용을 서버 transition에 연결하는 선언적 트리거입니다. 아무 요소에나 data-action="name"을 추가하면 엔진이 이벤트 위임, transition 호출, pending 상태를 자동 처리합니다.',
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '아무 요소에나 data-action="name"을 추가하면 됩니다 — 엔진이 클릭/제출 위임, transition 호출, 이전 스트림 abort, pending 표시를 자동으로 처리합니다. 명령형 JS가 필요 없습니다.',
+            },
+          ],
         },
         {
-          id: 'binding',
-          heading: '선언적 바인딩',
-          body: 'transition 이름에 data-action, JSON 파라미터에 data-params, pending 상태 범위 제한에 data-pending-targets를 사용합니다. data-action이 있는 form은 자동으로 필드 데이터를 직렬화하여 제출합니다.',
+          id: 'analogy',
+          heading: '비유로 이해하기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Action = 호텔 객실 TV 리모컨. 리모컨(HTML 속성)이 신호를 보내면, TV(엔진)가 실제로 채널(transition)을 바꿉니다. 신호 배선을 직접 하지 않아도 됩니다 — 버튼에 이름만 붙이면 됩니다.',
+            },
+            {
+              type: 'paragraph',
+              text: 'React 방식 비교: 버튼에 onClick → fetch → setState. StateSurface 방식: 버튼에 data-action="name" → 엔진이 POST → 서버가 프레임 yield → DOM 갱신. 배선이 내장되어 있습니다. transition 이름만 정하면 됩니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'React에서 오셨다면: data-action은 사전 배선된 onClick입니다. 폼을 서버에 제출하고 응답을 자동으로 스트리밍합니다. useCallback, fetch, useState 모두 필요 없습니다.',
+            },
+          ],
         },
         {
-          id: 'lifecycle',
-          heading: 'Action 생명주기',
-          body: '클릭 → 엔진이 속성 읽기 → 이전 transition abort → data-pending 추가 → POST /transition/:name → 첫 프레임 도착 → data-pending 제거 → 프레임 적용 → done. 동시성 정책은 "abort previous"입니다.',
+          id: 'when',
+          heading: '언제 사용하나',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                '서버 transition을 트리거하는 모든 사용자 상호작용에 사용합니다: 버튼 클릭, 폼 제출.',
+                'data-pending-targets를 사용하여 로딩 표시를 특정 앵커로 제한합니다.',
+                '페이지 이동에는 사용하지 마세요 — MPA 전환에는 <a href>를 사용하세요.',
+                'data-action이 용례를 커버할 때 명령형 fetch/POST를 사용하지 마세요.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 구현',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                '<button> 또는 <form>에 data-action="transition-name"을 추가합니다.',
+                "정적 JSON 파라미터가 있다면 data-params='{\"key\":\"value\"}'를 추가합니다 (선택사항).",
+                '폼의 경우 <input name="..."> 필드 값이 data-params와 자동으로 병합됩니다.',
+                '필요하다면 data-pending-targets="slot1,slot2"로 pending 표시를 제한합니다 (기본값: 모든 앵커).',
+                'JS가 필요 없습니다 — 엔진이 document에서 위임 방식으로 click/submit을 수신합니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예시',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'html',
+              label: '템플릿 TSX 파일 내',
+              text: `{/* 버튼 액션 */}
+<button data-action="search" data-params='{"category":"all"}'>
+  검색
+</button>
+
+{/* 폼 액션 — 필드 값이 params에 병합됨 */}
+<form data-action="search">
+  <input name="query" placeholder="검색어 입력..." />
+  <button type="submit">검색</button>
+</form>
+
+{/* 스코프드 pending — 이 앵커만 로딩 상태 표시 */}
+<button
+  data-action="load-comments"
+  data-pending-targets="page:comments"
+>
+  댓글 불러오기
+</button>`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                '사용자가 data-action 요소를 클릭하거나 data-action form을 제출합니다.',
+                '엔진이 data-action, data-params, 필드 값, data-pending-targets를 읽습니다.',
+                '진행 중인 이전 transition이 abort됩니다 (abort-previous 정책).',
+                '대상 <h-state> 앵커에 data-pending이 추가됩니다.',
+                'JSON body와 함께 POST /transition/:name이 전송됩니다.',
+                '프레임이 도착하면 DOM이 점진적으로 갱신됩니다.',
+                'done 프레임 → 모든 대상 앵커에서 data-pending이 제거됩니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '흔한 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: "data-params는 반드시 이중 따옴표로 된 키를 사용한 유효한 JSON이어야 합니다. data-params=\"{query: 'foo'}\"는 자동으로 실패합니다 — data-params='{\"query\":\"foo\"}'를 사용하세요.",
+            },
+            {
+              type: 'checklist',
+              items: [
+                'data-action에 명시된 transition이 등록되어 있습니다 (transitions/ 내 파일 존재).',
+                'data-params가 유효한 JSON입니다 (키와 문자열 값 모두 이중 따옴표).',
+                '폼 <input name="..."> 속성이 transition이 params에서 기대하는 것과 일치합니다.',
+                'data-pending-targets는 쉼표로 구분된 슬롯 이름을 사용하며 공백이 없습니다.',
+                'abort에 민감한 작업의 경우 transition이 조기 종료를 정상적으로 처리합니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '디버깅 체크리스트',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: '클릭해도 아무 반응이 없습니다 — DevTools에 네트워크 요청이 나타나지 않습니다.',
+                  cause: 'data-action 속성 오타 또는 누락. 또는 shadow DOM 내부 요소일 수 있습니다.',
+                  fix: 'DevTools에서 요소를 클릭하여 data-action 속성이 실제로 있는지 확인하세요. data-transition이나 action 등 다른 이름을 사용하지 않았는지 확인하세요.',
+                },
+                {
+                  symptom: 'POST 요청은 가지만 서버가 404로 응답합니다.',
+                  cause: 'Transition 파일이 없거나 data-action 값과 파일명이 다릅니다.',
+                  fix: 'routes/<page>/transitions/<name>.ts 파일이 있는지 확인하고, <name>이 data-action 값과 정확히 일치하는지 확인하세요.',
+                },
+                {
+                  symptom: '폼 제출 시 input 값이 서버에 전달되지 않습니다.',
+                  cause: 'input에 name 속성이 없거나, data-action이 form 대신 submit 버튼에 있습니다.',
+                  fix: '모든 <input>에 name="..." 속성을 추가하고, data-action을 submit 버튼이 아닌 <form> 요소에 놓으세요.',
+                },
+                {
+                  symptom: '액션 완료 후에도 pending 스피너가 계속 표시됩니다.',
+                  cause: '서버 generator가 done 프레임 없이 종료되거나 uncaught 예외로 스트림이 끊겼습니다.',
+                  fix: "transition에 finally 블록을 추가하여 항상 yield { type: 'done' }이 전송되도록 하세요. async 작업은 try/catch로 감싸세요.",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '액션 플레이그라운드에서 버튼 액션, 폼 제출, 스코프드 pending 표시를 실험해보고, 빠르게 여러 액션이 실행될 때 abort-previous 정책이 동작하는 모습을 직접 확인하세요.',
+            },
+          ],
+        },
+      ],
+    },
+    quickstart: {
+      title: '10분 퀵스타트',
+      demoHref: '/features/streaming',
+      demoLabel: '스트리밍 데모 보기',
+      sections: [
+        {
+          id: 'preview',
+          heading: '무엇을 만드는가',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '파일 4개를 만들면 버튼을 눌렀을 때 서버에서 데이터를 가져와 화면을 바꾸는 페이지가 완성됩니다. 페이지 새로고침 없이, 클라이언트 fetch 없이, 상태 관리 라이브러리 없이.',
+            },
+            {
+              type: 'diagram',
+              label: '완성 후 동작',
+              text: `┌──────────────────────────────────┐
+│  /hello 페이지                    │
+│                                  │
+│  ┌──────────────────────────┐    │
+│  │  <h-state name="hello:btn">  │    │
+│  │  [ 데이터 불러오기 버튼 ] │    │
+│  └──────────────────────────┘    │
+│                                  │
+│  ┌──────────────────────────┐    │
+│  │ <h-state name="hello:result"> │    │
+│  │  ① 클릭 전: 빈 화면      │    │
+│  │  ② 로딩 중: 스켈레톤     │    │
+│  │  ③ 완료: 아이템 목록     │    │
+│  └──────────────────────────┘    │
+└──────────────────────────────────┘`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: '이 4개 파일(Surface, Template×2, Transition)이 StateSurface의 전부입니다. 복잡한 설정 없이 이 패턴만 반복합니다.',
+            },
+          ],
+        },
+        {
+          id: 'prereqs',
+          heading: '시작 전 확인',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Node.js 20 이상, pnpm 설치 확인 (node --version, pnpm --version).',
+                'StateSurface 프로젝트 클론 후 pnpm install 완료.',
+                'TypeScript와 JSX(TSX) 기초 문법을 알면 좋지만 필수는 아닙니다.',
+                'React/Vue를 써본 적 있다면 Template이 즉시 익숙할 것입니다.',
+              ],
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'pnpm dev를 실행하면 파일을 저장할 때마다 서버가 자동 재시작됩니다. 터미널을 하나 열어두고 진행하세요.',
+            },
+          ],
+        },
+        {
+          id: 'step1',
+          heading: '파일 1 — Surface 만들기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Surface = 인테리어 전 건물 뼈대. <h-state> 태그는 벽에 뚫린 콘센트 구멍입니다. 구멍(슬롯) 위치는 고정되어 있고, 거기에 Template이라는 가전제품을 꽂습니다.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/hello.ts  ← 이 파일을 만드세요',
+              text: `import type { RouteModule } from '../shared/routeModule.js';
+import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+
+export default {
+  layout: stateScript => {
+    const body = joinSurface(
+      '<main class="mx-auto max-w-xl p-8 space-y-6">',
+      stateSlots('hello:btn', 'hello:result'),  // 슬롯 2개 선언
+      '</main>',
+    );
+    return baseSurface(body, stateScript);
+  },
+  transition: 'hello-load',  // 이 이름의 Transition을 곧 만들 것
+} satisfies RouteModule;`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: "저장 후 http://localhost:5173/hello 접속 — 빈 페이지가 보이면 정상입니다. <h-state> 앵커 2개가 이미 DOM에 있지만 아직 아무것도 채워지지 않은 상태입니다.",
+            },
+          ],
+        },
+        {
+          id: 'step2',
+          heading: '파일 2, 3 — Template 2개 만들기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Template = React 컴포넌트인데 props를 서버가 결정합니다. useState로 데이터를 fetch하지 않습니다 — 서버가 NDJSON으로 props를 보내주면 그냥 렌더링합니다.',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/hello/templates/helloBtn.tsx  ← 버튼 슬롯',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { label?: string };
+
+const HelloBtn = ({ label = '데이터 불러오기' }: Props) => (
+  <div>
+    <button
+      class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+      data-action="hello-load"
+    >
+      {label}
+    </button>
+    <p class="mt-2 text-xs text-slate-400">
+      클릭하면 서버에서 데이터를 스트리밍합니다.
+    </p>
+  </div>
+);
+
+// 'hello:btn' 이름이 Surface의 stateSlots('hello:btn')과 일치해야 함
+export default defineTemplate('hello:btn', HelloBtn);`,
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: 'routes/hello/templates/helloResult.tsx  ← 결과 슬롯',
+              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+
+type Props = { loading?: boolean; items?: string[] };
+
+const HelloResult = ({ loading, items }: Props) => {
+  if (!items && !loading) {
+    return <p class="text-sm text-slate-400">버튼을 눌러 데이터를 불러오세요.</p>;
+  }
+  if (loading) {
+    return (
+      <div class="space-y-2">
+        {[1, 2, 3].map(i => (
+          <div key={i} class="h-5 animate-pulse rounded bg-slate-200" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <ul class="space-y-1">
+      {(items ?? []).map(item => (
+        <li key={item} class="text-sm text-slate-700">• {item}</li>
+      ))}
+    </ul>
+  );
+};
+
+export default defineTemplate('hello:result', HelloResult);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Template 파일은 routes/**/templates/*.tsx 경로에만 있으면 자동으로 등록됩니다. import 문을 따로 추가할 필요가 없습니다.',
+            },
+          ],
+        },
+        {
+          id: 'step3',
+          heading: '파일 4 — Transition 만들기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Transition = 서버가 보내는 자막 스트림. 영상(HTML 페이지)은 그대로고 자막(상태)만 줄줄이 전송됩니다. yield 하나가 NDJSON 한 줄 = 화면 업데이트 한 번입니다.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/hello/transitions/helloLoad.ts  ← 서버 로직',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* helloLoad(): AsyncGenerator<StateFrame> {
+  // 프레임 1 (full) — 반드시 첫 번째, 전체 UI 상태 선언
+  yield {
+    type: 'state',
+    states: {
+      'hello:btn': { label: '불러오는 중...' },
+      'hello:result': { loading: true },
+    },
+  };
+
+  // 서버 작업 시뮬레이션 (실제로는 DB 조회, API 호출 등)
+  await new Promise(r => setTimeout(r, 800));
+
+  const items = ['Surface — 페이지 뼈대', 'Template — DOM 투영', 'Transition — 상태 스트림'];
+
+  // 프레임 2 (partial) — 변경된 슬롯만 업데이트
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['hello:btn', 'hello:result'],
+    states: {
+      'hello:btn': { label: '다시 불러오기' },
+      'hello:result': { loading: false, items },
+    },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('hello-load', helloLoad);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '첫 번째 yield는 반드시 full 프레임(full 생략 또는 true)이어야 합니다. 두 번째부터 full: false + changed 배열로 부분 업데이트할 수 있습니다.',
+            },
+          ],
+        },
+        {
+          id: 'flow',
+          heading: '전체 흐름 한눈에 보기',
+          blocks: [
+            {
+              type: 'diagram',
+              label: '버튼 클릭 → DOM 업데이트 전체 파이프라인',
+              text: `[ 버튼 클릭 ]
+    │  data-action="hello-load" 속성 읽기
+    ▼
+[ Action 엔진 ]
+    │  이전 요청 abort → data-pending 추가
+    │  POST /transition/hello-load
+    ▼
+[ 서버: helloLoad() 실행 ]
+    │  yield { 프레임 1: loading 상태 }  ──→  NDJSON 한 줄 전송
+    │  (800ms 대기)
+    │  yield { 프레임 2: 실제 데이터 }   ──→  NDJSON 한 줄 전송
+    │  yield { type: 'done' }            ──→  스트림 종료
+    ▼
+[ 클라이언트: 프레임 적용 ]
+    │  프레임 1: HelloBtn + HelloResult 리렌더
+    │  프레임 2: HelloBtn + HelloResult 다시 리렌더
+    ▼
+[ <h-state name="hello:btn">, <h-state name="hello:result"> DOM 업데이트 ]`,
+            },
+            {
+              type: 'paragraph',
+              text: '이 파이프라인이 StateSurface의 전부입니다. Surface가 슬롯을 고정하고, Template이 슬롯 내용을 그리고, Transition이 서버에서 상태를 스트리밍하고, Action이 사용자 이벤트와 Transition을 연결합니다.',
+            },
+          ],
+        },
+        {
+          id: 'verify',
+          heading: '동작 확인',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'pnpm dev가 실행 중인지 확인합니다.',
+                'http://localhost:5173/hello 에 접속합니다.',
+                '"데이터 불러오기" 버튼을 클릭합니다.',
+                '로딩 스켈레톤이 잠깐 표시된 후 아이템 목록이 나타나면 성공입니다.',
+                '버튼 레이블이 "다시 불러오기"로 바뀌었는지 확인합니다.',
+              ],
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: '브라우저 DevTools → Network 탭에서 /transition/hello-load 요청을 클릭하면 NDJSON 스트림이 실시간으로 흘러오는 것을 확인할 수 있습니다.',
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음 단계',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '퀵스타트를 완료했습니다. 각 개념을 깊이 이해하려면 아래 가이드를 순서대로 읽으세요.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'Surface 가이드 — 슬롯 설계, 공유 레이아웃, baseSurface/stateSlots 헬퍼 심화.',
+                'Template 가이드 — props 타입, 무상태 원칙, hydration, 자동 등록 메커니즘.',
+                'Transition 가이드 — full/partial/removed 프레임 규칙, NDJSON 프로토콜 심화.',
+                'Action 가이드 — data-params, 폼 직렬화, data-pending-targets, abort-previous.',
+                '스트리밍 데모 (/features/streaming) — 프레임 시퀀스를 브라우저에서 직접 시각화.',
+                '액션 플레이그라운드 (/features/actions) — 다양한 action 패턴 직접 실험.',
+              ],
+            },
+          ],
         },
       ],
     },
@@ -306,14 +2124,15 @@ export function guideContent(slug: string, lang: Lang) {
 
 export function guideLoadingState(slug: string, lang: Lang) {
   const guide = guideContent(slug, lang);
-  const items = ['surface', 'template', 'transition', 'action'];
+  const items = ['quickstart', 'surface', 'template', 'transition', 'action'];
+  const sections = guide?.sections.map(s => ({ id: s.id, heading: s.heading })) ?? [];
   return {
     'page:header': {
       title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
       nav: 'guide',
       lang,
     },
-    'guide:toc': { slug, items },
+    'guide:toc': { slug, items, sections },
     'guide:content': { slug, loading: true, title: guide?.title ?? slug },
   };
 }
@@ -326,6 +2145,8 @@ export function guideLoadedState(slug: string, lang: Lang) {
     loading: false,
     title: guide.title,
     sections: guide.sections,
+    demoHref: prefixPath(guide.demoHref),
+    demoLabel: guide.demoLabel,
   };
 }
 
@@ -501,9 +2322,9 @@ export function pageContent(
     case 'home':
       return homeContent(lang);
     case 'guide': {
-      const slug = (params?.slug as string) ?? 'surface';
+      const slug = (params?.slug as string) ?? 'quickstart';
       const guide = guideContent(slug, lang);
-      const items = ['surface', 'template', 'transition', 'action'];
+      const items = ['quickstart', 'surface', 'template', 'transition', 'action'];
       return {
         'page:header': {
           title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
@@ -512,7 +2333,14 @@ export function pageContent(
         },
         'guide:toc': { slug, items },
         'guide:content': guide
-          ? { slug, loading: false, title: guide.title, sections: guide.sections }
+          ? {
+              slug,
+              loading: false,
+              title: guide.title,
+              sections: guide.sections,
+              demoHref: prefixPath(guide.demoHref),
+              demoLabel: guide.demoLabel,
+            }
           : { slug, loading: false, title: slug },
       };
     }

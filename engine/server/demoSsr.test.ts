@@ -40,7 +40,7 @@ describe('demo SSR page', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('State-Layout Mapping Runtime');
-    expect(res.text).toContain('Read the Guide');
+    expect(res.text).toContain('10-Min Quickstart');
     expect(res.text).not.toContain('상태-레이아웃 매핑 런타임');
   });
 
@@ -49,7 +49,7 @@ describe('demo SSR page', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('상태-레이아웃 매핑 런타임');
-    expect(res.text).toContain('가이드 읽기');
+    expect(res.text).toContain('10분 퀵스타트');
     expect(res.text).not.toContain('State-Layout Mapping Runtime');
   });
 
