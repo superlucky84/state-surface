@@ -281,42 +281,43 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 
 ```tsx
 // template 안에서 선언만 하면 끝
-<button data-action="article-load" data-params='{"articleId": 1}'>
-  Load Article
+<button data-action="action-demo" data-params='{"type":"button","variant":"primary"}'>
+  Run Action
 </button>
 
 // pending 범위 제한 (optional)
-<button data-action="load-comments" data-pending-targets="panel:comments">
-  Load Comments
+<button data-action="search" data-pending-targets="search:results">
+  Search
 </button>
 ```
 
 **Checklist:**
 
-- [ ] Implement action event delegation in engine:
-  - [ ] `click` listener on `document` — discover `[data-action]` elements.
-  - [ ] Parse `data-action` (transition name) + `data-params` (JSON → params object).
-  - [ ] Call `surface.transition(action, params)` automatically.
-  - [ ] `submit` listener for `<form data-action="...">` (prevent default + serialize).
-- [ ] Implement pending state in `StateSurface`:
-  - [ ] On `transition()` call: add `data-pending` attribute to target anchors.
-  - [ ] Default scope: all anchors. Optionally limited by `data-pending-targets`.
-  - [ ] On first frame arrival: remove `data-pending` from all anchors.
-  - [ ] On error/abort: remove `data-pending` from all anchors.
-- [ ] Add pending CSS to `client/styles.css`:
-  - [ ] `h-state[data-pending]` — opacity, pointer-events: none, transition.
-- [ ] Remove manual `surface.transition()` calls from `client/main.ts` (keep only boot auto-run).
-- [ ] Update existing templates with `data-action` attributes:
-  - [ ] Search page: input/button triggers `data-action="search"`.
-  - [ ] Article page: any in-page action buttons.
-- [ ] Add tests:
-  - [ ] Action discovery: click on `[data-action]` triggers transition.
-  - [ ] Params parsing: `data-params` JSON correctly passed.
-  - [ ] Pending state: `data-pending` added on transition start, removed on first frame.
-  - [ ] Pending targets: `data-pending-targets` limits scope.
-  - [ ] Form submission: `<form data-action>` submit triggers transition.
-  - [ ] Abort: pending cleared when new action aborts previous.
-- [ ] Smoke check: article page actions work end-to-end via `data-action`.
+- [x] Implement action event delegation in engine:
+  - [x] `click` listener on `document` — discover `[data-action]` elements.
+  - [x] Parse `data-action` (transition name) + `data-params` (JSON → params object).
+  - [x] Call `surface.transition(action, params)` automatically.
+  - [x] `submit` listener for `<form data-action="...">` (prevent default + serialize).
+- [x] Implement pending state in `StateSurface`:
+  - [x] On `transition()` call: add `data-pending` attribute to target anchors.
+  - [x] Default scope: all anchors. Optionally limited by `data-pending-targets`.
+  - [x] On first frame arrival: remove `data-pending` from all anchors.
+  - [x] On error/abort: remove `data-pending` from all anchors.
+- [x] Add pending CSS to `client/styles.css`:
+  - [x] `h-state[data-pending]` — opacity, pointer-events: none, transition.
+- [x] Remove manual `surface.transition()` calls from `client/main.ts` (keep only boot auto-run).
+- [x] Update existing templates with `data-action` attributes:
+  - [x] Search page: input/button triggers `data-action="search"`.
+  - [x] Feature/Chat pages: button/form actions use declarative `data-action`.
+  - [x] `routes/article/`는 Phase 12에서 제거되어 해당 항목은 대체 완료.
+- [x] Add tests:
+  - [x] Action discovery: click on `[data-action]` triggers transition.
+  - [x] Params parsing: `data-params` JSON correctly passed.
+  - [x] Pending state: `data-pending` added on transition start, removed on first frame.
+  - [x] Pending targets: `data-pending-targets` limits scope.
+  - [x] Form submission: `<form data-action>` submit triggers transition.
+  - [x] Abort: pending cleared when new action aborts previous.
+- [ ] Smoke check: search/features/chat 페이지 액션이 `data-action`으로 end-to-end 동작.
 - [ ] Smoke check: pending visual feedback visible during slow transitions.
 
 ### Phase 12: Demo Site Redesign — Self-Documenting Feature Showcase
@@ -328,29 +329,29 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 
 **설계 원칙:**
 
-* 페이지를 열면 "이 기능이 뭔지" 읽으면서 "이 기능이 동작하는 것"을 체험
-* 기존 article/search 데모를 교체 (chat은 Phase 13에서 별도 구현)
-* 모든 StateSurface 핵심 기능이 최소 1개 페이지에서 시연됨
+- 페이지를 열면 "이 기능이 뭔지" 읽으면서 "이 기능이 동작하는 것"을 체험
+- 기존 article/search 데모를 교체 (chat은 Phase 13에서 별도 구현)
+- 모든 StateSurface 핵심 기능이 최소 1개 페이지에서 시연됨
 
 **Target page structure (DESIGN.md Section 2.4 참조):**
 
-| Route | 콘텐츠 | 시연 기능 |
-|-------|--------|----------|
-| `/` | StateSurface 소개 — 4 핵심 개념 카드 + 각 기능 페이지 링크 | `initial` SSR only, surface 조합 |
-| `/guide/[slug]` | 개념별 가이드 (surface, template, transition, action) | Dynamic `[param]`, boot auto-run, full→partial |
-| `/features/streaming` | 스트리밍 데모 — 프레임 흐름 실시간 시각화 | Full/partial, `removed`, error frame |
-| `/features/actions` | 액션 플레이그라운드 — 버튼, 폼, scoped pending 체험 | `data-action`, form submit, `data-pending-targets` |
-| `/search` | StateSurface 기능/개념 검색 | Form `data-action`, pending 상태 |
+| Route                 | 콘텐츠                                                     | 시연 기능                                          |
+| --------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| `/`                   | StateSurface 소개 — 4 핵심 개념 카드 + 각 기능 페이지 링크 | `initial` SSR only, surface 조합                   |
+| `/guide/[slug]`       | 개념별 가이드 (surface, template, transition, action)      | Dynamic `[param]`, boot auto-run, full→partial     |
+| `/features/streaming` | 스트리밍 데모 — 프레임 흐름 실시간 시각화                  | Full/partial, `removed`, error frame               |
+| `/features/actions`   | 액션 플레이그라운드 — 버튼, 폼, scoped pending 체험        | `data-action`, form submit, `data-pending-targets` |
+| `/search`             | StateSurface 기능/개념 검색                                | Form `data-action`, pending 상태                   |
 
 **Target slot structure:**
 
-| Route | Page-specific slots | Shared (via baseSurface) |
-|-------|--------------------|-----------------------------|
-| `/` | `page:hero`, `page:concepts`, `page:features` | `page:header`, `system:error` |
-| `/guide/[slug]` | `guide:content`, `guide:toc` | `page:header`, `system:error` |
+| Route                 | Page-specific slots                             | Shared (via baseSurface)      |
+| --------------------- | ----------------------------------------------- | ----------------------------- |
+| `/`                   | `page:hero`, `page:concepts`, `page:features`   | `page:header`, `system:error` |
+| `/guide/[slug]`       | `guide:content`, `guide:toc`                    | `page:header`, `system:error` |
 | `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | `page:header`, `system:error` |
-| `/features/actions` | `actions:playground`, `actions:log` | `page:header`, `system:error` |
-| `/search` | `search:input`, `search:results` | `page:header`, `system:error` |
+| `/features/actions`   | `actions:playground`, `actions:log`             | `page:header`, `system:error` |
+| `/search`             | `search:input`, `search:results`                | `page:header`, `system:error` |
 
 **Checklist:**
 
@@ -419,10 +420,10 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 
 **설계:**
 
-* 언어 전환은 `data-action="switch-lang"` transition으로 처리.
-* 언어 상태는 `lang` 쿠키에 저장 (`ko` | `en`, 기본값 `en`).
-* `initial(req)`에서 쿠키를 읽어 해당 언어 데이터로 SSR.
-* 콘텐츠 데이터는 서버에 `{ ko, en }` 구조로 보관, 선택된 언어만 클라이언트에 전송.
+- 언어 전환은 `data-action="switch-lang"` transition으로 처리.
+- 언어 상태는 `lang` 쿠키에 저장 (`ko` | `en`, 기본값 `en`).
+- `initial(req)`에서 쿠키를 읽어 해당 언어 데이터로 SSR.
+- 콘텐츠 데이터는 서버에 `{ ko, en }` 구조로 보관, 선택된 언어만 클라이언트에 전송.
 
 **Checklist:**
 
@@ -467,11 +468,11 @@ basePath 설정 기능을 추가한다. 환경변수 `BASE_PATH`로 설정하면
 
 **설계:**
 
-* `shared/basePath.ts` — `setBasePath()`, `getBasePath()`, `prefixPath()` 중앙 헬퍼.
-* 서버: `process.env.BASE_PATH` 읽어서 Express 라우트 + transition 엔드포인트에 prefix.
-* 클라이언트: SSR HTML의 `<script id="__BASE_PATH__">` → `client/main.ts`에서 읽어서
+- `shared/basePath.ts` — `setBasePath()`, `getBasePath()`, `prefixPath()` 중앙 헬퍼.
+- 서버: `process.env.BASE_PATH` 읽어서 Express 라우트 + transition 엔드포인트에 prefix.
+- 클라이언트: SSR HTML의 `<script id="__BASE_PATH__">` → `client/main.ts`에서 읽어서
   `StateSurface` 인스턴스와 `setBasePath()`에 전달.
-* basePath='' (기본값)이면 현재와 완전히 동일하게 동작 (zero-cost default).
+- basePath='' (기본값)이면 현재와 완전히 동일하게 동작 (zero-cost default).
 
 **Checklist:**
 
@@ -561,16 +562,16 @@ const ChatMessage = mount<MessageProps>(renew => {
   - [x] `routes/chat/templates/chatMessages.tsx` — message list with `cacheUpdate` per message.
   - [x] `routes/chat/templates/chatInput.tsx` — input form.
   - [x] `routes/chat/templates/chatTyping.tsx` — typing indicator.
-- [ ] Verify `abort previous` works as "cancel generation":
-  - [ ] Send new message during bot streaming → previous stream cancels.
-  - [ ] Only latest conversation state survives.
-- [ ] Performance verification:
-  - [ ] 100+ messages: old messages produce zero DOM mutations.
-  - [ ] `cacheUpdate` dependency check confirms skip for unchanged messages.
+- [x] Verify `abort previous` works as "cancel generation":
+  - [x] Send new message during bot streaming → previous stream cancels.
+  - [x] Only latest conversation state survives.
+- [x] Performance verification:
+  - [x] 100+ messages: old messages produce zero DOM mutations.
+  - [x] `cacheUpdate` dependency check confirms skip for unchanged messages.
 - [x] Update `pageHeader.tsx` nav with `/chat` link.
 - [x] Add tests:
   - [x] Transition yields correct frame sequence (full → partial\* → done).
-  - [ ] Abort mid-stream produces clean state.
+  - [x] Abort mid-stream produces clean state.
   - [x] SSR initial render shows empty chat or welcome message.
 - [ ] Smoke check: full chat flow works end-to-end in dev server.
 
@@ -668,4 +669,4 @@ layouts/         # 사용자: surface 헬퍼 (stateSlots, joinSurface, baseSurfa
 - 2026-02-11: Locked surface/projection asymmetry and added surface composition tasks.
 - 2026-02-14: Phase 8 complete — file-based route discovery, per-route SSR, boot config, demo migration (145 tests passing).
 - 2026-02-14: Phase 9 complete — static page route, param validation, 404 handling, cross-route nav (160 tests passing).
-- 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR __BASE_PATH__ script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).
+- 2026-02-18: Phase 12.2 complete — basePath sub-path mounting. shared/basePath.ts (setBasePath/getBasePath/prefixPath), server routes/transition endpoint prefix, SSR **BASE_PATH** script tag, client bootstrap, template href prefix, Vite base option. (186 tests passing).

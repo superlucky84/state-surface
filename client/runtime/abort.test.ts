@@ -34,9 +34,9 @@ describe('abort previous transition', () => {
     surface.discoverAnchors();
 
     // Mock fetch to avoid actual network
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('', { status: 200 })
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 200 }));
 
     surface.transition('first');
     const firstController = (surface as any).abortController;
@@ -86,10 +86,7 @@ describe('abort previous transition', () => {
     const controller = new AbortController();
     controller.abort();
 
-    (surface as any).onFrame(
-      { type: 'error', message: 'should be ignored' },
-      controller.signal
-    );
+    (surface as any).onFrame({ type: 'error', message: 'should be ignored' }, controller.signal);
 
     expect(traces.filter(t => t.kind === 'error')).toHaveLength(0);
   });
@@ -104,24 +101,15 @@ describe('abort previous transition', () => {
     const ctrl3 = new AbortController();
 
     // First transition starts
-    (surface as any).onFrame(
-      { type: 'state', states: { a: { v: 'first' } } },
-      ctrl1.signal
-    );
+    (surface as any).onFrame({ type: 'state', states: { a: { v: 'first' } } }, ctrl1.signal);
 
     // Second transition aborts first
     ctrl1.abort();
-    (surface as any).onFrame(
-      { type: 'state', states: { a: { v: 'second' } } },
-      ctrl2.signal
-    );
+    (surface as any).onFrame({ type: 'state', states: { a: { v: 'second' } } }, ctrl2.signal);
 
     // Third transition aborts second
     ctrl2.abort();
-    (surface as any).onFrame(
-      { type: 'state', states: { a: { v: 'third' } } },
-      ctrl3.signal
-    );
+    (surface as any).onFrame({ type: 'state', states: { a: { v: 'third' } } }, ctrl3.signal);
 
     // Flush
     (surface as any).flushQueue(true);
@@ -130,5 +118,115 @@ describe('abort previous transition', () => {
     // plus frame from transition 3. Full frames replace state,
     // so the last full frame wins.
     expect(surface.activeStates.a.v).toBe('third');
+  });
+
+  it('chat streaming: new message aborts previous stream and stale frames are ignored', async () => {
+    document.body.innerHTML = `
+      <h-state name="chat:messages"></h-state>
+      <h-state name="chat:current"></h-state>
+      <h-state name="chat:typing"></h-state>
+    `;
+
+    const { surface, traces } = createTestSurface();
+    surface.discoverAnchors();
+
+    const line = (frame: Record<string, unknown>) => `${JSON.stringify(frame)}\n`;
+    const encoder = new TextEncoder();
+
+    let firstController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    let callCount = 0;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            firstController = controller;
+            controller.enqueue(
+              encoder.encode(
+                line({
+                  type: 'state',
+                  states: {
+                    'chat:messages': {
+                      append: { id: 'u-1', role: 'user', text: 'first' },
+                    },
+                    'chat:typing': { text: 'Typing...' },
+                  },
+                })
+              )
+            );
+            controller.enqueue(
+              encoder.encode(
+                line({
+                  type: 'state',
+                  full: false,
+                  states: { 'chat:current': { id: 'b-1', delta: 'A' } },
+                  changed: ['chat:current'],
+                })
+              )
+            );
+          },
+        });
+        return Promise.resolve(new Response(stream, { status: 200 }));
+      }
+
+      const secondResponse =
+        line({
+          type: 'state',
+          states: {
+            'chat:messages': {
+              append: { id: 'u-2', role: 'user', text: 'second' },
+            },
+            'chat:typing': { text: 'Typing...' },
+          },
+        }) +
+        line({
+          type: 'state',
+          full: false,
+          states: {
+            'chat:messages': {
+              append: { id: 'b-2', role: 'bot', text: 'SECOND_OK' },
+            },
+          },
+          changed: ['chat:messages'],
+          removed: ['chat:current', 'chat:typing'],
+        }) +
+        line({ type: 'done' });
+      return Promise.resolve(new Response(secondResponse, { status: 200 }));
+    });
+
+    const firstTransition = surface.transition('chat', { message: 'first' });
+    await Promise.resolve();
+
+    const secondTransition = surface.transition('chat', { message: 'second' });
+
+    firstController?.enqueue(
+      encoder.encode(
+        line({
+          type: 'state',
+          full: false,
+          states: {
+            'chat:messages': {
+              append: { id: 'b-1', role: 'bot', text: 'SHOULD_NOT_APPEAR' },
+            },
+          },
+          changed: ['chat:messages'],
+          removed: ['chat:current', 'chat:typing'],
+        })
+      )
+    );
+    firstController?.enqueue(encoder.encode(line({ type: 'done' })));
+    firstController?.close();
+
+    await secondTransition;
+    await firstTransition;
+
+    expect(surface.activeStates).toEqual({
+      'chat:messages': { append: { id: 'b-2', role: 'bot', text: 'SECOND_OK' } },
+    });
+    expect(JSON.stringify(surface.activeStates)).not.toContain('SHOULD_NOT_APPEAR');
+    expect(traces.filter(t => t.kind === 'done')).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    fetchSpy.mockRestore();
   });
 });
