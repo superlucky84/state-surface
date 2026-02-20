@@ -391,8 +391,8 @@ Pending state ─────────── /features/actions, /search
 Scoped pending ────────── /features/actions
 Multiple actions ──────── /features/actions
 Abort previous ────────── /chat
+Accumulate frame ──────── /chat (streaming text + message append)
 Progressive streaming ─── /chat
-cacheUpdate optimization─ /chat
 Debug overlay ─────────── all pages (?debug=1)
 i18n (ko/en) ─────────── all pages
 basePath ─────────────── all pages (sub-path mounting)
@@ -818,6 +818,7 @@ type StateFrame =
       type: "state";
       states: Record<string, any>;
       full?: boolean;
+      accumulate?: boolean;   // NEW: accumulate into existing slot state
       changed?: string[];
       removed?: string[];
     }
@@ -831,7 +832,7 @@ For concrete valid/invalid payload samples, see `PROTOCOL.md`.
 
 * Frames describe **what is**, not what to do
 * The client **never computes state**
-* **Full frames replace state; partial frames merge by template key**
+* **Full frames replace state; partial frames merge by template key; accumulate frames stack data into existing slot state**
 * **State and data flow together**
 * **Views are bound to data at the frame level**
 * Frames are **processed as a FIFO queue**
@@ -963,20 +964,30 @@ The stream defines the entire flow.**
 
 ---
 
-### 5.3 Full vs Partial Frames
+### 5.3 Full vs Partial vs Accumulate Frames
 
-* **Full frame**: `states` includes **all active templates**
-* **Partial frame**: `states` includes **only changed templates**
-* Partial frames **merge by template key**
-* `removed` lists templates that must be unmounted
-* **The first frame in a stream must be full**
-* If `full` is omitted, it is treated as **true**
+StateSurface defines three frame update semantics:
+
+| Frame type | Condition | Behavior |
+|---|---|---|
+| **Full** | `full !== false` (default) | Replace all of `activeStates` entirely |
+| **Partial** | `full === false` | Replace only the listed slot states by key |
+| **Accumulate** | `accumulate === true` | Stack incoming data into existing slot state |
+
+* **Full frame**: `states` includes **all active templates** — wipes `activeStates` and resets from scratch.
+* **Partial frame**: `states` includes **only changed templates** — merges by slot key, `removed` unmounts slots.
+* **Accumulate frame**: `states` includes **delta data per slot** — the runtime merges incoming values into the existing cached slot state (arrays concat, strings concat, objects shallow-merge, scalars replace).
+* `removed` lists templates that must be unmounted (partial only).
+* **The first frame in a stream must be full.**
+* If `full` is omitted, it is treated as **true**.
+* `accumulate` and `full === false` are mutually exclusive. An accumulate frame is never a reset.
 
 Schema rules (NDJSON state frames, v1):
 
 * `type` is required and must be `"state"`
 * `states` is required and must be an object
 * `full` is optional (default `true`)
+* `accumulate` is optional (default `false`); when `true`, `full` is ignored
 * If `full === false`, at least one of `changed` or `removed` is required
 * If `full === false` and `changed` exists, changed keys must exist in `states`
 * If `full === false`, `removed` keys must not exist in `states`
@@ -984,20 +995,67 @@ Schema rules (NDJSON state frames, v1):
 
 Precedence rules (v1):
 
-* If `full !== false`, treat the frame as full and ignore `changed`/`removed`
-* If `full === false`, apply `removed` first, then apply `changed` via `states`
+* If `accumulate === true`, apply accumulate merge regardless of `full`
+* If `full !== false` (and not accumulate), treat the frame as full and ignore `changed`/`removed`
+* If `full === false` (and not accumulate), apply `removed` first, then apply `changed` via `states`
 * A key cannot exist in both `removed` and `changed`; if it does, frame is invalid
 
 Client apply rule:
 
 ```js
-if (frame.full) {
-  activeStates = frame.states
+if (frame.accumulate) {
+  for (const [key, incoming] of Object.entries(frame.states)) {
+    activeStates[key] = mergeAccumulate(activeStates[key], incoming)
+  }
+} else if (frame.full !== false) {
+  activeStates = { ...frame.states }
 } else {
   for (const key in frame.states) activeStates[key] = frame.states[key]
   for (const key of frame.removed || []) delete activeStates[key]
 }
+
+function mergeAccumulate(existing, incoming) {
+  if (!existing) return incoming
+  const result = { ...existing }
+  for (const [k, v] of Object.entries(incoming)) {
+    const e = existing[k]
+    if (Array.isArray(e) && Array.isArray(v))            result[k] = [...e, ...v]     // concat
+    else if (typeof e === 'string' && typeof v === 'string') result[k] = e + v        // concat
+    else                                                  result[k] = v               // replace
+  }
+  return result
+}
 ```
+
+#### 5.3.1 Why Accumulate
+
+The accumulate frame solves **progressive data growth** (streaming text, chat history, log entries)
+without requiring templates to hold local state.
+
+**Without accumulate** — template must hold client-side state:
+```tsx
+// mount + state + updateCallback needed in template
+const ChatCurrent = mount((renew, props) => {
+  let accumulated = props.delta ?? '';
+  updateCallback(() => { accumulated += props.delta ?? ''; });
+  return () => <div>{accumulated}</div>;
+});
+```
+
+**With accumulate** — template is a pure function:
+```tsx
+// server sends delta each frame; runtime concatenates into activeStates['chat:current'].text
+const ChatCurrent = ({ text }: { text: string }) => <div>{text}</div>;
+```
+
+The server sends only the delta (`text: 'He'`, `text: 'llo'`). The runtime accumulates
+`activeStates['chat:current'].text` → `'Hello'`. The template receives the merged result.
+
+**Invariants:**
+* An accumulate frame never resets a slot — use a full frame for that.
+* Accumulate applies only to keys present in `states`; absent keys in `activeStates` are untouched.
+* Template props always reflect the **merged** slot state, not the raw incoming delta.
+* The server declares intent explicitly via `accumulate: true` — no implicit behavior.
 
 ---
 
@@ -1578,6 +1636,16 @@ class StateSurface {
   }
 
   applyFrame(frame) {
+    if (frame.accumulate) {
+      // Accumulate: stack delta data into existing slot state
+      const nextStates = { ...this.activeStates }
+      for (const [key, incoming] of Object.entries(frame.states)) {
+        nextStates[key] = this.mergeAccumulate(nextStates[key], incoming)
+      }
+      this.sync(nextStates, Object.keys(frame.states), [])
+      return
+    }
+
     if (frame.full !== false) {
       const removed = Object.keys(this.activeStates).filter(
         key => !(key in frame.states)
@@ -1589,6 +1657,18 @@ class StateSurface {
     const nextStates = { ...this.activeStates, ...frame.states }
     for (const key of frame.removed || []) delete nextStates[key]
     this.sync(nextStates, frame.changed || Object.keys(frame.states), frame.removed)
+  }
+
+  mergeAccumulate(existing, incoming) {
+    if (!existing) return incoming
+    const result = { ...existing }
+    for (const [k, v] of Object.entries(incoming)) {
+      const e = existing[k]
+      if (Array.isArray(e) && Array.isArray(v))                result[k] = [...e, ...v]
+      else if (typeof e === 'string' && typeof v === 'string') result[k] = e + v
+      else                                                      result[k] = v
+    }
+    return result
   }
 
   sync(nextStates, changedKeys, removedKeys) {

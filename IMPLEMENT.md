@@ -18,8 +18,12 @@ If context is lost, read in order:
 - `<h-state>` is a fixed DOM anchor and hydration boundary.
 - Navigation is MPA; in-page updates come from streamed state frames.
 - Transport is NDJSON over HTTP POST readable stream.
-- State frame model supports `full` and `partial` with locked precedence rules.
+- State frame model supports `full`, `partial`, and `accumulate` with locked precedence rules.
+  - Full (`full !== false`): replace all `activeStates` entirely.
+  - Partial (`full === false`): replace only listed slot states by key.
+  - Accumulate (`accumulate === true`): stack delta data into existing slot state (arrays concat, strings concat, objects shallow-merge, scalars replace).
 - First frame in each stream is full.
+- Accumulate frames never reset a slot — use a full frame for reset.
 - Concurrency policy is `abort previous`.
 - Template loading is prebundle v1 + static registry.
 - Error template key convention is `system:error` (recommended anchor).
@@ -31,6 +35,7 @@ If context is lost, read in order:
   - templates are **TSX projections** (`routes/**/templates/*.tsx`)
 - SSR reuses transitions (first full frame = initial states).
 - Client entry is route-agnostic (discovers + hydrates whatever is in DOM).
+- Templates are pure functions by default; accumulate frame eliminates the need for client-side local state in streaming/append UIs.
 
 ## Execution Baseline
 
@@ -901,6 +906,85 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 - [ ] Smoke check: ko/en 전환 시 구조가 동일하게 유지된다.
 - [ ] Smoke check: 모바일 폭에서 코드 블록/다이어그램/debug 카드가 깨지지 않는다.
 
+### Phase 17: Accumulate Frame — Protocol Extension + Chat Refactor
+
+(Phase 15 완료 후 진행. Phase 16과 독립적으로 병행 가능)
+
+**배경:**
+현재 챗봇(`/chat`) 데모는 `ChatMessages`와 `ChatCurrent` 템플릿이 Lithent `mount`/`state`/`updateCallback`으로
+클라이언트 로컬 state를 직접 보유한다. 이는 "서버가 상태 소유" 철학에 위배된다.
+
+해결책: **`accumulate` 프레임 타입을 프레임워크 레벨로 추가**한다.
+서버가 delta만 전송하면 런타임이 `activeStates`에 누적 적용하고,
+템플릿은 병합된 최신 상태를 props로 받아 순수 함수로 렌더링한다.
+
+**목표:**
+- `accumulate` 프레임 타입이 프로토콜 1급 시민으로 등록된다.
+- `ChatMessages`, `ChatCurrent` 템플릿이 `mount`/`state` 없이 순수 함수가 된다.
+- 기존 full/partial 동작에 regression이 없다.
+
+---
+
+**17A — 프로토콜 + 런타임 확장**
+
+- [ ] `engine/shared/protocol.ts`
+  - [ ] `StateFrameState`에 `accumulate?: boolean` 필드 추가.
+  - [ ] `validateStateFrame`에 accumulate 유효성 규칙 추가:
+    - `accumulate: true`이면 `full` 무시, `removed` 금지.
+  - [ ] `applyFrame`에 accumulate 분기 추가:
+    ```
+    accumulate === true → mergeAccumulate(existing, incoming) per slot
+    배열 필드: [...existing, ...incoming]
+    문자열 필드: existing + incoming
+    나머지: incoming으로 교체
+    ```
+- [ ] `engine/client/stateSurface.ts`
+  - [ ] `coalescePartials`가 accumulate 프레임을 partial과 혼합하지 않도록 분리 처리.
+    (accumulate끼리는 순서대로 적용, partial/full과 섞이면 full이 우선)
+- [ ] `engine/shared/protocol.test.ts`
+  - [ ] accumulate 프레임 validate 테스트 추가.
+  - [ ] `applyFrame` accumulate 케이스 테스트 추가:
+    - 배열 concat, 문자열 concat, 객체 shallow merge, scalar 교체.
+    - 기존 slot 없을 때 → incoming 그대로 사용.
+    - full 프레임 → accumulate 초기화(reset) 확인.
+
+---
+
+**17B — Chat 전환 (transition + templates)**
+
+- [ ] `routes/chat/transitions/chat.ts`
+  - [ ] 첫 번째 full 프레임: `chat:messages`에 `messages: []` (초기화).
+  - [ ] 유저 메시지 append: `accumulate` 프레임으로 `messages: [userMsg]` 전송.
+  - [ ] 스트리밍 delta: `accumulate` 프레임으로 `text: delta` 전송 (`chat:current`).
+  - [ ] 완료 시: `chat:messages`에 accumulate로 botMsg append, `chat:current` removed.
+- [ ] `routes/chat/templates/chatMessages.tsx`
+  - [ ] `mount`, `state`, `updateCallback`, `mountCallback` 전부 제거.
+  - [ ] 순수 함수 컴포넌트로 교체: `({ messages, welcomeText }) => JSX`.
+  - [ ] `cacheUpdate` 최적화도 제거 (단순 map 렌더링).
+- [ ] `routes/chat/templates/chatCurrent.tsx`
+  - [ ] `mount`, `updateCallback` 제거.
+  - [ ] 순수 함수 컴포넌트로 교체: `({ text }) => JSX`.
+  - [ ] `accumulated` 로컬 변수 제거 — runtime이 `activeStates`에서 누적.
+- [ ] `routes/chat/templates/chatInput.tsx`
+  - [ ] `history` hidden input 필드 완전 제거 (이미 없을 수 있음, 확인).
+
+---
+
+**17C — 검증**
+
+- [ ] `routes/chat/chat.test.ts` 업데이트:
+  - [ ] accumulate 프레임이 올바르게 전송되는지 서버 응답 검증.
+  - [ ] 기존 동작 테스트(abort, 스트리밍, 한국어) regression 없음 확인.
+- [ ] `engine/server/demoSsr.test.ts`: chat SSR 초기 상태 확인.
+- [ ] Smoke check:
+  - [ ] `/chat`에서 메시지 전송 → 유저 메시지 즉시 표시.
+  - [ ] 봇 응답이 글자 단위로 스트리밍되며 누적 표시.
+  - [ ] 새 메시지 전송 시 이전 스트리밍 abort 후 새 시작.
+  - [ ] ko/en 언어 전환 후 채팅 정상 동작.
+  - [ ] 템플릿 파일에 `mount`/`state` import가 없음 확인.
+
+---
+
 ### Phase 16: `createLithent` CLI Scaffolding & Distribution
 
 (Phase 15 가이드 강화와 병행 가능, 릴리스 전 완료)
@@ -980,3 +1064,5 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 - 2026-02-19: Added Phase 16 plan for `createLithent` CLI scaffolding/distribution so the full StateSurface demo can be generated and run from a fresh directory.
 - 2026-02-19: Phase 15A complete — block-based guide data model (paragraph/bullets/code/checklist/warning/sequence), 4 slugs × 2 langs rewritten as 7-section step-by-step tutorials, guideContent.tsx block renderers with code styling and demo CTA, 96 quality/i18n/SSR tests passing (292 total).
 - 2026-02-19: Phase 15 plan expanded — added 15B (Quickstart /guide/quickstart, diagram/callout blocks), 15C (analogy/why/debug depth per guide), 15D (TOC section anchors, clipboard copy, home CTA) to IMPLEMENT.md.
+- 2026-02-21: Phase 15C+15D complete — analogy/debug sections added to all 4 guides (EN+KO, 9 sections), GuideToc section anchors, CodeBlock clipboard copy. Bug fix: guide:toc Fragment→keyed div (Lithent checkSameFragment constraint). 312 tests passing.
+- 2026-02-21: Phase 17 plan added — accumulate frame type as protocol extension. Rationale: chat demo templates holding client-side local state violates "server owns state" philosophy. Accumulate frame enables pure-function templates for streaming/append UIs by having the runtime merge delta data into activeStates. DESIGN.md and PROTOCOL.md updates pending implementation.
