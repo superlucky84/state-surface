@@ -927,23 +927,23 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 **17A — 프로토콜 + 런타임 확장**
 
-- [ ] `engine/shared/protocol.ts`
-  - [ ] `StateFrameState`에 `accumulate?: boolean` 필드 추가.
-  - [ ] `validateStateFrame`에 accumulate 유효성 규칙 추가:
+- [x] `engine/shared/protocol.ts`
+  - [x] `StateFrameState`에 `accumulate?: boolean` 필드 추가.
+  - [x] `validateStateFrame`에 accumulate 유효성 규칙 추가:
     - `accumulate: true`이면 `full` 무시, `removed` 금지.
-  - [ ] `applyFrame`에 accumulate 분기 추가:
+  - [x] `applyFrame`에 accumulate 분기 추가:
     ```
     accumulate === true → mergeAccumulate(existing, incoming) per slot
     배열 필드: [...existing, ...incoming]
     문자열 필드: existing + incoming
     나머지: incoming으로 교체
     ```
-- [ ] `engine/client/stateSurface.ts`
-  - [ ] `coalescePartials`가 accumulate 프레임을 partial과 혼합하지 않도록 분리 처리.
+- [x] `engine/client/stateSurface.ts`
+  - [x] `coalescePartials`가 accumulate 프레임을 partial과 혼합하지 않도록 분리 처리.
     (accumulate끼리는 순서대로 적용, partial/full과 섞이면 full이 우선)
-- [ ] `engine/shared/protocol.test.ts`
-  - [ ] accumulate 프레임 validate 테스트 추가.
-  - [ ] `applyFrame` accumulate 케이스 테스트 추가:
+- [x] `engine/shared/protocol.test.ts`
+  - [x] accumulate 프레임 validate 테스트 추가.
+  - [x] `applyFrame` accumulate 케이스 테스트 추가:
     - 배열 concat, 문자열 concat, 객체 shallow merge, scalar 교체.
     - 기존 slot 없을 때 → incoming 그대로 사용.
     - full 프레임 → accumulate 초기화(reset) 확인.
@@ -952,30 +952,30 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 **17B — Chat 전환 (transition + templates)**
 
-- [ ] `routes/chat/transitions/chat.ts`
-  - [ ] 첫 번째 full 프레임: `chat:messages`에 `messages: []` (초기화).
-  - [ ] 유저 메시지 append: `accumulate` 프레임으로 `messages: [userMsg]` 전송.
-  - [ ] 스트리밍 delta: `accumulate` 프레임으로 `text: delta` 전송 (`chat:current`).
-  - [ ] 완료 시: `chat:messages`에 accumulate로 botMsg append, `chat:current` removed.
-- [ ] `routes/chat/templates/chatMessages.tsx`
-  - [ ] `mount`, `state`, `updateCallback`, `mountCallback` 전부 제거.
-  - [ ] 순수 함수 컴포넌트로 교체: `({ messages, welcomeText }) => JSX`.
-  - [ ] `cacheUpdate` 최적화도 제거 (단순 map 렌더링).
-- [ ] `routes/chat/templates/chatCurrent.tsx`
-  - [ ] `mount`, `updateCallback` 제거.
-  - [ ] 순수 함수 컴포넌트로 교체: `({ text }) => JSX`.
-  - [ ] `accumulated` 로컬 변수 제거 — runtime이 `activeStates`에서 누적.
-- [ ] `routes/chat/templates/chatInput.tsx`
-  - [ ] `history` hidden input 필드 완전 제거 (이미 없을 수 있음, 확인).
+- [x] `routes/chat/transitions/chat.ts`
+  - [x] 첫 번째 full 프레임: `chat:messages`에 `messages: []` (초기화).
+  - [x] 유저 메시지 append: `accumulate` 프레임으로 `messages: [userMsg]` 전송.
+  - [x] 스트리밍 delta: `accumulate` 프레임으로 `text: delta` 전송 (`chat:current`).
+  - [x] 완료 시: `chat:messages`에 accumulate로 botMsg append, `chat:current` removed.
+- [x] `routes/chat/templates/chatMessages.tsx`
+  - [x] `mount`, `state`, `updateCallback`, `mountCallback` 전부 제거.
+  - [x] 순수 함수 컴포넌트로 교체: `({ messages, welcomeText }) => JSX`.
+  - [x] `cacheUpdate` 최적화도 제거 (단순 map 렌더링).
+- [x] `routes/chat/templates/chatCurrent.tsx`
+  - [x] `mount`, `updateCallback` 제거.
+  - [x] 순수 함수 컴포넌트로 교체: `({ text }) => JSX`.
+  - [x] `accumulated` 로컬 변수 제거 — runtime이 `activeStates`에서 누적.
+- [x] `routes/chat/templates/chatInput.tsx`
+  - [x] `history` hidden input 필드 완전 제거 (이미 없을 수 있음, 확인).
 
 ---
 
 **17C — 검증**
 
-- [ ] `routes/chat/chat.test.ts` 업데이트:
-  - [ ] accumulate 프레임이 올바르게 전송되는지 서버 응답 검증.
-  - [ ] 기존 동작 테스트(abort, 스트리밍, 한국어) regression 없음 확인.
-- [ ] `engine/server/demoSsr.test.ts`: chat SSR 초기 상태 확인.
+- [x] `routes/chat/chat.test.ts` 업데이트:
+  - [x] accumulate 프레임이 올바르게 전송되는지 서버 응답 검증.
+  - [x] 기존 동작 테스트(abort, 스트리밍, 한국어) regression 없음 확인.
+- [x] `engine/server/demoSsr.test.ts`: chat SSR 초기 상태 확인.
 - [ ] Smoke check:
   - [ ] `/chat`에서 메시지 전송 → 유저 메시지 즉시 표시.
   - [ ] 봇 응답이 글자 단위로 스트리밍되며 누적 표시.
@@ -985,20 +985,44 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 ---
 
-### Phase 16: `createLithent` CLI Scaffolding & Distribution
+### Phase 16: `createStateSurface` CLI Scaffolding & Distribution
 
 (Phase 15 가이드 강화와 병행 가능, 릴리스 전 완료)
 
-목표는 `../lithent/createLithent`에 StateSurface 프로젝트 템플릿을 추가해,
-신규 사용자가 CLI 한 번으로 현재 데모 사이트(라우트/템플릿/트랜지션/스타일/문서)를 그대로 설치해 실행할 수 있게 만드는 것이다.
+목표는 **현재 프로젝트 안에 독립 CLI 도구 `createStateSurface`를 만드는 것**이다.
+`../lithent/createLithent`는 구현 방식의 참고 레퍼런스로만 활용한다.
+신규 사용자가 `npx create-state-surface` 한 번으로 현재 데모 사이트
+(라우트/템플릿/트랜지션/스타일/문서)를 그대로 설치해 실행할 수 있게 만든다.
 
 **배포 목표:**
 
-- `createLithent` CLI에서 StateSurface 템플릿 선택 가능.
-- 생성 직후 `pnpm dev`로 현재 데모와 동일한 동작/화면을 재현.
+- `npx create-state-surface` 한 번으로 프로젝트 생성.
+- 생성 직후 `pnpm install && pnpm dev`로 현재 데모와 동일한 동작/화면 재현.
 - 가이드/예제 페이지(`/`, `/guide/*`, `/features/*`, `/search`, `/chat`)가 모두 포함.
 
-**Template scope (설치 포함 대상):**
+**CLI 위치:**
+
+```
+create-state-surface/   ← 현재 저장소 안 별도 패키지
+  bin/
+    create-state-surface.js   ← CLI 진입점
+  template/                   ← 스캐폴딩 소스 파일 (현재 프로젝트 복사본)
+    engine/
+    server/
+    client/
+    shared/
+    layouts/
+    routes/
+    package.json.template
+    tsconfig.json
+    vite.config.ts
+    ...
+  package.json                ← name: "create-state-surface"
+```
+
+**참고 레퍼런스:** `../lithent/createLithent` — CLI 구조, 템플릿 치환 방식, 파일 복사 로직 참고용.
+
+**Template scope (생성 결과물 포함 대상):**
 
 - 엔진/런타임: `engine/`, `server/`, `client/`, `shared/`, `layouts/`, `routes/`.
 - 설정: `package.json`, `tsconfig.json`, `vite.config.ts`, 필수 스크립트/의존성.
@@ -1007,18 +1031,20 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 **Checklist:**
 
-- [ ] createLithent 연동 설계:
-  - [ ] CLI 템플릿 키/이름 확정 (예: `state-surface-demo`).
+- [ ] `create-state-surface` 패키지 설계:
+  - [ ] 저장소 내 `create-state-surface/` 디렉토리 구조 확정.
+  - [ ] `../lithent/createLithent` 코드 참고해 CLI 진입점 구현 방식 결정.
   - [ ] 옵션 정책 확정 (기본: full demo 포함, 선택 옵션 최소화).
-  - [ ] 생성 후 안내 문구(`cd`, `pnpm i`, `pnpm dev`) 확정.
-- [ ] 템플릿 소스 구성 (`../lithent/createLithent`):
-  - [ ] StateSurface 템플릿 디렉토리 생성.
-  - [ ] 현재 프로젝트 구조를 템플릿 파일로 반영.
-  - [ ] 템플릿 내 불필요한 로컬/실험 파일 제외 규칙 적용.
-- [ ] 치환/초기화 처리:
-  - [ ] 프로젝트명/설명/라이선스 기본값 치환.
-  - [ ] Git 초기화 전후 동작(불필요 캐시/락 파일 처리) 점검.
-  - [ ] Node/pnpm 최소 버전 안내 자동 삽입.
+  - [ ] 생성 후 안내 문구(`cd`, `pnpm install`, `pnpm dev`) 확정.
+- [ ] 템플릿 소스 구성:
+  - [ ] `create-state-surface/template/` 에 현재 프로젝트 구조 반영.
+  - [ ] 불필요한 로컬/실험 파일 제외 규칙 적용 (`.git`, `node_modules`, `dist` 등).
+  - [ ] `package.json.template` — 프로젝트명 치환 플레이스홀더 삽입.
+- [ ] CLI 구현:
+  - [ ] `bin/create-state-surface.js` — 프로젝트명 입력 → 디렉토리 생성 → 파일 복사 → 치환.
+  - [ ] 프로젝트명/설명 치환 처리.
+  - [ ] Git 초기화 (`git init`) 자동 실행.
+  - [ ] 완료 후 안내 메시지 출력.
 - [ ] demo parity 보장:
   - [ ] 생성 프로젝트에서 라우트 목록이 기준과 동일한지 검증.
   - [ ] chat/search/features/guide 동작이 기준 데모와 기능적으로 동일한지 검증.
@@ -1028,11 +1054,11 @@ debug 섹션 (증상 → 원인 → 해결 3단):
   - [ ] 생성 프로젝트에서 `pnpm test` 통과 검증.
   - [ ] 생성 프로젝트에서 `pnpm dev` 최소 스모크 검증(주요 route 200 + transition 응답).
 - [ ] 문서/배포:
-  - [ ] `createLithent` 사용 문서에 StateSurface 템플릿 추가.
-  - [ ] 본 저장소 `README.md`에 \"CLI로 시작하기\" 섹션 추가.
-  - [ ] 버전/릴리스 노트에 신규 템플릿 제공 사실 명시.
+  - [ ] 본 저장소 `README.md`에 "CLI로 시작하기" 섹션 추가.
+  - [ ] `create-state-surface/README.md` 작성.
+  - [ ] npm 배포 설정 (`publishConfig`, `.npmignore`).
 - [ ] Smoke check:
-  - [ ] 완전히 빈 디렉토리에서 CLI 1회 실행으로 프로젝트 생성.
+  - [ ] 완전히 빈 디렉토리에서 `npx create-state-surface my-app` 1회 실행으로 프로젝트 생성.
   - [ ] 설치 후 5분 내 `pnpm dev` + 핵심 페이지 확인 가능.
   - [ ] 생성 결과물이 현재 레퍼런스 데모와 시각/동작상 큰 차이 없이 일치.
 
@@ -1045,7 +1071,7 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 - [x] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
 - [ ] Guide pages provide step-by-step onboarding with runnable examples.
-- [ ] `createLithent` can scaffold the full StateSurface demo project via CLI.
+- [ ] `createStateSurface` CLI can scaffold the full StateSurface demo project via `npx create-state-surface`.
 
 ## Open Questions (Keep Short)
 
@@ -1066,3 +1092,4 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 - 2026-02-19: Phase 15 plan expanded — added 15B (Quickstart /guide/quickstart, diagram/callout blocks), 15C (analogy/why/debug depth per guide), 15D (TOC section anchors, clipboard copy, home CTA) to IMPLEMENT.md.
 - 2026-02-21: Phase 15C+15D complete — analogy/debug sections added to all 4 guides (EN+KO, 9 sections), GuideToc section anchors, CodeBlock clipboard copy. Bug fix: guide:toc Fragment→keyed div (Lithent checkSameFragment constraint). 312 tests passing.
 - 2026-02-21: Phase 17 plan added — accumulate frame type as protocol extension. Rationale: chat demo templates holding client-side local state violates "server owns state" philosophy. Accumulate frame enables pure-function templates for streaming/append UIs by having the runtime merge delta data into activeStates. DESIGN.md and PROTOCOL.md updates pending implementation.
+- 2026-02-21: Phase 17 complete — accumulate frame type implemented. protocol.ts: accumulate field + validation + applyFrame merge logic. stateSurface.ts: coalescePartials skips accumulate frames. chat templates (chatMessages, chatCurrent) converted to pure functions. chat transition uses accumulate frames for user message append + streaming delta. 322 tests passing.

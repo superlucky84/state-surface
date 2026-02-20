@@ -842,6 +842,205 @@ export default defineTransition('my-transition', myTransition);`,
         },
       ],
     },
+    accumulate: {
+      title: 'Accumulate Frame',
+      demoHref: '/chat',
+      demoLabel: 'Chat Demo',
+      sections: [
+        {
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'An accumulate frame lets the server send delta-only data without resetting the slot. Arrays concat, strings concat. Templates stay pure functions — the runtime owns accumulated state in activeStates.',
+            },
+          ],
+        },
+        {
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Think of a group chat. When a new message arrives, the app appends it to the list — it does not reload the entire conversation history. Accumulate works the same way: each frame says "add this to what you already have" instead of "replace everything with this".',
+            },
+            {
+              type: 'paragraph',
+              text: 'Why "accumulate"? The name describes what the runtime does with incoming data — it accumulates (stacks) delta onto existing state. Compare: full frames replace all activeStates; partial frames replace specific slot states; accumulate frames add to specific slot states.',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'The chat demo at /chat uses accumulate frames for streaming. Each token the server yields appends to the bot\'s response string — the template receives the fully concatenated text every time, with no local state.',
+            },
+          ],
+        },
+        {
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for append-only UIs: chat messages, activity logs, streaming output.',
+                'Use for progressive text streaming: LLM token-by-token responses.',
+                'Use for paginated result appending: "load more" patterns.',
+                "Don't use when you need to reset slot state — yield a full frame for reset.",
+                "Don't mix accumulate and partial frames for the same slot in one flush — use separate frames.",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Yield a full frame first to initialise the slot (e.g., messages: [], text: \'\').',
+                'For each delta, yield { type: \'state\', accumulate: true, states: { \'slot\': delta } }.',
+                'Arrays are concatenated: [...existingArray, ...incomingArray].',
+                'Strings are concatenated: existingString + incomingString.',
+                'Scalars replace: incomingValue replaces existingValue.',
+                'To reset the slot, yield a new full frame — accumulate never resets.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/chat/transitions/chat.ts',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  const userMsg = { id: crypto.randomUUID(), role: 'user', text: String(message) };
+
+  // Frame 1 (full) — reset slots, declare complete UI state
+  yield {
+    type: 'state',
+    states: {
+      'chat:messages': { messages: [] },
+      'chat:current': { text: '' },
+    },
+  };
+
+  // Frame 2 (accumulate) — append user message to array
+  yield {
+    type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [userMsg] } },
+  };
+
+  // Frames 3…N (accumulate) — stream bot response token by token
+  for (const token of ['Hello', ' from', ' the', ' server!']) {
+    yield {
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: token } }, // strings concat
+    };
+  }
+
+  // Final accumulate — append completed bot message
+  const botMsg = { id: crypto.randomUUID(), role: 'bot', text: 'Hello from the server!' };
+  yield {
+    type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [botMsg] } },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('chat', chat);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'Notice there is no local state in the templates. The runtime accumulates messages in activeStates — the template just receives the complete array as props each render.',
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                "Full frame: { 'chat:messages': { messages: [] } } — initialises slot.",
+                "Accumulate frame: { messages: [userMsg] } — runtime appends → messages: [userMsg].",
+                "Accumulate frame: { 'chat:current': { text: 'Hello' } } — runtime concat → text: 'Hello'.",
+                "Accumulate frame: { text: ' world!' } — runtime concat → text: 'Hello world!'.",
+                'Full frame resets: new session start, all accumulated state replaced.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'The first frame in every stream must be a full frame. Yielding an accumulate frame before any full frame is a protocol violation — the runtime has no existing state to accumulate onto.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                'First yielded frame has no accumulate: true (must be a full frame).',
+                'removed is forbidden on accumulate frames — clear slots via a full frame.',
+                'Slot name in accumulate frame matches <h-state name> exactly.',
+                'Reset via full frame, not empty accumulate (messages: [] accumulate just concats an empty array, it does not reset).',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Troubleshooting',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'Accumulated array keeps growing after starting a new session.',
+                  cause: 'A full frame was not yielded at the start of the new session — old state was still in activeStates.',
+                  fix: "Always begin a new session with a full frame that resets the slot (e.g., messages: []). The chat transition's first yield is always a full frame for this reason.",
+                },
+                {
+                  symptom: 'Bot response text shows duplicated content after rapid user messages.',
+                  cause: 'Previous streaming session was aborted but chat:current was not reset — next session accumulates onto leftover text.',
+                  fix: "Include chat:current: { text: '' } in the full frame at the start of each transition to clear it. Alternatively, use removed: ['chat:current'] in a partial frame after the stream ends.",
+                },
+                {
+                  symptom: "Protocol validation error: 'removed not allowed on accumulate frame'.",
+                  cause: 'A frame has both accumulate: true and a removed array.',
+                  fix: 'Remove the removed field. Use a separate partial frame (full: false) to remove slots, then continue with accumulate frames.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Open the Chat demo to see accumulate in action — each token the server yields appends to the bot\'s response string, with no local state in the template.',
+            },
+          ],
+        },
+      ],
+    },
     quickstart: {
       title: '10-Minute Quickstart',
       demoHref: '/features/streaming',
@@ -1819,6 +2018,205 @@ export default defineTransition('my-transition', myTransition);`,
         },
       ],
     },
+    accumulate: {
+      title: 'Accumulate 프레임',
+      demoHref: '/chat',
+      demoLabel: '채팅 데모',
+      sections: [
+        {
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'accumulate 프레임은 슬롯을 초기화하지 않고 서버가 delta 데이터만 전송할 수 있게 합니다. 배열은 concat, 문자열은 concat. 템플릿은 순수 함수로 유지되고 — 런타임이 activeStates에 누적 상태를 관리합니다.',
+            },
+          ],
+        },
+        {
+          id: 'analogy',
+          heading: '비유로 이해하기',
+          blocks: [
+            {
+              type: 'analogy',
+              text: '단체 채팅방을 생각해보세요. 새 메시지가 오면 앱은 전체 대화를 다시 불러오지 않고 새 메시지만 추가합니다. accumulate도 같은 방식입니다: 각 프레임이 "가진 것에 이걸 추가해"를 말하지, "전부 이걸로 교체해"가 아닙니다.',
+            },
+            {
+              type: 'paragraph',
+              text: '왜 "accumulate"인가? 이름 그대로 런타임이 incoming 데이터를 기존 상태에 쌓아(accumulate) 올리기 때문입니다. full 프레임은 activeStates 전체를 교체하고, partial 프레임은 특정 슬롯 상태를 교체하며, accumulate 프레임은 특정 슬롯 상태에 추가합니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: '/chat 채팅 데모는 스트리밍에 accumulate 프레임을 사용합니다. 서버가 토큰을 yield할 때마다 봇 응답 문자열에 추가되고 — 템플릿은 매 렌더마다 완성된 연결 텍스트를 props로 받으며, 로컬 state가 없습니다.',
+            },
+          ],
+        },
+        {
+          id: 'when',
+          heading: '언제 사용하나',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'append-only UI에 사용: 채팅 메시지, 활동 로그, 스트리밍 출력.',
+                '점진적 텍스트 스트리밍에 사용: LLM 토큰 단위 응답.',
+                '페이지네이션 결과 추가에 사용: "더 보기" 패턴.',
+                '슬롯 상태를 초기화해야 할 때는 사용하지 마세요 — 초기화는 full 프레임으로.',
+                '같은 flush 안에서 같은 슬롯에 accumulate와 partial을 혼용하지 마세요 — 별도 프레임으로 분리.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 구현',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                '먼저 full 프레임을 yield하여 슬롯을 초기화합니다 (예: messages: [], text: \'\').',
+                "각 delta마다 { type: 'state', accumulate: true, states: { 'slot': delta } }를 yield합니다.",
+                '배열 필드: [...기존배열, ...새배열]로 연결됩니다.',
+                '문자열 필드: 기존문자열 + 새문자열로 연결됩니다.',
+                '스칼라 필드: 새값이 기존값을 교체합니다.',
+                '슬롯을 초기화하려면 새 full 프레임을 yield합니다 — accumulate는 절대 초기화하지 않습니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예시',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'routes/chat/transitions/chat.ts',
+              text: `import { defineTransition } from '../../../server/transition.js';
+import type { StateFrame } from '../../../shared/protocol.js';
+
+async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  const userMsg = { id: crypto.randomUUID(), role: 'user', text: String(message) };
+
+  // Frame 1 (full) — 슬롯 초기화, 완전한 UI 상태 선언
+  yield {
+    type: 'state',
+    states: {
+      'chat:messages': { messages: [] },
+      'chat:current': { text: '' },
+    },
+  };
+
+  // Frame 2 (accumulate) — 유저 메시지를 배열에 append
+  yield {
+    type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [userMsg] } },
+  };
+
+  // Frame 3…N (accumulate) — 봇 응답을 토큰 단위로 스트리밍
+  for (const token of ['안녕', '하세요', ', 서버', '입니다!']) {
+    yield {
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: token } }, // 문자열 concat
+    };
+  }
+
+  // 최종 accumulate — 완성된 봇 메시지를 배열에 append
+  const botMsg = { id: crypto.randomUUID(), role: 'bot', text: '안녕하세요, 서버입니다!' };
+  yield {
+    type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [botMsg] } },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('chat', chat);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '템플릿에 로컬 state가 없는 것을 주목하세요. 런타임이 activeStates에 messages를 누적하고 — 템플릿은 매 렌더마다 완성된 배열을 props로 받을 뿐입니다.',
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                "Full 프레임: { 'chat:messages': { messages: [] } } — 슬롯 초기화.",
+                'Accumulate 프레임: { messages: [userMsg] } — 런타임 append → messages: [userMsg].',
+                "Accumulate 프레임: { 'chat:current': { text: '안녕' } } — 런타임 concat → text: '안녕'.",
+                "Accumulate 프레임: { text: '하세요' } — 런타임 concat → text: '안녕하세요'.",
+                'Full 프레임 초기화: 새 세션 시작, 누적 상태 전부 교체.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '자주 하는 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: '모든 스트림의 첫 번째 프레임은 full 프레임이어야 합니다. full 프레임 이전에 accumulate 프레임을 yield하는 것은 프로토콜 위반입니다 — 런타임에 누적할 기존 상태가 없기 때문입니다.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                '첫 번째 yield 프레임에 accumulate: true가 없음 (full 프레임으로 시작).',
+                'removed는 accumulate 프레임에 금지 — 슬롯 제거는 full 프레임으로.',
+                'accumulate 프레임의 슬롯 이름이 <h-state name> 속성과 정확히 일치.',
+                '초기화는 빈 accumulate가 아닌 full 프레임으로 (messages: [] accumulate는 빈 배열을 concat할 뿐, 초기화가 아님).',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '트러블슈팅',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: '새 세션 시작 후에도 누적 배열이 계속 커진다.',
+                  cause: '새 세션 시작 시 full 프레임을 yield하지 않아 이전 activeStates가 남아있음.',
+                  fix: '모든 transition은 슬롯을 초기화하는 full 프레임(예: messages: [])으로 시작해야 합니다. 채팅 transition의 첫 번째 yield가 항상 full 프레임인 이유입니다.',
+                },
+                {
+                  symptom: '빠른 메시지 전송 후 봇 응답 텍스트가 중복 표시된다.',
+                  cause: '이전 스트리밍 세션이 abort됐지만 chat:current가 초기화되지 않아 다음 세션이 남은 텍스트에 누적.',
+                  fix: "각 transition 시작의 full 프레임에 'chat:current': { text: '' }를 포함하여 초기화하세요. 또는 스트림 종료 후 partial 프레임의 removed: ['chat:current']를 사용하세요.",
+                },
+                {
+                  symptom: "프로토콜 검증 에러: 'removed not allowed on accumulate frame'.",
+                  cause: '하나의 프레임에 accumulate: true와 removed 배열이 동시에 있음.',
+                  fix: 'removed 필드를 제거하세요. 슬롯 제거는 별도의 partial 프레임(full: false)으로 처리한 후 accumulate 프레임을 계속 사용하세요.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '/chat 채팅 데모를 열어 accumulate를 직접 확인해보세요 — 서버가 yield하는 각 토큰이 봇 응답 문자열에 추가되며, 템플릿에 로컬 state가 없습니다.',
+            },
+          ],
+        },
+      ],
+    },
     quickstart: {
       title: '10분 퀵스타트',
       demoHref: '/features/streaming',
@@ -2124,7 +2522,7 @@ export function guideContent(slug: string, lang: Lang) {
 
 export function guideLoadingState(slug: string, lang: Lang) {
   const guide = guideContent(slug, lang);
-  const items = ['quickstart', 'surface', 'template', 'transition', 'action'];
+  const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'];
   const sections = guide?.sections.map(s => ({ id: s.id, heading: s.heading })) ?? [];
   return {
     'page:header': {
@@ -2324,7 +2722,7 @@ export function pageContent(
     case 'guide': {
       const slug = (params?.slug as string) ?? 'quickstart';
       const guide = guideContent(slug, lang);
-      const items = ['quickstart', 'surface', 'template', 'transition', 'action'];
+      const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'];
       return {
         'page:header': {
           title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',

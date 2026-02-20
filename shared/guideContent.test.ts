@@ -4,8 +4,8 @@ import { app } from '../engine/server/index.js';
 import { guideContent, guideLoadedState } from './content.js';
 import type { Block } from './content.js';
 
-const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action'] as const;
-const ALL_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action'] as const;
+const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action', 'accumulate'] as const;
+const ALL_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'] as const;
 const LANGS = ['en', 'ko'] as const;
 const REQUIRED_SECTION_IDS = ['tldr', 'analogy', 'when', 'steps', 'example', 'sequence', 'mistakes', 'debug', 'next'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [

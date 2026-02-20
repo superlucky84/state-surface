@@ -15,6 +15,7 @@ const LABELS: Record<string, string> = {
   template: 'Template',
   transition: 'Transition',
   action: 'Action',
+  accumulate: 'Accumulate',
 };
 
 const GuideToc = ({ slug, items, sections }: TocProps) => (
