@@ -163,6 +163,39 @@ describe('validateStateFrame', () => {
   it('accepts error frame without template', () => {
     expect(validateStateFrame({ type: 'error', message: 'fail' })).toEqual({ valid: true });
   });
+
+  // ── Accumulate frames ──
+
+  it('accepts a valid accumulate frame', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: 'He' } },
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts accumulate frame with empty states', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      accumulate: true,
+      states: {},
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('rejects accumulate frame with removed', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: 'x' } },
+      removed: ['chat:typing'],
+    });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toContain('"removed"');
+    }
+  });
 });
 
 describe('applyFrame', () => {
@@ -256,5 +289,74 @@ describe('applyFrame', () => {
     const result = applyFrame(active, frame);
     expect(result).toEqual({ a: { x: 999 } });
     expect(result).not.toHaveProperty('b');
+  });
+
+  // ── Accumulate ──
+
+  it('accumulate: array fields are concatenated', () => {
+    const active = { 'chat:messages': { messages: [{ id: 'u1', role: 'user', text: 'Hi' }] } };
+    const frame: StateFrameState = {
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:messages': { messages: [{ id: 'b1', role: 'bot', text: 'Hello' }] } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result['chat:messages'].messages).toHaveLength(2);
+    expect(result['chat:messages'].messages[1].id).toBe('b1');
+  });
+
+  it('accumulate: string fields are concatenated', () => {
+    const active = { 'chat:current': { text: 'He' } };
+    const frame: StateFrameState = {
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: 'llo' } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result['chat:current'].text).toBe('Hello');
+  });
+
+  it('accumulate: scalar fields are replaced', () => {
+    const active = { slot: { count: 1, label: 'old' } };
+    const frame: StateFrameState = {
+      type: 'state',
+      accumulate: true,
+      states: { slot: { count: 2 } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result.slot.count).toBe(2);
+    expect(result.slot.label).toBe('old'); // untouched field preserved
+  });
+
+  it('accumulate: non-existent slot is initialized from incoming', () => {
+    const active = {};
+    const frame: StateFrameState = {
+      type: 'state',
+      accumulate: true,
+      states: { 'chat:current': { text: 'Hi' } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result['chat:current'].text).toBe('Hi');
+  });
+
+  it('accumulate: does not touch slots absent from frame', () => {
+    const active = { a: { x: 1 }, b: { y: 2 } };
+    const frame: StateFrameState = {
+      type: 'state',
+      accumulate: true,
+      states: { a: { x: 10 } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result.b).toEqual({ y: 2 });
+  });
+
+  it('full frame after accumulate resets the slot', () => {
+    const active = { 'chat:current': { text: 'Hello world' } };
+    const frame: StateFrameState = {
+      type: 'state',
+      states: { 'chat:current': { text: '' } },
+    };
+    const result = applyFrame(active, frame);
+    expect(result['chat:current'].text).toBe('');
   });
 });

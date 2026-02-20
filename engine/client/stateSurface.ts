@@ -236,8 +236,8 @@ export class StateSurface {
 
       let frame = this.frameQueue.shift()!;
 
-      // Coalesce consecutive partial frames
-      if (frame.full === false) {
+      // Coalesce consecutive partial frames (not accumulate — those apply individually)
+      if (frame.full === false && !frame.accumulate) {
         frame = this.coalescePartials(frame);
       }
 
@@ -282,7 +282,10 @@ export class StateSurface {
     const prevStates = this.activeStates;
     const nextStates = applyFrame(prevStates, frame);
 
-    if (frame.full !== false) {
+    if (frame.accumulate === true) {
+      // Accumulate frame: only the listed slots changed
+      this.sync(nextStates, Object.keys(frame.states), []);
+    } else if (frame.full !== false) {
       // Full frame: find removed keys
       const removedKeys = Object.keys(prevStates).filter(k => !(k in nextStates));
       const changedKeys = Object.keys(nextStates);

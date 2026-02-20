@@ -20,7 +20,6 @@ describe('GET /chat — SSR initial render', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('Send a message to start the conversation');
     expect(res.text).toContain('Type a message...');
-    // No history field in the form
     expect(res.text).not.toContain('name="history"');
   });
 
@@ -33,7 +32,7 @@ describe('GET /chat — SSR initial render', () => {
   });
 });
 
-describe('POST /transition/chat — frame sequence', () => {
+describe('POST /transition/chat — accumulate frame sequence', () => {
   it('empty message yields only done', async () => {
     const res = await request(app)
       .post('/transition/chat')
@@ -50,7 +49,7 @@ describe('POST /transition/chat — frame sequence', () => {
     expect(lines[0].type).toBe('done');
   });
 
-  it('server sends append operations — never the full history array', async () => {
+  it('server sends accumulate frames — user message appended via accumulate', async () => {
     const res = await request(app)
       .post('/transition/chat')
       .send({ message: 'surface', lang: 'en' })
@@ -62,42 +61,45 @@ describe('POST /transition/chat — frame sequence', () => {
       .split('\n')
       .map((l: string) => JSON.parse(l));
 
-    // Full frame: chat:messages carries only { append: userMsg }, NOT { messages: [...] }
+    // Frame 0: full frame — initializes chat:current to empty, shows typing indicator
     const firstFrame = lines[0];
     expect(firstFrame.full).not.toBe(false);
-    expect(firstFrame.states['chat:messages']).toHaveProperty('append');
-    expect(firstFrame.states['chat:messages']).not.toHaveProperty('messages');
-    expect(firstFrame.states['chat:messages'].append.role).toBe('user');
-    expect(firstFrame.states['chat:messages'].append.text).toBe('surface');
+    expect(firstFrame.accumulate).not.toBe(true);
+    expect(firstFrame.states['chat:current']).toEqual({ text: '' });
+    expect(firstFrame.states['chat:typing']).toBeDefined();
 
-    // Streaming partial frames: only chat:current (delta), no chat:messages
-    const streamingFrames = lines.slice(1, -2);
+    // Frame 1: accumulate — appends user message to chat:messages.messages[]
+    const userAccumulate = lines[1];
+    expect(userAccumulate.accumulate).toBe(true);
+    expect(userAccumulate.states['chat:messages'].messages).toHaveLength(1);
+    expect(userAccumulate.states['chat:messages'].messages[0].role).toBe('user');
+    expect(userAccumulate.states['chat:messages'].messages[0].text).toBe('surface');
+
+    // Streaming frames: accumulate with chat:current.text (delta chars)
+    const streamingFrames = lines.slice(2, -3);
     expect(streamingFrames.length).toBeGreaterThan(0);
     for (const frame of streamingFrames) {
-      expect(frame.changed).toEqual(['chat:current']);
-      expect(frame.states['chat:current']).toHaveProperty('delta');
-      expect(frame.states['chat:current']).not.toHaveProperty('text');
-      expect(frame.states).not.toHaveProperty('chat:messages');
+      expect(frame.accumulate).toBe(true);
+      expect(frame.states['chat:current']).toHaveProperty('text');
+      expect(typeof frame.states['chat:current'].text).toBe('string');
     }
 
-    // Final partial: append bot message, remove chat:current + chat:typing
-    const finalPartial = lines[lines.length - 2];
-    expect(finalPartial.full).toBe(false);
-    expect(finalPartial.states['chat:messages']).toHaveProperty('append');
-    expect(finalPartial.states['chat:messages']).not.toHaveProperty('messages');
-    expect(finalPartial.states['chat:messages'].append.role).toBe('bot');
-    expect(finalPartial.removed).toContain('chat:current');
-    expect(finalPartial.removed).toContain('chat:typing');
+    // Second-to-last state frame: accumulate bot message into chat:messages
+    const botAccumulate = lines[lines.length - 3];
+    expect(botAccumulate.accumulate).toBe(true);
+    expect(botAccumulate.states['chat:messages'].messages).toHaveLength(1);
+    expect(botAccumulate.states['chat:messages'].messages[0].role).toBe('bot');
 
-    // No history field anywhere in the stream
-    const allJson = res.text;
-    expect(allJson).not.toContain('"history"');
+    // Partial remove: clears chat:current and chat:typing
+    const removeFrame = lines[lines.length - 2];
+    expect(removeFrame.full).toBe(false);
+    expect(removeFrame.removed).toContain('chat:current');
+    expect(removeFrame.removed).toContain('chat:typing');
 
     expect(lines[lines.length - 1].type).toBe('done');
   }, 30000);
 
-  it('server does not receive or echo back history', async () => {
-    // Send without history param — server should work fine
+  it('server does not receive or echo back history — stateless server', async () => {
     const res = await request(app)
       .post('/transition/chat')
       .send({ message: 'action', lang: 'en' })
@@ -109,8 +111,9 @@ describe('POST /transition/chat — frame sequence', () => {
       .split('\n')
       .map((l: string) => JSON.parse(l));
 
-    // Full frame still has append (not messages array)
-    expect(lines[0].states['chat:messages'].append.text).toBe('action');
+    // User message appended via accumulate (frame 1)
+    expect(lines[1].accumulate).toBe(true);
+    expect(lines[1].states['chat:messages'].messages[0].text).toBe('action');
   }, 30000);
 
   it('Korean language: typing and bot response in Korean', async () => {
@@ -125,9 +128,12 @@ describe('POST /transition/chat — frame sequence', () => {
       .split('\n')
       .map((l: string) => JSON.parse(l));
 
+    // Full frame contains Korean typing indicator
     expect(lines[0].states['chat:typing'].text).toBe('입력 중...');
 
-    const finalPartial = lines[lines.length - 2];
-    expect(finalPartial.states['chat:messages'].append.text).toMatch(/[가-힣]/);
+    // Bot accumulate frame contains Korean text
+    const botAccumulate = lines[lines.length - 3];
+    expect(botAccumulate.accumulate).toBe(true);
+    expect(botAccumulate.states['chat:messages'].messages[0].text).toMatch(/[가-힣]/);
   }, 30000);
 });

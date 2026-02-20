@@ -41,6 +41,10 @@ const BOT_RESPONSES: Record<string, { en: string; ko: string }> = {
     en: 'NDJSON (Newline-Delimited JSON) is the wire format for state frames. Each line is a complete JSON object. The client parses lines as they arrive, enabling true streaming without buffering the full response.',
     ko: 'NDJSON(줄바꿈 구분 JSON)은 상태 프레임의 전송 형식입니다. 각 줄이 완전한 JSON 객체입니다. 클라이언트는 줄이 도착하는 대로 파싱하여 전체 응답을 버퍼링하지 않고 진정한 스트리밍을 실현합니다.',
   },
+  accumulate: {
+    en: 'The accumulate frame is a third frame type alongside full and partial. The server sends only delta data; the runtime stacks it into activeStates (arrays concat, strings concat). Templates stay pure functions — no local state needed.',
+    ko: 'accumulate 프레임은 full/partial과 함께하는 세 번째 프레임 타입입니다. 서버가 delta만 전송하면 런타임이 activeStates에 누적합니다(배열 concat, 문자열 concat). 템플릿은 순수 함수로 유지됩니다 — 로컬 state 불필요.',
+  },
 };
 
 function makeBotResponse(userText: string, lang: Lang): string {
@@ -49,8 +53,8 @@ function makeBotResponse(userText: string, lang: Lang): string {
     if (lower.includes(key)) return resp[lang];
   }
   return lang === 'ko'
-    ? 'StateSurface에 대해 질문해보세요! 예: surface, template, transition, action, streaming, hydration, abort, ndjson'
-    : 'Try asking about: surface, template, transition, action, streaming, hydration, abort, or ndjson!';
+    ? 'StateSurface에 대해 질문해보세요! 예: surface, template, transition, action, streaming, hydration, abort, ndjson, accumulate'
+    : 'Try asking about: surface, template, transition, action, streaming, hydration, abort, ndjson, or accumulate!';
 }
 
 async function* chat(
@@ -67,21 +71,28 @@ async function* chat(
   const base = chatContent(lang);
   const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', text: userText };
 
-  // Full frame: append user message to client-side history + show typing indicator.
-  // The server does NOT know nor send the previous history — the client holds it.
+  // Full frame: reset chat:current to empty, show typing indicator.
+  // Accumulate user message into chat:messages history.
   yield {
     type: 'state',
     states: {
       ...base,
-      'chat:messages': { append: userMsg },
+      'chat:current': { text: '' },
       'chat:typing': { text: lang === 'ko' ? '입력 중...' : 'Typing...' },
     },
   };
 
+  // Append user message to history via accumulate
+  yield {
+    type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [userMsg] } },
+  };
+
   await delay(400);
 
-  // Streaming: partial frames carry only the new delta characters in
-  // chat:current. The component accumulates locally — frames stay tiny.
+  // Streaming: accumulate frames carry only new chars; runtime concatenates
+  // activeStates['chat:current'].text on the client — no local state in template.
   const fullResponse = makeBotResponse(userText, lang);
   const botId = `b-${Date.now()}`;
   let pos = 0;
@@ -93,21 +104,24 @@ async function* chat(
     pos = nextPos;
     yield {
       type: 'state',
-      full: false,
-      states: { 'chat:current': { id: botId, delta } },
-      changed: ['chat:current'],
+      accumulate: true,
+      states: { 'chat:current': { text: delta } },
     };
     await delay(Math.floor(Math.random() * 30) + 15);
   }
 
-  // Final partial: append completed bot message to client history,
-  // remove the streaming slot and typing indicator.
+  // Final: append completed bot message to history, remove streaming slot and typing.
   const botMsg: Message = { id: botId, role: 'bot', text: fullResponse };
   yield {
     type: 'state',
+    accumulate: true,
+    states: { 'chat:messages': { messages: [botMsg] } },
+  };
+
+  yield {
+    type: 'state',
     full: false,
-    states: { 'chat:messages': { append: botMsg } },
-    changed: ['chat:messages'],
+    states: {},
     removed: ['chat:current', 'chat:typing'],
   };
 
