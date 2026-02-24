@@ -167,7 +167,7 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
           blocks: [
             {
               type: 'paragraph',
-              text: 'A surface is the fixed page shell — plain HTML strings that declare <h-state name="..."> anchors and static layout. Surfaces define where dynamic content appears, not what it contains.',
+              text: 'A surface is the fixed page shell — 7 lines of HTML strings to declare 3 independent panels. Traditional approach needs 27+ lines with component imports, state hooks, and hidden re-render bugs. Surfaces define where dynamic content appears, not what it contains.',
             },
           ],
         },
@@ -227,21 +227,62 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/my-page.ts',
-              text: `import type { RouteModule } from '../shared/routeModule.js';
+              label: '✓ StateSurface — 7 lines',
+              text: `// routes/dashboard.ts — Stock dashboard with 3 independent panels
+import type { RouteModule } from '../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
-  layout: stateScript => {
-    const body = joinSurface(
-      '<main class="max-w-4xl mx-auto p-6">',
-      stateSlots('page:hero', 'page:content'),
-      '</main>',
-    );
-    return baseSurface(body, stateScript);
-  },
-  transition: 'my-page-load',
+  layout: stateScript => baseSurface(joinSurface(
+    '<main class="grid grid-cols-3 gap-4 max-w-6xl mx-auto p-6">',
+    stateSlots('stock:price', 'stock:news', 'stock:chart'),
+    '</main>',
+  ), stateScript),
+  transition: 'dashboard-load',
 } satisfies RouteModule;`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — what these 7 lines do automatically:\n✓ Each panel updates independently — other panels never re-render\n✓ Adding a new panel = 1 line in stateSlots + 1 template file\n✓ The surface itself never changes during a page visit\n✓ SSR delivers complete HTML — no client-side layout assembly\n✓ Hydration is per-anchor, not full-page',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ Traditional approach — 27 lines, 2 hidden issues',
+              text: `// React-style dashboard — each panel manages its own data
+import { useState, useEffect } from 'react';
+import { StockPrice } from './StockPrice';
+import { StockNews } from './StockNews';
+import { StockChart } from './StockChart';
+
+function Dashboard() {
+  const [priceData, setPriceData] = useState(null);
+  const [newsData, setNewsData] = useState(null);
+  const [chartData, setChartData] = useState(null);
+
+  useEffect(() => {
+    fetchPrice().then(setPriceData);
+  }, []);
+  useEffect(() => {
+    fetchNews().then(setNewsData);
+  }, []);
+  useEffect(() => {
+    fetchChart().then(setChartData);
+    // ⚠️ BUG: No cleanup — stale setState calls after unmount
+  }, []);
+
+  // ⚠️ BUG: Parent re-renders when ANY child state changes
+  // All 3 panels re-render even when only price updated
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      <StockPrice data={priceData} loading={!priceData} />
+      <StockNews data={newsData} loading={!newsData} />
+      <StockChart data={chartData} loading={!chartData} />
+    </div>
+  );
+}
+// + 3 child component files, each with their own fetch logic`,
             },
           ],
         },
@@ -329,7 +370,7 @@ export default {
           blocks: [
             {
               type: 'paragraph',
-              text: 'A template is a stateless TSX function that renders inside one <h-state> anchor. It receives props from the server via state frames — it owns DOM projection, the server owns data.',
+              text: 'A template is a stateless TSX function — 12 lines. No useState, no useEffect, no fetch. Traditional approach: 38 lines with 3 hidden bugs (race conditions, stale state, abort handling). The server sends data; you render it.',
             },
           ],
         },
@@ -390,24 +431,79 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/my-page/templates/myContent.tsx',
-              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+              label: '✓ StateSurface — 12 lines',
+              text: `// routes/dashboard/templates/stockPrice.tsx
+import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { title: string; items: string[]; loading?: boolean };
+type Props = { symbol: string; price: number; change: number; loading?: boolean };
 
-const MyContent = ({ title, items, loading }: Props) => {
-  if (loading) return <div class="animate-pulse h-8 bg-slate-200 rounded" />;
+const StockPrice = ({ symbol, price, change, loading }: Props) => {
+  if (loading) return <div class="animate-pulse h-20 bg-slate-100 rounded-xl" />;
   return (
-    <section>
-      <h2 class="text-xl font-semibold">{title}</h2>
-      <ul class="mt-2 space-y-1">
-        {items.map(i => <li key={i}>{i}</li>)}
-      </ul>
-    </section>
+    <div class="rounded-xl border p-4">
+      <span class="text-sm text-slate-500">{symbol}</span>
+      <p class="text-2xl font-bold">\${price.toFixed(2)}</p>
+      <span class={change > 0 ? 'text-green-600' : 'text-red-600'}>
+        {change > 0 ? '+' : ''}{change.toFixed(2)}%
+      </span>
+    </div>
   );
 };
 
-export default defineTemplate('page:content', MyContent);`,
+export default defineTemplate('stock:price', StockPrice);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — what this stateless function gets for free:\n✓ No useState — the server sends data via state frames\n✓ No useEffect — no client-side fetch needed\n✓ No AbortController — the engine auto-aborts previous requests\n✓ SSR and CSR use the same function — the engine decides output format\n✓ Re-renders only when this specific anchor receives new data',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ Traditional approach — 38 lines, 3 hidden bugs',
+              text: `// React-style stock price component
+import { useState, useEffect, useRef } from 'react';
+
+function StockPrice({ symbol }: { symbol: string }) {
+  const [data, setData] = useState<{ price: number; change: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+    setError(null);
+
+    fetch(\`/api/stock/\${symbol}\`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => {
+        if (e.name === 'AbortError') return;
+        // ⚠️ BUG: setState after unmount if component removed during fetch
+        setError(e.message);
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+    // ⚠️ BUG: AbortError shown briefly as error on fast symbol switches
+  }, [symbol]);
+
+  if (loading) return <div className="animate-pulse h-20 bg-slate-100 rounded-xl" />;
+  if (error) return <div className="text-red-600">{error}</div>;
+  // ⚠️ BUG: Race condition — fast symbol changes can show stale data
+  return (
+    <div className="rounded-xl border p-4">
+      <span className="text-sm text-slate-500">{symbol}</span>
+      <p className="text-2xl font-bold">\${data!.price.toFixed(2)}</p>
+      <span className={data!.change > 0 ? 'text-green-600' : 'text-red-600'}>
+        {data!.change > 0 ? '+' : ''}{data!.change.toFixed(2)}%
+      </span>
+    </div>
+  );
+}`,
             },
           ],
         },
@@ -496,7 +592,7 @@ export default defineTemplate('page:content', MyContent);`,
           blocks: [
             {
               type: 'paragraph',
-              text: "A transition is a server-side async function* that yields StateFrame objects as NDJSON. It defines the progressive sequence of UI states as data becomes available — the server's state machine.",
+              text: "A transition is a server-side async function* — 18 lines for a 3-stage UX (skeleton → cached → live). Race conditions are structurally impossible. Traditional approach: 35 lines with race condition bugs built in. yield order = UX timeline.",
             },
           ],
         },
@@ -558,33 +654,87 @@ export default defineTemplate('page:content', MyContent);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/my-page/transitions/myTransition.ts',
-              text: `import { defineTransition } from '../../../server/transition.js';
+              label: '✓ StateSurface — 18 lines, 3-stage UX',
+              text: `// routes/search/transitions/search.ts — skeleton → cached → live
+import { defineTransition } from '../../../server/transition.js';
 import type { StateFrame } from '../../../shared/protocol.js';
 
-async function* myTransition(
-  params: Record<string, unknown>
-): AsyncGenerator<StateFrame> {
-  // Frame 1: full — loading state (required first)
+async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  // Stage 1: loading skeleton
   yield {
     type: 'state',
-    states: { 'page:content': { loading: true, items: [] } },
+    states: { 'search:results': { loading: true, items: [], badge: '' } },
   };
 
-  const data = await fetchData(params.query as string);
-
-  // Frame 2: partial — content ready
+  // Stage 2: cached results arrive first
+  const cached = await searchCache(String(query));
   yield {
-    type: 'state',
-    full: false,
-    changed: ['page:content'],
-    states: { 'page:content': { loading: false, items: data } },
+    type: 'state', full: false, changed: ['search:results'],
+    states: { 'search:results': { loading: false, items: cached, badge: 'cached' } },
+  };
+
+  // Stage 3: live results replace cached
+  const live = await searchLive(String(query));
+  yield {
+    type: 'state', full: false, changed: ['search:results'],
+    states: { 'search:results': { loading: false, items: live, badge: 'live' } },
   };
 
   yield { type: 'done' };
 }
 
-export default defineTransition('my-transition', myTransition);`,
+export default defineTransition('search', search);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — what yield order guarantees:\n✓ yield order = UX timeline — skeleton → cached → live, structurally guaranteed\n✓ Race conditions impossible — single stream, server controls order\n✓ Previous request auto-aborted — engine handles concurrency\n✓ Loading indicator — data-pending auto-attached and removed\n✓ No client-side promise coordination needed',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ Traditional approach — 35 lines, 3 race condition bugs',
+              text: `// React-style search with 3-stage UX
+import { useState, useEffect, useRef } from 'react';
+
+function SearchResults({ query }: { query: string }) {
+  const [items, setItems] = useState([]);
+  const [badge, setBadge] = useState('');
+  const [loading, setLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!query) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+
+    // ⚠️ BUG: If live resolves before cached, stale cached overwrites live
+    searchCache(query).then(cached => {
+      if (controller.signal.aborted) return;
+      setItems(cached);
+      setBadge('cached');
+      setLoading(false);
+    });
+
+    searchLive(query, controller.signal).then(live => {
+      if (controller.signal.aborted) return;
+      setItems(live);
+      setBadge('live');
+    }).catch(e => {
+      if (e.name === 'AbortError') return;
+      // ⚠️ BUG: Error silently swallowed — user sees stale results
+      console.error(e);
+    });
+
+    return () => controller.abort();
+    // ⚠️ BUG: No guaranteed order — cached and live race each other
+  }, [query]);
+
+  if (loading) return <Skeleton />;
+  return <ResultList items={items} badge={badge} />;
+}`,
             },
           ],
         },
@@ -678,7 +828,7 @@ export default defineTransition('my-transition', myTransition);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Add data-action="name" to any element — the engine handles click/submit delegation, transition invocation, abort of previous streams, and pending indicators automatically. No imperative JS needed.',
+              text: 'Add data-action="name" to any element — 10 lines of HTML, zero JS event handlers. Traditional approach: 42 lines of useState + useEffect + fetch with 3 hidden bugs. The engine handles delegation, abort, and pending automatically.',
             },
           ],
         },
@@ -739,25 +889,87 @@ export default defineTransition('my-transition', myTransition);`,
             {
               type: 'code',
               lang: 'html',
-              label: 'In any template TSX file',
-              text: `{/* Button action */}
-<button data-action="search" data-params='{"category":"all"}'>
-  Search
-</button>
+              label: '✓ StateSurface — 10 lines of HTML, zero JS',
+              text: `<!-- Shipping options form — updates cart summary in real time -->
+<form data-action="update-cart" data-pending-targets="cart:summary">
+  <select name="shipping">
+    <option value="standard">Standard — $5.00</option>
+    <option value="express">Express — $15.00</option>
+    <option value="overnight">Overnight — $30.00</option>
+  </select>
+  <select name="gift">
+    <option value="none">No gift wrap</option>
+    <option value="basic">Basic — $3.00</option>
+    <option value="premium">Premium — $8.00</option>
+  </select>
+  <button type="submit">Place Order</button>
+</form>`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — what data-action handles automatically:\n✓ Zero onChange handlers — engine reads form values on submit\n✓ Zero onSubmit handlers — engine intercepts and POSTs\n✓ Zero useState — no client state management\n✓ Zero fetch/POST code — engine manages HTTP\n✓ Previous request auto-aborted — rapid changes handled safely\n✓ Pending indicator scoped to cart:summary only',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ Traditional approach — 42 lines, 3 hidden bugs',
+              text: `// React-style shipping form — manual state + fetch
+import { useState, useEffect, useCallback } from 'react';
 
-{/* Form action — field values merge into params */}
-<form data-action="search">
-  <input name="query" placeholder="Search..." />
-  <button type="submit">Go</button>
-</form>
+function ShippingForm() {
+  const [shipping, setShipping] = useState('standard');
+  const [gift, setGift] = useState('none');
+  const [loading, setLoading] = useState(false);
 
-{/* Scoped pending — only this anchor shows loading state */}
-<button
-  data-action="load-comments"
-  data-pending-targets="page:comments"
->
-  Load Comments
-</button>`,
+  // ⚠️ BUG: Rapid option changes fire concurrent fetches
+  // Last response may not match current selection
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    fetch('/api/cart/price', {
+      method: 'POST',
+      body: JSON.stringify({ shipping, gift }),
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then(r => r.json())
+      .then(data => { setLoading(false); /* update summary */ })
+      .catch(e => {
+        if (e.name !== 'AbortError') setLoading(false);
+        // ⚠️ BUG: Error state not cleared on next successful request
+      });
+    return () => controller.abort();
+  }, [shipping, gift]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await fetch('/api/cart/order', {
+      method: 'POST',
+      body: JSON.stringify({ shipping, gift }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    // ⚠️ BUG: No error handling on order submission
+    setLoading(false);
+  }, [shipping, gift]);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <select value={shipping} onChange={e => setShipping(e.target.value)}>
+        <option value="standard">Standard — $5.00</option>
+        <option value="express">Express — $15.00</option>
+        <option value="overnight">Overnight — $30.00</option>
+      </select>
+      <select value={gift} onChange={e => setGift(e.target.value)}>
+        <option value="none">No gift wrap</option>
+        <option value="basic">Basic — $3.00</option>
+        <option value="premium">Premium — $8.00</option>
+      </select>
+      <button type="submit" disabled={loading}>Place Order</button>
+    </form>
+  );
+}`,
             },
           ],
         },
@@ -1052,31 +1264,24 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Create 4 files and you have a page where clicking a button streams data from the server and updates the UI — no page reload, no client-side fetch, no state management library.',
+              text: 'Create 4 files and you have a real-time book search page — type a query, the server streams results progressively, the UI updates without page reload, client fetch, or state management.',
             },
             {
               type: 'diagram',
               label: 'End result',
-              text: `┌──────────────────────────────────┐
-│  /hello page                     │
-│                                  │
-│  ┌──────────────────────────┐    │
-│  │ <h-state name="hello:btn">    │    │
-│  │  [ Load Data button ]    │    │
-│  └──────────────────────────┘    │
-│                                  │
-│  ┌──────────────────────────┐    │
-│  │ <h-state name="hello:result"> │    │
-│  │  ① Before click: empty   │    │
-│  │  ② Loading: skeleton     │    │
-│  │  ③ Done: item list       │    │
-│  └──────────────────────────┘    │
-└──────────────────────────────────┘`,
+              text: `/books
+  <h-state name="books:search">
+    -- Search input + button
+
+  <h-state name="books:results">
+    -- Before search: empty
+    -- Searching: skeleton
+    -- Done: book list`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: 'These 4 files (Surface, 2 Templates, Transition) are all of StateSurface. No complex setup — just repeat this pattern for every new page.',
+              text: 'These 4 files are all of StateSurface. The Surface is plain HTML with <h-state> slots, Templates are JSX components, and the Transition is a server generator. No complex setup — just repeat this pattern for every new page.',
             },
           ],
         },
@@ -1111,26 +1316,39 @@ export default defineTransition('chat', chat);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/hello.ts  ← create this file',
+              label: 'routes/books.ts  ← create this file',
               text: `import type { RouteModule } from '../shared/routeModule.js';
-import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
-  layout: stateScript => {
-    const body = joinSurface(
-      '<main class="mx-auto max-w-xl p-8 space-y-6">',
-      stateSlots('hello:btn', 'hello:result'),  // declare 2 slots
-      '</main>',
-    );
-    return baseSurface(body, stateScript);
-  },
-  transition: 'hello-load',  // name of the Transition you will create next
+  layout: stateScript => \`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Search</title>
+  <link rel="stylesheet" href="/client/styles.css">
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <main class="mx-auto max-w-xl p-8 space-y-6">
+    <h-state name="books:search"></h-state>
+    <h-state name="books:results"></h-state>
+  </main>
+  \${stateScript}
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>\`,
+  transition: 'book-search',
 } satisfies RouteModule;`,
             },
             {
               type: 'callout',
+              kind: 'info',
+              text: 'layout is just a function that returns an HTML string. The two <h-state> tags are the only StateSurface-specific parts — everything else is plain HTML you control completely. (In a real project, helper functions like baseSurface() can eliminate the boilerplate.)',
+            },
+            {
+              type: 'callout',
               kind: 'tip',
-              text: 'After saving, visit http://localhost:5173/hello — a blank page is expected. The two <h-state> anchors are in the DOM but nothing fills them yet.',
+              text: 'After saving, visit http://localhost:5173/books — a blank page is expected. The two <h-state> anchors are in the DOM but nothing fills them yet.',
             },
           ],
         },
@@ -1145,64 +1363,59 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/hello/templates/helloBtn.tsx  ← button slot',
+              label: 'routes/books/templates/booksSearch.tsx  ← search form (8 lines)',
               text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { label?: string };
+type Props = { query?: string };
 
-const HelloBtn = ({ label = 'Load Data' }: Props) => (
-  <div>
-    <button
-      class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-      data-action="hello-load"
-    >
-      {label}
+const BooksSearch = ({ query = '' }: Props) => (
+  <form data-action="book-search" data-pending-targets="books:results" class="flex gap-2">
+    <input name="query" value={query} placeholder="Search books..."
+      class="flex-1 rounded-lg border px-4 py-2 text-sm" />
+    <button type="submit"
+      class="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700">
+      Search
     </button>
-    <p class="mt-2 text-xs text-slate-400">
-      Click to stream data from the server.
-    </p>
-  </div>
+  </form>
 );
 
-// 'hello:btn' must exactly match stateSlots('hello:btn') in the Surface
-export default defineTemplate('hello:btn', HelloBtn);`,
+export default defineTemplate('books:search', BooksSearch);`,
             },
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/hello/templates/helloResult.tsx  ← result slot',
+              label: 'routes/books/templates/booksResults.tsx  ← results (9 lines)',
               text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { loading?: boolean; items?: string[] };
+type Book = { title: string; author: string };
+type Props = { loading?: boolean; books?: Book[] };
 
-const HelloResult = ({ loading, items }: Props) => {
-  if (!items && !loading) {
-    return <p class="text-sm text-slate-400">Click the button to load data.</p>;
-  }
-  if (loading) {
-    return (
-      <div class="space-y-2">
-        {[1, 2, 3].map(i => (
-          <div key={i} class="h-5 animate-pulse rounded bg-slate-200" />
-        ))}
-      </div>
-    );
-  }
+const BooksResults = ({ loading, books }: Props) => {
+  if (!books && !loading) return <p class="text-sm text-slate-400">Type a query to search.</p>;
+  if (loading) return (
+    <div class="space-y-2">
+      {[1, 2, 3].map(i => <div key={i} class="h-6 animate-pulse rounded bg-slate-200" />)}
+    </div>
+  );
+  if (!books?.length) return <p class="text-sm text-slate-500">No books found.</p>;
   return (
-    <ul class="space-y-1">
-      {(items ?? []).map(item => (
-        <li key={item} class="text-sm text-slate-700">• {item}</li>
+    <ul class="space-y-2">
+      {books.map(b => (
+        <li key={b.title} class="text-sm">
+          <span class="font-medium">{b.title}</span>
+          <span class="text-slate-400"> — {b.author}</span>
+        </li>
       ))}
     </ul>
   );
 };
 
-export default defineTemplate('hello:result', HelloResult);`,
+export default defineTemplate('books:results', BooksResults);`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: 'Any file under routes/**/templates/*.tsx is auto-registered at startup. No import statement needed.',
+              text: 'Any file under routes/**/templates/*.tsx is auto-registered at startup. No import statement needed. Notice: zero useState, zero useEffect, zero fetch calls.',
             },
           ],
         },
@@ -1217,45 +1430,43 @@ export default defineTemplate('hello:result', HelloResult);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/hello/transitions/helloLoad.ts  ← server logic',
+              label: 'routes/books/transitions/bookSearch.ts  ← server logic (12 lines)',
               text: `import { defineTransition } from '../../../server/transition.js';
 import type { StateFrame } from '../../../shared/protocol.js';
 
-async function* helloLoad(): AsyncGenerator<StateFrame> {
-  // Frame 1 (full) — must be first, declares the complete UI state
+async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  // Frame 1 (full) — loading state
   yield {
     type: 'state',
     states: {
-      'hello:btn': { label: 'Loading...' },
-      'hello:result': { loading: true },
+      'books:search': { query: String(query) },
+      'books:results': { loading: true },
     },
   };
 
-  // Simulate server work (real app: DB query, API call, etc.)
-  await new Promise(r => setTimeout(r, 800));
+  // Simulate DB search (real app: database query, external API, etc.)
+  await new Promise(r => setTimeout(r, 600));
+  const books = [
+    { title: 'Design Patterns', author: 'Gang of Four' },
+    { title: 'Clean Code', author: 'Robert C. Martin' },
+    { title: 'Refactoring', author: 'Martin Fowler' },
+  ].filter(b => b.title.toLowerCase().includes(String(query).toLowerCase()));
 
-  const items = ['Surface — page skeleton', 'Template — DOM projection', 'Transition — state stream'];
-
-  // Frame 2 (partial) — update only changed slots
+  // Frame 2 (partial) — results ready
   yield {
-    type: 'state',
-    full: false,
-    changed: ['hello:btn', 'hello:result'],
-    states: {
-      'hello:btn': { label: 'Load Again' },
-      'hello:result': { loading: false, items },
-    },
+    type: 'state', full: false, changed: ['books:results'],
+    states: { 'books:results': { loading: false, books } },
   };
 
   yield { type: 'done' };
 }
 
-export default defineTransition('hello-load', helloLoad);`,
+export default defineTransition('book-search', bookSearch);`,
             },
             {
               type: 'callout',
               kind: 'tip',
-              text: 'The first yield must always be a full frame (omit full or set full: true). From the second yield onward, use full: false + changed array for partial updates.',
+              text: 'The first yield must always be a full frame (omit full or set full: true). From the second yield onward, use full: false + changed array for partial updates. The search form auto-aborts previous requests when the user types again.',
             },
           ],
         },
@@ -1265,29 +1476,29 @@ export default defineTransition('hello-load', helloLoad);`,
           blocks: [
             {
               type: 'diagram',
-              label: 'Button click → DOM update pipeline',
-              text: `[ Button click ]
-    │  reads data-action="hello-load"
+              label: 'Form submit → DOM update pipeline',
+              text: `[ Form submit ]
+    │  reads data-action="book-search" + input values
     ▼
 [ Action engine ]
-    │  abort previous request → add data-pending
-    │  POST /transition/hello-load
+    │  abort previous request → add data-pending to books:results
+    │  POST /transition/book-search { query: "design" }
     ▼
-[ Server: helloLoad() runs ]
+[ Server: bookSearch() runs ]
     │  yield { frame 1: loading state }  ──→  sends 1 NDJSON line
-    │  (800ms wait)
-    │  yield { frame 2: real data }      ──→  sends 1 NDJSON line
+    │  (600ms DB search)
+    │  yield { frame 2: results }        ──→  sends 1 NDJSON line
     │  yield { type: 'done' }            ──→  stream closes
     ▼
 [ Client: applies frames ]
-    │  frame 1: re-renders HelloBtn + HelloResult
-    │  frame 2: re-renders HelloBtn + HelloResult again
+    │  frame 1: BooksSearch keeps query, BooksResults shows skeleton
+    │  frame 2: BooksResults shows book list
     ▼
-[ <h-state name="hello:btn">, <h-state name="hello:result"> DOM patched ]`,
+[ <h-state name="books:results"> DOM patched, data-pending removed ]`,
             },
             {
               type: 'paragraph',
-              text: 'This pipeline is the entirety of StateSurface. Surface fixes the slots, Template renders each slot, Transition streams state from the server, Action connects user events to Transitions.',
+              text: 'This pipeline is the entirety of StateSurface. Surface fixes the slots, Template renders each slot, Transition streams state from the server, Action connects user events to Transitions. No useState, no useEffect, no fetch — the engine handles everything.',
             },
           ],
         },
@@ -1299,16 +1510,16 @@ export default defineTransition('hello-load', helloLoad);`,
               type: 'sequence',
               steps: [
                 'Make sure pnpm dev is running.',
-                'Visit http://localhost:5173/hello.',
-                'Click the "Load Data" button.',
-                'A loading skeleton appears briefly, then the item list renders — success.',
-                'Confirm the button label changed to "Load Again".',
+                'Visit http://localhost:5173/books.',
+                'Type "design" in the search box and click Search.',
+                'A loading skeleton appears briefly, then matching books render — success.',
+                'Try searching again — the previous request auto-aborts (no stale results).',
               ],
             },
             {
               type: 'callout',
               kind: 'note',
-              text: 'Open DevTools → Network tab, click the /transition/hello-load request — you can watch the NDJSON stream arrive in real time.',
+              text: 'Open DevTools → Network tab, click the /transition/book-search request — you can watch the NDJSON stream arrive in real time. Notice data-pending appears on books:results during loading.',
             },
           ],
         },
@@ -1348,7 +1559,7 @@ export default defineTransition('hello-load', helloLoad);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Surface는 고정된 페이지 셸입니다 — <h-state name="..."> 앵커와 정적 레이아웃을 선언하는 순수 HTML 문자열입니다. Surface는 동적 콘텐츠가 나타날 위치를 정의하며, 내용 자체는 포함하지 않습니다.',
+              text: 'Surface는 고정된 페이지 셸 — HTML 문자열 7줄로 독립 업데이트되는 3개 패널을 선언합니다. 기존 방식은 27줄 이상 + 컴포넌트 import, state hook, 숨겨진 re-render 버그가 필요합니다. Surface는 동적 콘텐츠의 위치만 정의합니다.',
             },
           ],
         },
@@ -1408,21 +1619,62 @@ export default defineTransition('hello-load', helloLoad);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/my-page.ts',
-              text: `import type { RouteModule } from '../shared/routeModule.js';
+              label: '✓ StateSurface — 7줄',
+              text: `// routes/dashboard.ts — 독립 업데이트되는 3패널 주식 대시보드
+import type { RouteModule } from '../shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
-  layout: stateScript => {
-    const body = joinSurface(
-      '<main class="max-w-4xl mx-auto p-6">',
-      stateSlots('page:hero', 'page:content'),
-      '</main>',
-    );
-    return baseSurface(body, stateScript);
-  },
-  transition: 'my-page-load',
+  layout: stateScript => baseSurface(joinSurface(
+    '<main class="grid grid-cols-3 gap-4 max-w-6xl mx-auto p-6">',
+    stateSlots('stock:price', 'stock:news', 'stock:chart'),
+    '</main>',
+  ), stateScript),
+  transition: 'dashboard-load',
 } satisfies RouteModule;`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — 이 7줄이 자동으로 처리하는 것들:\n✓ 각 패널 독립 업데이트 — 다른 패널은 절대 re-render 없음\n✓ 새 패널 추가 = stateSlots에 1줄 + template 파일 1개\n✓ Surface 자체는 페이지 수명 내내 불변\n✓ SSR이 완성된 HTML을 전달 — 클라이언트에서 레이아웃 조립 불필요\n✓ Hydration은 앵커 단위, 전체 페이지가 아님',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ 기존 방식 — 27줄, 숨겨진 문제 2개',
+              text: `// React 방식 대시보드 — 각 패널이 자체 데이터를 관리
+import { useState, useEffect } from 'react';
+import { StockPrice } from './StockPrice';
+import { StockNews } from './StockNews';
+import { StockChart } from './StockChart';
+
+function Dashboard() {
+  const [priceData, setPriceData] = useState(null);
+  const [newsData, setNewsData] = useState(null);
+  const [chartData, setChartData] = useState(null);
+
+  useEffect(() => {
+    fetchPrice().then(setPriceData);
+  }, []);
+  useEffect(() => {
+    fetchNews().then(setNewsData);
+  }, []);
+  useEffect(() => {
+    fetchChart().then(setChartData);
+    // ⚠️ BUG: cleanup 없음 — unmount 후 stale setState 호출
+  }, []);
+
+  // ⚠️ BUG: 자식 state 변경 시 부모가 re-render
+  // price만 갱신돼도 3개 패널 전부 re-render
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      <StockPrice data={priceData} loading={!priceData} />
+      <StockNews data={newsData} loading={!newsData} />
+      <StockChart data={chartData} loading={!chartData} />
+    </div>
+  );
+}
+// + 자체 fetch 로직이 있는 자식 컴포넌트 파일 3개`,
             },
           ],
         },
@@ -1510,7 +1762,7 @@ export default {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Template은 하나의 <h-state> 앵커 안에서 렌더링되는 무상태 TSX 함수입니다. 서버로부터 상태 프레임을 통해 props를 받습니다 — DOM 프로젝션은 template이, 데이터는 서버가 담당합니다.',
+              text: 'Template은 무상태 TSX 함수 — 12줄. useState, useEffect, fetch 전부 없음. 기존 방식: 38줄에 숨겨진 버그 3개 (레이스 컨디션, stale state, abort 처리). 서버가 데이터를 보내면 그냥 렌더링합니다.',
             },
           ],
         },
@@ -1571,24 +1823,79 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/my-page/templates/myContent.tsx',
-              text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
+              label: '✓ StateSurface — 12줄',
+              text: `// routes/dashboard/templates/stockPrice.tsx
+import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { title: string; items: string[]; loading?: boolean };
+type Props = { symbol: string; price: number; change: number; loading?: boolean };
 
-const MyContent = ({ title, items, loading }: Props) => {
-  if (loading) return <div class="animate-pulse h-8 bg-slate-200 rounded" />;
+const StockPrice = ({ symbol, price, change, loading }: Props) => {
+  if (loading) return <div class="animate-pulse h-20 bg-slate-100 rounded-xl" />;
   return (
-    <section>
-      <h2 class="text-xl font-semibold">{title}</h2>
-      <ul class="mt-2 space-y-1">
-        {items.map(i => <li key={i}>{i}</li>)}
-      </ul>
-    </section>
+    <div class="rounded-xl border p-4">
+      <span class="text-sm text-slate-500">{symbol}</span>
+      <p class="text-2xl font-bold">\${price.toFixed(2)}</p>
+      <span class={change > 0 ? 'text-green-600' : 'text-red-600'}>
+        {change > 0 ? '+' : ''}{change.toFixed(2)}%
+      </span>
+    </div>
   );
 };
 
-export default defineTemplate('page:content', MyContent);`,
+export default defineTemplate('stock:price', StockPrice);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — 이 무상태 함수가 공짜로 얻는 것들:\n✓ useState 없음 — 서버가 상태 프레임으로 데이터를 전송\n✓ useEffect 없음 — 클라이언트 fetch 불필요\n✓ AbortController 없음 — 엔진이 이전 요청 자동 abort\n✓ SSR/CSR 동일 함수 — 엔진이 출력 형식 결정\n✓ 이 앵커에 새 데이터가 올 때만 re-render',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ 기존 방식 — 38줄, 숨겨진 버그 3개',
+              text: `// React 방식 주가 컴포넌트
+import { useState, useEffect, useRef } from 'react';
+
+function StockPrice({ symbol }: { symbol: string }) {
+  const [data, setData] = useState<{ price: number; change: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+    setError(null);
+
+    fetch(\`/api/stock/\${symbol}\`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => {
+        if (e.name === 'AbortError') return;
+        // ⚠️ BUG: fetch 중 컴포넌트 제거 시 unmount 후 setState 호출
+        setError(e.message);
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+    // ⚠️ BUG: 빠른 symbol 전환 시 AbortError가 잠깐 에러로 표시됨
+  }, [symbol]);
+
+  if (loading) return <div className="animate-pulse h-20 bg-slate-100 rounded-xl" />;
+  if (error) return <div className="text-red-600">{error}</div>;
+  // ⚠️ BUG: 레이스 컨디션 — 빠른 symbol 전환 시 이전 데이터 표시 가능
+  return (
+    <div className="rounded-xl border p-4">
+      <span className="text-sm text-slate-500">{symbol}</span>
+      <p className="text-2xl font-bold">\${data!.price.toFixed(2)}</p>
+      <span className={data!.change > 0 ? 'text-green-600' : 'text-red-600'}>
+        {data!.change > 0 ? '+' : ''}{data!.change.toFixed(2)}%
+      </span>
+    </div>
+  );
+}`,
             },
           ],
         },
@@ -1677,7 +1984,7 @@ export default defineTemplate('page:content', MyContent);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Transition은 StateFrame 객체를 NDJSON으로 yield하는 서버 측 async function*입니다. 데이터가 도착하는 순서에 따라 UI 상태가 점진적으로 구성되는 시퀀스를 정의합니다 — 서버의 상태 머신입니다.',
+              text: 'Transition은 서버 측 async function* — 18줄로 3단계 UX (스켈레톤 → 캐시 → 실시간). 레이스 컨디션이 구조적으로 불가능합니다. 기존 방식: 35줄에 레이스 컨디션 버그 내장. yield 순서 = UX 타임라인.',
             },
           ],
         },
@@ -1739,33 +2046,87 @@ export default defineTemplate('page:content', MyContent);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/my-page/transitions/myTransition.ts',
-              text: `import { defineTransition } from '../../../server/transition.js';
+              label: '✓ StateSurface — 18줄, 3단계 UX',
+              text: `// routes/search/transitions/search.ts — 스켈레톤 → 캐시 → 실시간
+import { defineTransition } from '../../../server/transition.js';
 import type { StateFrame } from '../../../shared/protocol.js';
 
-async function* myTransition(
-  params: Record<string, unknown>
-): AsyncGenerator<StateFrame> {
-  // 프레임 1: full — 로딩 상태 (반드시 첫 번째)
+async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  // 1단계: 로딩 스켈레톤
   yield {
     type: 'state',
-    states: { 'page:content': { loading: true, items: [] } },
+    states: { 'search:results': { loading: true, items: [], badge: '' } },
   };
 
-  const data = await fetchData(params.query as string);
-
-  // 프레임 2: partial — 콘텐츠 준비 완료
+  // 2단계: 캐시 결과 먼저 도착
+  const cached = await searchCache(String(query));
   yield {
-    type: 'state',
-    full: false,
-    changed: ['page:content'],
-    states: { 'page:content': { loading: false, items: data } },
+    type: 'state', full: false, changed: ['search:results'],
+    states: { 'search:results': { loading: false, items: cached, badge: 'cached' } },
+  };
+
+  // 3단계: 실시간 결과가 캐시를 대체
+  const live = await searchLive(String(query));
+  yield {
+    type: 'state', full: false, changed: ['search:results'],
+    states: { 'search:results': { loading: false, items: live, badge: 'live' } },
   };
 
   yield { type: 'done' };
 }
 
-export default defineTransition('my-transition', myTransition);`,
+export default defineTransition('search', search);`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — yield 순서가 보장하는 것들:\n✓ yield 순서 = UX 타임라인 — 스켈레톤 → 캐시 → 실시간, 구조적 보장\n✓ 레이스 컨디션 불가능 — 단일 스트림, 서버가 순서 제어\n✓ 이전 요청 자동 abort — 엔진이 동시성 처리\n✓ 로딩 인디케이터 — data-pending 자동 부착/제거\n✓ 클라이언트 측 Promise 조율 불필요',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ 기존 방식 — 35줄, 레이스 컨디션 버그 3개',
+              text: `// React 방식 3단계 UX 검색
+import { useState, useEffect, useRef } from 'react';
+
+function SearchResults({ query }: { query: string }) {
+  const [items, setItems] = useState([]);
+  const [badge, setBadge] = useState('');
+  const [loading, setLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!query) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+
+    // ⚠️ BUG: live가 cached보다 먼저 resolve되면 오래된 cached가 live를 덮어씀
+    searchCache(query).then(cached => {
+      if (controller.signal.aborted) return;
+      setItems(cached);
+      setBadge('cached');
+      setLoading(false);
+    });
+
+    searchLive(query, controller.signal).then(live => {
+      if (controller.signal.aborted) return;
+      setItems(live);
+      setBadge('live');
+    }).catch(e => {
+      if (e.name === 'AbortError') return;
+      // ⚠️ BUG: 에러가 사용자에게 표시되지 않음 — 조용히 삼켜짐
+      console.error(e);
+    });
+
+    return () => controller.abort();
+    // ⚠️ BUG: 순서 보장 없음 — cached와 live가 서로 경쟁
+  }, [query]);
+
+  if (loading) return <Skeleton />;
+  return <ResultList items={items} badge={badge} />;
+}`,
             },
           ],
         },
@@ -1854,7 +2215,7 @@ export default defineTransition('my-transition', myTransition);`,
           blocks: [
             {
               type: 'paragraph',
-              text: '아무 요소에나 data-action="name"을 추가하면 됩니다 — 엔진이 클릭/제출 위임, transition 호출, 이전 스트림 abort, pending 표시를 자동으로 처리합니다. 명령형 JS가 필요 없습니다.',
+              text: '아무 요소에나 data-action="name" 추가 — HTML 10줄, JS 이벤트 핸들러 0개. 기존 방식: useState + useEffect + fetch 42줄에 숨겨진 버그 3개. 엔진이 위임, abort, pending을 자동 처리합니다.',
             },
           ],
         },
@@ -1915,25 +2276,87 @@ export default defineTransition('my-transition', myTransition);`,
             {
               type: 'code',
               lang: 'html',
-              label: '템플릿 TSX 파일 내',
-              text: `{/* 버튼 액션 */}
-<button data-action="search" data-params='{"category":"all"}'>
-  검색
-</button>
+              label: '✓ StateSurface — HTML 10줄, JS 0줄',
+              text: `<!-- 배송 옵션 폼 — 장바구니 요약을 실시간 갱신 -->
+<form data-action="update-cart" data-pending-targets="cart:summary">
+  <select name="shipping">
+    <option value="standard">일반 — ₩5,000</option>
+    <option value="express">빠른배송 — ₩15,000</option>
+    <option value="overnight">당일배송 — ₩30,000</option>
+  </select>
+  <select name="gift">
+    <option value="none">선물포장 없음</option>
+    <option value="basic">기본 — ₩3,000</option>
+    <option value="premium">프리미엄 — ₩8,000</option>
+  </select>
+  <button type="submit">주문하기</button>
+</form>`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Invisible Power — data-action이 자동으로 처리하는 것들:\n✓ onChange 핸들러 0개 — 엔진이 submit 시 폼 값을 읽음\n✓ onSubmit 핸들러 0개 — 엔진이 가로채서 POST\n✓ useState 0개 — 클라이언트 상태 관리 불필요\n✓ fetch/POST 코드 0줄 — 엔진이 HTTP 관리\n✓ 이전 요청 자동 abort — 빠른 변경도 안전\n✓ pending 표시가 cart:summary에만 적용',
+            },
+            {
+              type: 'code',
+              lang: 'tsx',
+              label: '✗ 기존 방식 — 42줄, 숨겨진 버그 3개',
+              text: `// React 방식 배송 폼 — 수동 state + fetch
+import { useState, useEffect, useCallback } from 'react';
 
-{/* 폼 액션 — 필드 값이 params에 병합됨 */}
-<form data-action="search">
-  <input name="query" placeholder="검색어 입력..." />
-  <button type="submit">검색</button>
-</form>
+function ShippingForm() {
+  const [shipping, setShipping] = useState('standard');
+  const [gift, setGift] = useState('none');
+  const [loading, setLoading] = useState(false);
 
-{/* 스코프드 pending — 이 앵커만 로딩 상태 표시 */}
-<button
-  data-action="load-comments"
-  data-pending-targets="page:comments"
->
-  댓글 불러오기
-</button>`,
+  // ⚠️ BUG: 빠른 옵션 변경 시 동시 fetch 발생
+  // 마지막 응답이 현재 선택과 불일치할 수 있음
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    fetch('/api/cart/price', {
+      method: 'POST',
+      body: JSON.stringify({ shipping, gift }),
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then(r => r.json())
+      .then(data => { setLoading(false); /* 요약 갱신 */ })
+      .catch(e => {
+        if (e.name !== 'AbortError') setLoading(false);
+        // ⚠️ BUG: 에러 상태가 다음 성공 요청에서 초기화되지 않음
+      });
+    return () => controller.abort();
+  }, [shipping, gift]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await fetch('/api/cart/order', {
+      method: 'POST',
+      body: JSON.stringify({ shipping, gift }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    // ⚠️ BUG: 주문 제출 에러 핸들링 없음
+    setLoading(false);
+  }, [shipping, gift]);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <select value={shipping} onChange={e => setShipping(e.target.value)}>
+        <option value="standard">일반 — ₩5,000</option>
+        <option value="express">빠른배송 — ₩15,000</option>
+        <option value="overnight">당일배송 — ₩30,000</option>
+      </select>
+      <select value={gift} onChange={e => setGift(e.target.value)}>
+        <option value="none">선물포장 없음</option>
+        <option value="basic">기본 — ₩3,000</option>
+        <option value="premium">프리미엄 — ₩8,000</option>
+      </select>
+      <button type="submit" disabled={loading}>주문하기</button>
+    </form>
+  );
+}`,
             },
           ],
         },
@@ -2228,31 +2651,24 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: '파일 4개를 만들면 버튼을 눌렀을 때 서버에서 데이터를 가져와 화면을 바꾸는 페이지가 완성됩니다. 페이지 새로고침 없이, 클라이언트 fetch 없이, 상태 관리 라이브러리 없이.',
+              text: '파일 4개를 만들면 실시간 도서 검색 페이지가 완성됩니다 — 검색어를 입력하면 서버가 결과를 스트리밍하고, 페이지 새로고침 없이, 클라이언트 fetch 없이, 상태 관리 라이브러리 없이 UI가 갱신됩니다.',
             },
             {
               type: 'diagram',
               label: '완성 후 동작',
-              text: `┌──────────────────────────────────┐
-│  /hello 페이지                    │
-│                                  │
-│  ┌──────────────────────────┐    │
-│  │  <h-state name="hello:btn">  │    │
-│  │  [ 데이터 불러오기 버튼 ] │    │
-│  └──────────────────────────┘    │
-│                                  │
-│  ┌──────────────────────────┐    │
-│  │ <h-state name="hello:result"> │    │
-│  │  ① 클릭 전: 빈 화면      │    │
-│  │  ② 로딩 중: 스켈레톤     │    │
-│  │  ③ 완료: 아이템 목록     │    │
-│  └──────────────────────────┘    │
-└──────────────────────────────────┘`,
+              text: `/books
+  <h-state name="books:search">
+    -- 검색 입력 + 버튼
+
+  <h-state name="books:results">
+    -- 검색 전: 빈 화면
+    -- 검색 중: 스켈레톤
+    -- 완료: 도서 목록`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: '이 4개 파일(Surface, Template×2, Transition)이 StateSurface의 전부입니다. 복잡한 설정 없이 이 패턴만 반복합니다.',
+              text: '이 4개 파일이 StateSurface의 전부입니다. Surface는 <h-state> 슬롯이 포함된 순수 HTML, Template은 JSX 컴포넌트, Transition은 서버 제너레이터입니다. 복잡한 설정 없이 이 패턴만 반복합니다.',
             },
           ],
         },
@@ -2287,26 +2703,39 @@ export default defineTransition('chat', chat);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/hello.ts  ← 이 파일을 만드세요',
+              label: 'routes/books.ts  ← 이 파일을 만드세요',
               text: `import type { RouteModule } from '../shared/routeModule.js';
-import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
-  layout: stateScript => {
-    const body = joinSurface(
-      '<main class="mx-auto max-w-xl p-8 space-y-6">',
-      stateSlots('hello:btn', 'hello:result'),  // 슬롯 2개 선언
-      '</main>',
-    );
-    return baseSurface(body, stateScript);
-  },
-  transition: 'hello-load',  // 이 이름의 Transition을 곧 만들 것
+  layout: stateScript => \`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>도서 검색</title>
+  <link rel="stylesheet" href="/client/styles.css">
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <main class="mx-auto max-w-xl p-8 space-y-6">
+    <h-state name="books:search"></h-state>
+    <h-state name="books:results"></h-state>
+  </main>
+  \${stateScript}
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>\`,
+  transition: 'book-search',
 } satisfies RouteModule;`,
             },
             {
               type: 'callout',
+              kind: 'info',
+              text: 'layout은 HTML 문자열을 반환하는 함수일 뿐입니다. <h-state> 태그 2개만이 StateSurface 고유 부분이고 나머지는 직접 제어하는 순수 HTML입니다. (실제 프로젝트에서는 baseSurface() 같은 헬퍼로 보일러플레이트를 줄일 수 있습니다.)',
+            },
+            {
+              type: 'callout',
               kind: 'tip',
-              text: "저장 후 http://localhost:5173/hello 접속 — 빈 페이지가 보이면 정상입니다. <h-state> 앵커 2개가 이미 DOM에 있지만 아직 아무것도 채워지지 않은 상태입니다.",
+              text: '저장 후 http://localhost:5173/books 접속 — 빈 페이지가 보이면 정상입니다. <h-state> 앵커 2개가 이미 DOM에 있지만 아직 아무것도 채워지지 않은 상태입니다.',
             },
           ],
         },
@@ -2321,64 +2750,59 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/hello/templates/helloBtn.tsx  ← 버튼 슬롯',
+              label: 'routes/books/templates/booksSearch.tsx  ← 검색 폼 (8줄)',
               text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { label?: string };
+type Props = { query?: string };
 
-const HelloBtn = ({ label = '데이터 불러오기' }: Props) => (
-  <div>
-    <button
-      class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-      data-action="hello-load"
-    >
-      {label}
+const BooksSearch = ({ query = '' }: Props) => (
+  <form data-action="book-search" data-pending-targets="books:results" class="flex gap-2">
+    <input name="query" value={query} placeholder="도서 검색..."
+      class="flex-1 rounded-lg border px-4 py-2 text-sm" />
+    <button type="submit"
+      class="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700">
+      검색
     </button>
-    <p class="mt-2 text-xs text-slate-400">
-      클릭하면 서버에서 데이터를 스트리밍합니다.
-    </p>
-  </div>
+  </form>
 );
 
-// 'hello:btn' 이름이 Surface의 stateSlots('hello:btn')과 일치해야 함
-export default defineTemplate('hello:btn', HelloBtn);`,
+export default defineTemplate('books:search', BooksSearch);`,
             },
             {
               type: 'code',
               lang: 'tsx',
-              label: 'routes/hello/templates/helloResult.tsx  ← 결과 슬롯',
+              label: 'routes/books/templates/booksResults.tsx  ← 결과 (9줄)',
               text: `import { defineTemplate } from '../../../shared/templateRegistry.js';
 
-type Props = { loading?: boolean; items?: string[] };
+type Book = { title: string; author: string };
+type Props = { loading?: boolean; books?: Book[] };
 
-const HelloResult = ({ loading, items }: Props) => {
-  if (!items && !loading) {
-    return <p class="text-sm text-slate-400">버튼을 눌러 데이터를 불러오세요.</p>;
-  }
-  if (loading) {
-    return (
-      <div class="space-y-2">
-        {[1, 2, 3].map(i => (
-          <div key={i} class="h-5 animate-pulse rounded bg-slate-200" />
-        ))}
-      </div>
-    );
-  }
+const BooksResults = ({ loading, books }: Props) => {
+  if (!books && !loading) return <p class="text-sm text-slate-400">검색어를 입력하세요.</p>;
+  if (loading) return (
+    <div class="space-y-2">
+      {[1, 2, 3].map(i => <div key={i} class="h-6 animate-pulse rounded bg-slate-200" />)}
+    </div>
+  );
+  if (!books?.length) return <p class="text-sm text-slate-500">검색 결과가 없습니다.</p>;
   return (
-    <ul class="space-y-1">
-      {(items ?? []).map(item => (
-        <li key={item} class="text-sm text-slate-700">• {item}</li>
+    <ul class="space-y-2">
+      {books.map(b => (
+        <li key={b.title} class="text-sm">
+          <span class="font-medium">{b.title}</span>
+          <span class="text-slate-400"> — {b.author}</span>
+        </li>
       ))}
     </ul>
   );
 };
 
-export default defineTemplate('hello:result', HelloResult);`,
+export default defineTemplate('books:results', BooksResults);`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: 'Template 파일은 routes/**/templates/*.tsx 경로에만 있으면 자동으로 등록됩니다. import 문을 따로 추가할 필요가 없습니다.',
+              text: 'Template 파일은 routes/**/templates/*.tsx 경로에만 있으면 자동으로 등록됩니다. import 문을 따로 추가할 필요가 없습니다. useState 0개, useEffect 0개, fetch 호출 0개입니다.',
             },
           ],
         },
@@ -2393,45 +2817,43 @@ export default defineTemplate('hello:result', HelloResult);`,
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/hello/transitions/helloLoad.ts  ← 서버 로직',
+              label: 'routes/books/transitions/bookSearch.ts  ← 서버 로직 (12줄)',
               text: `import { defineTransition } from '../../../server/transition.js';
 import type { StateFrame } from '../../../shared/protocol.js';
 
-async function* helloLoad(): AsyncGenerator<StateFrame> {
-  // 프레임 1 (full) — 반드시 첫 번째, 전체 UI 상태 선언
+async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
+  // 프레임 1 (full) — 로딩 상태
   yield {
     type: 'state',
     states: {
-      'hello:btn': { label: '불러오는 중...' },
-      'hello:result': { loading: true },
+      'books:search': { query: String(query) },
+      'books:results': { loading: true },
     },
   };
 
-  // 서버 작업 시뮬레이션 (실제로는 DB 조회, API 호출 등)
-  await new Promise(r => setTimeout(r, 800));
+  // DB 검색 시뮬레이션 (실제로는 DB 조회, 외부 API 등)
+  await new Promise(r => setTimeout(r, 600));
+  const books = [
+    { title: 'Design Patterns', author: 'Gang of Four' },
+    { title: 'Clean Code', author: 'Robert C. Martin' },
+    { title: 'Refactoring', author: 'Martin Fowler' },
+  ].filter(b => b.title.toLowerCase().includes(String(query).toLowerCase()));
 
-  const items = ['Surface — 페이지 뼈대', 'Template — DOM 투영', 'Transition — 상태 스트림'];
-
-  // 프레임 2 (partial) — 변경된 슬롯만 업데이트
+  // 프레임 2 (partial) — 결과 준비 완료
   yield {
-    type: 'state',
-    full: false,
-    changed: ['hello:btn', 'hello:result'],
-    states: {
-      'hello:btn': { label: '다시 불러오기' },
-      'hello:result': { loading: false, items },
-    },
+    type: 'state', full: false, changed: ['books:results'],
+    states: { 'books:results': { loading: false, books } },
   };
 
   yield { type: 'done' };
 }
 
-export default defineTransition('hello-load', helloLoad);`,
+export default defineTransition('book-search', bookSearch);`,
             },
             {
               type: 'callout',
               kind: 'tip',
-              text: '첫 번째 yield는 반드시 full 프레임(full 생략 또는 true)이어야 합니다. 두 번째부터 full: false + changed 배열로 부분 업데이트할 수 있습니다.',
+              text: '첫 번째 yield는 반드시 full 프레임(full 생략 또는 true)이어야 합니다. 두 번째부터 full: false + changed 배열로 부분 업데이트할 수 있습니다. 사용자가 다시 검색하면 이전 요청이 자동으로 abort됩니다.',
             },
           ],
         },
@@ -2441,29 +2863,29 @@ export default defineTransition('hello-load', helloLoad);`,
           blocks: [
             {
               type: 'diagram',
-              label: '버튼 클릭 → DOM 업데이트 전체 파이프라인',
-              text: `[ 버튼 클릭 ]
-    │  data-action="hello-load" 속성 읽기
+              label: '폼 제출 → DOM 업데이트 전체 파이프라인',
+              text: `[ 폼 제출 ]
+    │  data-action="book-search" + input 값 읽기
     ▼
 [ Action 엔진 ]
-    │  이전 요청 abort → data-pending 추가
-    │  POST /transition/hello-load
+    │  이전 요청 abort → books:results에 data-pending 추가
+    │  POST /transition/book-search { query: "design" }
     ▼
-[ 서버: helloLoad() 실행 ]
-    │  yield { 프레임 1: loading 상태 }  ──→  NDJSON 한 줄 전송
-    │  (800ms 대기)
-    │  yield { 프레임 2: 실제 데이터 }   ──→  NDJSON 한 줄 전송
+[ 서버: bookSearch() 실행 ]
+    │  yield { 프레임 1: 로딩 상태 }     ──→  NDJSON 한 줄 전송
+    │  (600ms DB 검색)
+    │  yield { 프레임 2: 검색 결과 }     ──→  NDJSON 한 줄 전송
     │  yield { type: 'done' }            ──→  스트림 종료
     ▼
 [ 클라이언트: 프레임 적용 ]
-    │  프레임 1: HelloBtn + HelloResult 리렌더
-    │  프레임 2: HelloBtn + HelloResult 다시 리렌더
+    │  프레임 1: BooksSearch 쿼리 유지, BooksResults 스켈레톤 표시
+    │  프레임 2: BooksResults에 도서 목록 표시
     ▼
-[ <h-state name="hello:btn">, <h-state name="hello:result"> DOM 업데이트 ]`,
+[ <h-state name="books:results"> DOM 업데이트, data-pending 제거 ]`,
             },
             {
               type: 'paragraph',
-              text: '이 파이프라인이 StateSurface의 전부입니다. Surface가 슬롯을 고정하고, Template이 슬롯 내용을 그리고, Transition이 서버에서 상태를 스트리밍하고, Action이 사용자 이벤트와 Transition을 연결합니다.',
+              text: '이 파이프라인이 StateSurface의 전부입니다. Surface가 슬롯을 고정하고, Template이 슬롯 내용을 그리고, Transition이 서버에서 상태를 스트리밍하고, Action이 사용자 이벤트와 Transition을 연결합니다. useState 0개, useEffect 0개, fetch 0개 — 엔진이 전부 처리합니다.',
             },
           ],
         },
@@ -2475,16 +2897,16 @@ export default defineTransition('hello-load', helloLoad);`,
               type: 'sequence',
               steps: [
                 'pnpm dev가 실행 중인지 확인합니다.',
-                'http://localhost:5173/hello 에 접속합니다.',
-                '"데이터 불러오기" 버튼을 클릭합니다.',
-                '로딩 스켈레톤이 잠깐 표시된 후 아이템 목록이 나타나면 성공입니다.',
-                '버튼 레이블이 "다시 불러오기"로 바뀌었는지 확인합니다.',
+                'http://localhost:5173/books 에 접속합니다.',
+                '검색창에 "design"을 입력하고 검색 버튼을 클릭합니다.',
+                '로딩 스켈레톤이 잠깐 표시된 후 도서 목록이 나타나면 성공입니다.',
+                '다시 검색해보세요 — 이전 요청이 자동으로 abort됩니다 (stale 결과 없음).',
               ],
             },
             {
               type: 'callout',
               kind: 'note',
-              text: '브라우저 DevTools → Network 탭에서 /transition/hello-load 요청을 클릭하면 NDJSON 스트림이 실시간으로 흘러오는 것을 확인할 수 있습니다.',
+              text: '브라우저 DevTools → Network 탭에서 /transition/book-search 요청을 클릭하면 NDJSON 스트림이 실시간으로 흘러오는 것을 확인할 수 있습니다. 로딩 중 books:results에 data-pending이 나타나는 것도 확인하세요.',
             },
           ],
         },

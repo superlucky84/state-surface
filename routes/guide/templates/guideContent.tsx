@@ -19,37 +19,50 @@ const BulletsBlock = ({ items }: { items: string[] }) => (
   </ul>
 );
 
-const CodeBlock = ({ lang, label, text }: { lang?: string; label?: string; text: string }) => (
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-    <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-2">
-      <div class="flex items-center gap-2">
-        {lang && (
-          <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-slate-400">
-            {lang}
-          </span>
-        )}
-        {label && <span class="font-mono text-xs text-slate-500">{label}</span>}
+const PRISM_LANG_MAP: Record<string, string> = {
+  typescript: 'typescript',
+  ts: 'typescript',
+  tsx: 'tsx',
+  html: 'markup',
+  javascript: 'javascript',
+  js: 'javascript',
+};
+
+const CodeBlock = ({ lang, label, text }: { lang?: string; label?: string; text: string }) => {
+  const prismLang = lang ? PRISM_LANG_MAP[lang] || lang : '';
+  const langClass = prismLang ? `language-${prismLang}` : '';
+  return (
+    <div class="overflow-hidden rounded-lg border border-slate-700/50 bg-slate-900">
+      <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-2">
+        <div class="flex items-center gap-2">
+          {lang && (
+            <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-slate-400">
+              {lang}
+            </span>
+          )}
+          {label && <span class="font-mono text-xs text-slate-500">{label}</span>}
+        </div>
+        <button
+          type="button"
+          class="rounded px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+          onclick={(e: MouseEvent) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            navigator.clipboard?.writeText(text);
+            btn.textContent = 'Copied!';
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+            }, 1500);
+          }}
+        >
+          Copy
+        </button>
       </div>
-      <button
-        type="button"
-        class="rounded px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
-        onclick={(e: MouseEvent) => {
-          const btn = e.currentTarget as HTMLButtonElement;
-          navigator.clipboard?.writeText(text);
-          btn.textContent = 'Copied!';
-          setTimeout(() => {
-            btn.textContent = 'Copy';
-          }, 1500);
-        }}
-      >
-        Copy
-      </button>
+      <div class="overflow-x-auto">
+        <pre class="code-with-lines p-4 font-mono text-xs leading-snug"><code class={langClass}>{text}</code></pre>
+      </div>
     </div>
-    <div class="overflow-x-auto">
-      <pre class="p-4 font-mono text-xs leading-relaxed text-slate-200">{text}</pre>
-    </div>
-  </div>
-);
+  );
+};
 
 const ChecklistBlock = ({ items }: { items: string[] }) => (
   <ul class="space-y-1.5 text-sm text-slate-600">
@@ -104,7 +117,7 @@ const DiagramBlock = ({ text, label }: { text: string; label?: string }) => (
       </div>
     )}
     <div class="overflow-x-auto">
-      <pre class="p-4 font-mono text-xs leading-relaxed text-slate-700">{text}</pre>
+      <pre class="whitespace-pre p-4 font-mono text-xs leading-relaxed text-slate-700">{text}</pre>
     </div>
   </div>
 );

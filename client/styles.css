@@ -11,3 +11,110 @@ h-state[data-pending] {
   pointer-events: none;
   transition: opacity 0.15s ease;
 }
+
+/* ── Prism custom theme (slate palette) ── */
+
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #cbd5e1;               /* slate-300 */
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: inherit;
+  line-height: 1.6;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+  text-shadow: none;
+  margin: 0;
+  padding: 0;
+}
+
+.token.comment,
+.token.block-comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #64748b;               /* slate-500 */
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #94a3b8;               /* slate-400 */
+}
+
+.token.tag,
+.token.attr-name,
+.token.namespace,
+.token.deleted {
+  color: #f87171;               /* red-400 */
+}
+
+.token.boolean,
+.token.number {
+  color: #c084fc;               /* purple-400 */
+}
+
+.token.function,
+.token.function-name {
+  color: #60a5fa;               /* blue-400 */
+}
+
+.token.property,
+.token.class-name,
+.token.constant,
+.token.symbol {
+  color: #fbbf24;               /* amber-400 */
+}
+
+.token.selector,
+.token.important,
+.token.atrule,
+.token.keyword,
+.token.builtin {
+  color: #c084fc;               /* purple-400 */
+}
+
+.token.string,
+.token.char,
+.token.attr-value,
+.token.regex {
+  color: #34d399;               /* emerald-400 */
+}
+
+.token.variable {
+  color: #f0abfc;               /* fuchsia-300 */
+}
+
+.token.operator,
+.token.entity,
+.token.url {
+  color: #22d3ee;               /* cyan-400 */
+}
+
+.token.important,
+.token.bold {
+  font-weight: 600;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.inserted {
+  color: #34d399;               /* emerald-400 */
+}
+
+/* ── Line numbers ── */
+
+.code-ln {
+  display: inline-block;
+  width: 2.5em;
+  margin-right: 1em;
+  text-align: right;
+  color: #475569;               /* slate-600 */
+  user-select: none;
+  pointer-events: none;
+}
