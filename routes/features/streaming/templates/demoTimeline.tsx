@@ -14,6 +14,7 @@ function typeColor(type: string): string {
   if (type === 'full') return 'bg-sky-100 text-sky-800 border-sky-200';
   if (type === 'partial-changed') return 'bg-amber-100 text-amber-800 border-amber-200';
   if (type === 'partial-removed') return 'bg-red-100 text-red-800 border-red-200';
+  if (type === 'accumulate') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
   return 'bg-slate-100 text-slate-800 border-slate-200';
 }
 
@@ -21,6 +22,7 @@ function typeBadge(type: string): string {
   if (type === 'full') return 'FULL';
   if (type === 'partial-changed') return 'PARTIAL+CHANGED';
   if (type === 'partial-removed') return 'PARTIAL+REMOVED';
+  if (type === 'accumulate') return 'ACCUMULATE';
   return type.toUpperCase();
 }
 

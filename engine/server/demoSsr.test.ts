@@ -130,7 +130,7 @@ describe('demo transitions', () => {
       .split('\n')
       .map((l: string) => JSON.parse(l));
 
-    // Full → partial(changed) → partial(removed) → full → done
+    // Full → partial(changed) → accumulate → partial(removed) → full → done
     expect(lines[0].type).toBe('state');
     expect(lines[0].full).not.toBe(false);
 
@@ -139,13 +139,17 @@ describe('demo transitions', () => {
     expect(lines[1].changed).toContain('demo:timeline');
 
     expect(lines[2].type).toBe('state');
-    expect(lines[2].full).toBe(false);
-    expect(lines[2].removed).toContain('demo:output');
+    expect(lines[2].accumulate).toBe(true);
+    expect(lines[2].states['demo:timeline'].frames).toHaveLength(1);
 
     expect(lines[3].type).toBe('state');
-    expect(lines[3].full).not.toBe(false);
+    expect(lines[3].full).toBe(false);
+    expect(lines[3].removed).toContain('demo:output');
 
-    expect(lines[4].type).toBe('done');
+    expect(lines[4].type).toBe('state');
+    expect(lines[4].full).not.toBe(false);
+
+    expect(lines[5].type).toBe('done');
   });
 
   it('switch-lang transition yields full frame with target language', async () => {

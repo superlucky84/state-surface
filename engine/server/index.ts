@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
 import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
-import { isValidLang, langCookie } from '../../shared/i18n.js';
+import { getLang, isValidLang, langCookie } from '../../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
@@ -59,7 +59,10 @@ app.post(prefixPath('/transition/:name'), async (req, res) => {
   res.setHeader('Transfer-Encoding', 'chunked');
 
   try {
-    const gen = handler(req.body ?? {});
+    // Auto-inject lang from cookie if not provided in body
+    const body = req.body ?? {};
+    if (!body.lang) body.lang = getLang(req);
+    const gen = handler(body);
 
     for await (const frame of gen) {
       // Validate before streaming
