@@ -69,7 +69,7 @@ const ChecklistBlock = ({ items }: { items: string[] }) => (
     {items.map((item, i) => (
       <li key={i} class="flex gap-2">
         <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-400">
-          <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 12 12" fill="none">
             <path
               d="M2 6l3 3 5-5"
               stroke="currentColor"
@@ -88,7 +88,7 @@ const ChecklistBlock = ({ items }: { items: string[] }) => (
 const WarningBlock = ({ text }: { text: string }) => (
   <div class="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
     <span class="mt-0.5 shrink-0 text-amber-500">
-      <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
         <path d="M8 1.5a.5.5 0 0 1 .447.276l6 11A.5.5 0 0 1 14 13.5H2a.5.5 0 0 1-.447-.724l6-11A.5.5 0 0 1 8 1.5zM8 5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 5zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" />
       </svg>
     </span>
@@ -155,7 +155,7 @@ const CalloutBlock = ({ kind, text }: { kind: 'tip' | 'info' | 'note'; text: str
 const AnalogyBlock = ({ text }: { text: string }) => (
   <div class="flex gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
     <span class="mt-0.5 shrink-0 text-indigo-400">
-      <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
         <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zm-.25 2a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-1.75H7a.75.75 0 0 1-.75-.75z" />
       </svg>
     </span>
@@ -237,10 +237,38 @@ const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action'];
 const GuideContent = ({ slug, loading, title, sections, demoHref, demoLabel }: GuideContentProps) => {
   if (loading) {
     return (
-      <div class="space-y-4">
-        <div class="h-8 w-48 animate-pulse rounded bg-slate-200" />
-        <div class="h-4 w-full animate-pulse rounded bg-slate-200" />
-        <div class="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+      <div class="space-y-6">
+        {/* Title */}
+        <div class="h-8 w-56 animate-pulse rounded bg-slate-200" />
+
+        {/* Section 1: TL;DR style */}
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-3 h-5 w-24 animate-pulse rounded bg-slate-200" />
+          <div class="space-y-2">
+            <div class="h-4 w-full animate-pulse rounded bg-slate-100" />
+            <div class="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+          </div>
+        </div>
+
+        {/* Section 2: Analogy style */}
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-3 h-5 w-36 animate-pulse rounded bg-slate-200" />
+          <div class="space-y-2">
+            <div class="h-4 w-full animate-pulse rounded bg-slate-100" />
+            <div class="h-4 w-4/5 animate-pulse rounded bg-slate-100" />
+            <div class="h-4 w-full animate-pulse rounded bg-slate-100" />
+          </div>
+        </div>
+
+        {/* Section 3: Code block style */}
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-3 h-5 w-44 animate-pulse rounded bg-slate-200" />
+          <div class="space-y-2">
+            <div class="h-4 w-full animate-pulse rounded bg-slate-100" />
+            <div class="h-32 w-full animate-pulse rounded-lg bg-slate-800/10" />
+            <div class="h-4 w-3/4 animate-pulse rounded bg-slate-100" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -265,7 +293,7 @@ const GuideContent = ({ slug, loading, title, sections, demoHref, demoLabel }: G
             class="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
           >
             {demoLabel}
-            <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 7h8M7 3l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </a>
