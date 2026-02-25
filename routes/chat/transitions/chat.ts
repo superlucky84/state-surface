@@ -2,7 +2,7 @@ import type { StateFrame } from '../../../shared/protocol.js';
 import { defineTransition } from '../../../server/transition.js';
 import { isValidLang } from '../../../shared/i18n.js';
 import type { Lang } from '../../../shared/i18n.js';
-import { chatContent } from '../../../shared/content.js';
+
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 
@@ -68,17 +68,26 @@ async function* chat(
     return;
   }
 
-  const base = chatContent(lang);
   const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', text: userText };
 
-  // Full frame: reset chat:current to empty, show typing indicator.
-  // Accumulate user message into chat:messages history.
+  // Partial frame: reset chat:current, clear input, show typing indicator.
+  // chat:messages is NOT touched — previous history is preserved.
   yield {
     type: 'state',
+    full: false,
+    changed: ['chat:current', 'chat:typing', 'chat:input'],
     states: {
-      ...base,
       'chat:current': { text: '' },
       'chat:typing': { text: lang === 'ko' ? '입력 중...' : 'Typing...' },
+      'chat:input': {
+        placeholder: lang === 'ko' ? '메시지를 입력하세요...' : 'Type a message...',
+        submitLabel: lang === 'ko' ? '전송' : 'Send',
+        hint:
+          lang === 'ko'
+            ? '새 메시지를 보내면 진행 중인 응답이 취소됩니다 (abort previous 정책).'
+            : 'Sending a new message cancels any in-progress response (abort previous policy).',
+        lang,
+      },
     },
   };
 

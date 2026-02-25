@@ -167,7 +167,7 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
           blocks: [
             {
               type: 'paragraph',
-              text: 'A surface is the fixed page shell — 7 lines of HTML strings to declare 3 independent panels. Traditional approach needs 27+ lines with component imports, state hooks, and hidden re-render bugs. Surfaces define where dynamic content appears, not what it contains.',
+              text: 'Surface is your page\'s HTML layout. You place <h-state> tags where dynamic content should appear — like marking "content goes here" on a blueprint. The layout itself never changes; only the content inside each slot updates.',
             },
           ],
         },
@@ -370,7 +370,7 @@ function Dashboard() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'A template is a stateless TSX function — 12 lines. No useState, no useEffect, no fetch. Traditional approach: 38 lines with 3 hidden bugs (race conditions, stale state, abort handling). The server sends data; you render it.',
+              text: 'Template is a JSX component that receives data from the server and renders it. You don\'t fetch data or manage state — the server sends props, and the template just displays them. Same function works for both SSR and client updates.',
             },
           ],
         },
@@ -592,7 +592,7 @@ function StockPrice({ symbol }: { symbol: string }) {
           blocks: [
             {
               type: 'paragraph',
-              text: "A transition is a server-side async function* — 18 lines for a 3-stage UX (skeleton → cached → live). Race conditions are structurally impossible. Traditional approach: 35 lines with race condition bugs built in. yield order = UX timeline.",
+              text: 'Transition is a server function that streams UI state step by step. Each yield sends one update to the browser — yield a loading skeleton first, then yield the real data when ready. The order you yield is the order the user sees.',
             },
           ],
         },
@@ -828,7 +828,7 @@ function SearchResults({ query }: { query: string }) {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Add data-action="name" to any element — 10 lines of HTML, zero JS event handlers. Traditional approach: 42 lines of useState + useEffect + fetch with 3 hidden bugs. The engine handles delegation, abort, and pending automatically.',
+              text: 'Action connects a button click (or form submit) to a server Transition. Add data-action="search" to a button, and the engine handles the rest — sending the request, aborting previous ones, showing loading state, and updating the DOM.',
             },
           ],
         },
@@ -1065,7 +1065,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'An accumulate frame lets the server send delta-only data without resetting the slot. Arrays concat, strings concat. Templates stay pure functions — the runtime owns accumulated state in activeStates.',
+              text: 'Accumulate frame adds data to what\'s already on screen instead of replacing it. The server sends "append this" — arrays get concatenated, strings get concatenated. Think chat messages arriving one by one, or a streaming AI response building up token by token.',
             },
           ],
         },
@@ -1264,24 +1264,23 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Create 4 files and you have a real-time book search page — type a query, the server streams results progressively, the UI updates without page reload, client fetch, or state management.',
+              text: 'Type a book title and press Search. A loading skeleton appears instantly. Results stream in from the server — the page never reloads. To build this, you write 4 short files. None of them contain fetch calls, DOM updates, loading-state logic, or abort handling — the engine does all of that.',
             },
             {
               type: 'diagram',
-              label: 'End result',
-              text: `/books
-  <h-state name="books:search">
-    -- Search input + button
-
-  <h-state name="books:results">
-    -- Before search: empty
-    -- Searching: skeleton
-    -- Done: book list`,
+              label: 'What happens when you search',
+              text: `Type "design" → click Search
+    ↓
+[ Instant ]  skeleton appears, server starts working
+    ↓  600ms…
+[ Stream  ]  results arrive progressively
+    ↓
+[ Done    ]  search again → previous request auto-aborts`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: 'These 4 files are all of StateSurface. The Surface is plain HTML with <h-state> slots, Templates are JSX components, and the Transition is a server generator. No complex setup — just repeat this pattern for every new page.',
+              text: 'The 4 files: Surface (HTML layout with <h-state> slots), 2 Templates (JSX for search form + results list), 1 Transition (server function that streams state). Every new page follows this same pattern — only the slots, templates, and server logic change.',
             },
           ],
         },
@@ -1415,7 +1414,7 @@ export default defineTemplate('books:results', BooksResults);`,
             {
               type: 'callout',
               kind: 'info',
-              text: 'Any file under routes/**/templates/*.tsx is auto-registered at startup. No import statement needed. Notice: zero useState, zero useEffect, zero fetch calls.',
+              text: 'Any file under routes/**/templates/*.tsx is auto-registered at startup. No import statement needed. Your templates contain zero useState, zero useEffect, zero fetch — data arrives from the server as props.',
             },
           ],
         },
@@ -1498,7 +1497,7 @@ export default defineTransition('book-search', bookSearch);`,
             },
             {
               type: 'paragraph',
-              text: 'This pipeline is the entirety of StateSurface. Surface fixes the slots, Template renders each slot, Transition streams state from the server, Action connects user events to Transitions. No useState, no useEffect, no fetch — the engine handles everything.',
+              text: 'This pipeline is the entirety of StateSurface. Surface fixes the slots, Template renders each slot, Transition streams state from the server, Action connects user events to Transitions. You write no server communication, no DOM manipulation, no abort logic — the engine handles all of it.',
             },
           ],
         },
@@ -1559,7 +1558,7 @@ export default defineTransition('book-search', bookSearch);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Surface는 고정된 페이지 셸 — HTML 문자열 7줄로 독립 업데이트되는 3개 패널을 선언합니다. 기존 방식은 27줄 이상 + 컴포넌트 import, state hook, 숨겨진 re-render 버그가 필요합니다. Surface는 동적 콘텐츠의 위치만 정의합니다.',
+              text: 'Surface는 페이지의 HTML 레이아웃입니다. 동적 콘텐츠가 들어갈 자리에 <h-state> 태그를 배치합니다 — 설계도에 "여기에 콘텐츠"라고 표시하는 것과 같습니다. 레이아웃 자체는 절대 변하지 않고, 각 슬롯 안의 내용만 갱신됩니다.',
             },
           ],
         },
@@ -1762,7 +1761,7 @@ function Dashboard() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Template은 무상태 TSX 함수 — 12줄. useState, useEffect, fetch 전부 없음. 기존 방식: 38줄에 숨겨진 버그 3개 (레이스 컨디션, stale state, abort 처리). 서버가 데이터를 보내면 그냥 렌더링합니다.',
+              text: 'Template은 서버에서 받은 데이터를 화면에 그리는 JSX 컴포넌트입니다. 데이터를 직접 가져오거나 상태를 관리하지 않습니다 — 서버가 props를 보내면 Template은 그냥 표시합니다. SSR과 클라이언트 업데이트에 같은 함수를 씁니다.',
             },
           ],
         },
@@ -1984,7 +1983,7 @@ function StockPrice({ symbol }: { symbol: string }) {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Transition은 서버 측 async function* — 18줄로 3단계 UX (스켈레톤 → 캐시 → 실시간). 레이스 컨디션이 구조적으로 불가능합니다. 기존 방식: 35줄에 레이스 컨디션 버그 내장. yield 순서 = UX 타임라인.',
+              text: 'Transition은 UI 상태를 단계별로 스트리밍하는 서버 함수입니다. yield 한 번이 브라우저 업데이트 한 번 — 먼저 로딩 스켈레톤을 yield하고, 데이터가 준비되면 실제 결과를 yield합니다. yield 순서가 곧 사용자가 보는 순서입니다.',
             },
           ],
         },
@@ -2215,7 +2214,7 @@ function SearchResults({ query }: { query: string }) {
           blocks: [
             {
               type: 'paragraph',
-              text: '아무 요소에나 data-action="name" 추가 — HTML 10줄, JS 이벤트 핸들러 0개. 기존 방식: useState + useEffect + fetch 42줄에 숨겨진 버그 3개. 엔진이 위임, abort, pending을 자동 처리합니다.',
+              text: 'Action은 버튼 클릭(또는 폼 제출)을 서버 Transition에 연결합니다. 버튼에 data-action="search"를 추가하면 엔진이 나머지를 처리합니다 — 요청 전송, 이전 요청 abort, 로딩 상태 표시, DOM 갱신까지.',
             },
           ],
         },
@@ -2452,7 +2451,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'accumulate 프레임은 슬롯을 초기화하지 않고 서버가 delta 데이터만 전송할 수 있게 합니다. 배열은 concat, 문자열은 concat. 템플릿은 순수 함수로 유지되고 — 런타임이 activeStates에 누적 상태를 관리합니다.',
+              text: 'accumulate 프레임은 화면에 있는 데이터를 교체하지 않고 추가합니다. 서버가 "이걸 덧붙여"라고 보내면 — 배열은 이어붙이고, 문자열은 이어붙입니다. 채팅 메시지가 하나씩 도착하거나, AI 응답이 토큰 단위로 쌓이는 것을 떠올리면 됩니다.',
             },
           ],
         },
@@ -2651,24 +2650,23 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: '파일 4개를 만들면 실시간 도서 검색 페이지가 완성됩니다 — 검색어를 입력하면 서버가 결과를 스트리밍하고, 페이지 새로고침 없이, 클라이언트 fetch 없이, 상태 관리 라이브러리 없이 UI가 갱신됩니다.',
+              text: '도서 제목을 입력하고 검색을 누릅니다. 로딩 스켈레톤이 즉시 나타납니다. 서버에서 결과가 스트리밍되어 화면이 갱신됩니다 — 페이지는 새로고침되지 않습니다. 이 동작을 만드는 코드는 파일 4개뿐입니다. fetch 호출, DOM 조작, 로딩 상태 관리, abort 처리 — 어느 것도 직접 작성하지 않습니다. 엔진이 전부 처리합니다.',
             },
             {
               type: 'diagram',
-              label: '완성 후 동작',
-              text: `/books
-  <h-state name="books:search">
-    -- 검색 입력 + 버튼
-
-  <h-state name="books:results">
-    -- 검색 전: 빈 화면
-    -- 검색 중: 스켈레톤
-    -- 완료: 도서 목록`,
+              label: '검색하면 일어나는 일',
+              text: `"design" 입력 → 검색 클릭
+    ↓
+[ 즉시   ]  스켈레톤 표시, 서버 작업 시작
+    ↓  600ms…
+[ 스트림 ]  결과가 순차적으로 도착
+    ↓
+[ 완료   ]  다시 검색 → 이전 요청 자동 abort`,
             },
             {
               type: 'callout',
               kind: 'info',
-              text: '이 4개 파일이 StateSurface의 전부입니다. Surface는 <h-state> 슬롯이 포함된 순수 HTML, Template은 JSX 컴포넌트, Transition은 서버 제너레이터입니다. 복잡한 설정 없이 이 패턴만 반복합니다.',
+              text: '4개 파일의 정체: Surface(HTML 레이아웃에 <h-state> 슬롯 배치), Template 2개(검색 폼 + 결과 목록 JSX), Transition 1개(상태를 스트리밍하는 서버 함수). 새 페이지를 만들 때마다 이 패턴만 반복합니다 — 달라지는 것은 슬롯, 템플릿, 서버 로직뿐입니다.',
             },
           ],
         },
@@ -2802,7 +2800,7 @@ export default defineTemplate('books:results', BooksResults);`,
             {
               type: 'callout',
               kind: 'info',
-              text: 'Template 파일은 routes/**/templates/*.tsx 경로에만 있으면 자동으로 등록됩니다. import 문을 따로 추가할 필요가 없습니다. useState 0개, useEffect 0개, fetch 호출 0개입니다.',
+              text: 'Template 파일은 routes/**/templates/*.tsx 경로에만 있으면 자동으로 등록됩니다. import 문을 따로 추가할 필요가 없습니다. Template에 useState, useEffect, fetch가 없습니다 — 데이터는 서버에서 props로 도착합니다.',
             },
           ],
         },
@@ -2885,7 +2883,7 @@ export default defineTransition('book-search', bookSearch);`,
             },
             {
               type: 'paragraph',
-              text: '이 파이프라인이 StateSurface의 전부입니다. Surface가 슬롯을 고정하고, Template이 슬롯 내용을 그리고, Transition이 서버에서 상태를 스트리밍하고, Action이 사용자 이벤트와 Transition을 연결합니다. useState 0개, useEffect 0개, fetch 0개 — 엔진이 전부 처리합니다.',
+              text: '이 파이프라인이 StateSurface의 전부입니다. Surface가 슬롯을 고정하고, Template이 슬롯 내용을 그리고, Transition이 서버에서 상태를 스트리밍하고, Action이 사용자 이벤트와 Transition을 연결합니다. 서버 통신, DOM 조작, abort 처리를 직접 작성하지 않습니다 — 엔진이 전부 처리합니다.',
             },
           ],
         },

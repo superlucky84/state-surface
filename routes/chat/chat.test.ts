@@ -61,12 +61,17 @@ describe('POST /transition/chat — accumulate frame sequence', () => {
       .split('\n')
       .map((l: string) => JSON.parse(l));
 
-    // Frame 0: full frame — initializes chat:current to empty, shows typing indicator
+    // Frame 0: partial frame — resets chat:current, clears input, shows typing
+    // Partial so that chat:messages (conversation history) is preserved
     const firstFrame = lines[0];
-    expect(firstFrame.full).not.toBe(false);
+    expect(firstFrame.full).toBe(false);
+    expect(firstFrame.changed).toContain('chat:current');
+    expect(firstFrame.changed).toContain('chat:typing');
+    expect(firstFrame.changed).toContain('chat:input');
     expect(firstFrame.accumulate).not.toBe(true);
     expect(firstFrame.states['chat:current']).toEqual({ text: '' });
     expect(firstFrame.states['chat:typing']).toBeDefined();
+    expect(firstFrame.states['chat:input']).toBeDefined();
 
     // Frame 1: accumulate — appends user message to chat:messages.messages[]
     const userAccumulate = lines[1];

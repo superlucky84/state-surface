@@ -127,6 +127,7 @@ User action → POST /transition/:name → server generator yields StateFrames
 - **`activeStates`**: A `Record<string, any>` map of template name → bound data. Full frames replace it; partial frames merge into it.
 - **Full frame**: `full !== false` — declares complete UI state, replaces `activeStates` entirely. First frame in every stream must be full.
 - **Partial frame**: `full === false` — must include `changed` and/or `removed`. Apply `removed` first, then merge `changed` via `states`.
+- **Accumulate frame**: `accumulate === true` — stacks delta data into existing slot state (arrays concat, strings concat, objects shallow-merge, scalars replace). Never resets a slot; use a full frame for reset.
 - **Template registry**: Static map of state name → component module, shared by SSR and CSR.
 - **Hydration**: Per `<h-state>` root (not full-page). SSR hash (sha256) enables mismatch fallback to client render.
 
