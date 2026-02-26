@@ -287,6 +287,49 @@ function Dashboard() {
           ],
         },
         {
+          id: 'mixed',
+          heading: 'Two layout patterns',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'stateSlots() is a convenience shorthand — it just generates <h-state> tags. You can always write <h-state> tags directly and mix them freely with static HTML. Choose whichever fits your page.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'Pattern A — slots only (stateSlots shorthand)',
+              text: `layout: stateScript => baseSurface(joinSurface(
+  '<main class="grid grid-cols-3 gap-4">',
+  stateSlots('stock:price', 'stock:news', 'stock:chart'),
+  '</main>',
+), stateScript)`,
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'Pattern B — static HTML + slots mixed',
+              text: `layout: stateScript => baseSurface(joinSurface(
+  '<main class="flex flex-col gap-8">',
+  '<h-state name="page:hero"></h-state>',
+  '<section class="border-t border-slate-200 pt-8">',
+  '  <h2 class="text-lg font-semibold">Core Concepts</h2>',
+  '  <h-state name="page:concepts"></h-state>',
+  '</section>',
+  '<section class="border-t border-slate-200 pt-8">',
+  '  <h2 class="text-lg font-semibold">Features</h2>',
+  '  <h-state name="page:features"></h-state>',
+  '</section>',
+  '</main>',
+), stateScript)`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'Pattern B is ideal when your page has static headings, dividers, or decorative elements between dynamic slots. The static parts are baked into the HTML shell and never re-render — only the <h-state> contents update.',
+            },
+          ],
+        },
+        {
           id: 'sequence',
           heading: 'Execution sequence',
           blocks: [
@@ -1674,6 +1717,49 @@ function Dashboard() {
   );
 }
 // + 자체 fetch 로직이 있는 자식 컴포넌트 파일 3개`,
+            },
+          ],
+        },
+        {
+          id: 'mixed',
+          heading: '두 가지 레이아웃 패턴',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'stateSlots()는 편의 함수일 뿐입니다 — 내부적으로 <h-state> 태그를 생성합니다. <h-state> 태그를 직접 작성하고 정적 HTML과 자유롭게 섞어 쓸 수 있습니다. 페이지에 맞는 패턴을 선택하세요.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: '패턴 A — 슬롯만 (stateSlots 단축)',
+              text: `layout: stateScript => baseSurface(joinSurface(
+  '<main class="grid grid-cols-3 gap-4">',
+  stateSlots('stock:price', 'stock:news', 'stock:chart'),
+  '</main>',
+), stateScript)`,
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: '패턴 B — 정적 HTML + 슬롯 혼합',
+              text: `layout: stateScript => baseSurface(joinSurface(
+  '<main class="flex flex-col gap-8">',
+  '<h-state name="page:hero"></h-state>',
+  '<section class="border-t border-slate-200 pt-8">',
+  '  <h2 class="text-lg font-semibold">Core Concepts</h2>',
+  '  <h-state name="page:concepts"></h-state>',
+  '</section>',
+  '<section class="border-t border-slate-200 pt-8">',
+  '  <h2 class="text-lg font-semibold">Features</h2>',
+  '  <h-state name="page:features"></h-state>',
+  '</section>',
+  '</main>',
+), stateScript)`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '패턴 B는 동적 슬롯 사이에 정적 제목, 구분선, 장식 요소가 필요할 때 적합합니다. 정적 부분은 HTML 셸에 포함되어 절대 재렌더링되지 않고, <h-state> 내용만 갱신됩니다.',
             },
           ],
         },

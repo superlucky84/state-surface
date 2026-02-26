@@ -8,6 +8,7 @@ const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action', 'accumulat
 const ALL_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'] as const;
 const LANGS = ['en', 'ko'] as const;
 const REQUIRED_SECTION_IDS = ['tldr', 'analogy', 'when', 'steps', 'example', 'sequence', 'mistakes', 'debug', 'next'];
+const SURFACE_EXTRA_SECTION_IDS = ['mixed'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [
   'preview', 'prereqs', 'step1', 'step2', 'step3', 'flow', 'verify', 'next',
 ];
@@ -18,12 +19,17 @@ describe('guide content schema (concept guides)', () => {
   for (const slug of CONCEPT_SLUGS) {
     for (const lang of LANGS) {
       describe(`${slug} (${lang})`, () => {
-        it('has all 9 required sections', () => {
+        it('has all required sections', () => {
           const guide = guideContent(slug, lang);
           expect(guide).not.toBeNull();
           const ids = guide!.sections.map(s => s.id);
           for (const required of REQUIRED_SECTION_IDS) {
             expect(ids).toContain(required);
+          }
+          if (slug === 'surface') {
+            for (const extra of SURFACE_EXTRA_SECTION_IDS) {
+              expect(ids).toContain(extra);
+            }
           }
         });
 
@@ -228,8 +234,10 @@ describe('guide SSR rendering', () => {
       expect(loadedFrame).toBeDefined();
 
       const content = loadedFrame.states['guide:content'];
-      const expectedCount =
+      const baseCount =
         slug === 'quickstart' ? QUICKSTART_REQUIRED_SECTION_IDS.length : REQUIRED_SECTION_IDS.length;
+      const expectedCount =
+        slug === 'surface' ? baseCount + SURFACE_EXTRA_SECTION_IDS.length : baseCount;
       expect(content.sections.length).toBe(expectedCount);
       expect(content.demoHref).toBeTruthy();
       expect(content.demoLabel).toBeTruthy();
