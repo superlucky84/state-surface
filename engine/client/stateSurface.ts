@@ -327,6 +327,18 @@ export class StateSurface {
         // Update existing
         this.updateTemplate(key, nextStates[key], el);
       }
+
+      // Trigger reveal animation (opt-in via data-animate on <h-state>)
+      if (el.hasAttribute('data-animate')) {
+        el.removeAttribute('data-just-updated');
+        void el.offsetWidth; // force reflow to restart animation
+        el.setAttribute('data-just-updated', '');
+        el.addEventListener(
+          'animationend',
+          () => el.removeAttribute('data-just-updated'),
+          { once: true }
+        );
+      }
     }
 
     this.activeStates = nextStates;

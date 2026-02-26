@@ -9,6 +9,7 @@ const ALL_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action', 
 const LANGS = ['en', 'ko'] as const;
 const REQUIRED_SECTION_IDS = ['tldr', 'analogy', 'when', 'steps', 'example', 'sequence', 'mistakes', 'debug', 'next'];
 const SURFACE_EXTRA_SECTION_IDS = ['mixed'];
+const TRANSITION_EXTRA_SECTION_IDS = ['animation'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [
   'preview', 'prereqs', 'step1', 'step2', 'step3', 'flow', 'verify', 'next',
 ];
@@ -28,6 +29,11 @@ describe('guide content schema (concept guides)', () => {
           }
           if (slug === 'surface') {
             for (const extra of SURFACE_EXTRA_SECTION_IDS) {
+              expect(ids).toContain(extra);
+            }
+          }
+          if (slug === 'transition') {
+            for (const extra of TRANSITION_EXTRA_SECTION_IDS) {
               expect(ids).toContain(extra);
             }
           }
@@ -236,8 +242,13 @@ describe('guide SSR rendering', () => {
       const content = loadedFrame.states['guide:content'];
       const baseCount =
         slug === 'quickstart' ? QUICKSTART_REQUIRED_SECTION_IDS.length : REQUIRED_SECTION_IDS.length;
-      const expectedCount =
-        slug === 'surface' ? baseCount + SURFACE_EXTRA_SECTION_IDS.length : baseCount;
+      const extraCount =
+        slug === 'surface'
+          ? SURFACE_EXTRA_SECTION_IDS.length
+          : slug === 'transition'
+            ? TRANSITION_EXTRA_SECTION_IDS.length
+            : 0;
+      const expectedCount = baseCount + extraCount;
       expect(content.sections.length).toBe(expectedCount);
       expect(content.demoHref).toBeTruthy();
       expect(content.demoLabel).toBeTruthy();

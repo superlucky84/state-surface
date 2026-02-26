@@ -106,6 +106,6 @@ describe('empty anchors', () => {
     const res = await request(app).get('/search');
 
     // search:results has no initial state
-    expect(res.text).toMatch(/<h-state name="search:results"><\/h-state>/);
+    expect(res.text).toMatch(/<h-state name="search:results"[^>]*><\/h-state>/);
   });
 });

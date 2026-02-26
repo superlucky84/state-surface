@@ -782,6 +782,57 @@ function SearchResults({ query }: { query: string }) {
           ],
         },
         {
+          id: 'animation',
+          heading: 'Animation presets',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Add data-animate to an <h-state> tag to enable a reveal animation when a state frame updates that anchor. Set it to a preset name to choose the effect.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'fade — opacity-only reveal. Clean and minimal.',
+                'slide-up — translate from below + fade. Good for progressively loaded content.',
+                'scale — slight scale-up + fade. Draws attention to newly appearing elements.',
+              ],
+            },
+            {
+              type: 'code',
+              lang: 'html',
+              label: 'Using presets in a surface layout',
+              text: `<!-- No animation — anchor updates silently -->
+<h-state name="search:input"></h-state>
+
+<!-- Fade in on every update -->
+<h-state name="search:results" data-animate="fade"></h-state>
+
+<!-- Slide up from below -->
+<h-state name="demo:timeline" data-animate="slide-up"></h-state>
+
+<!-- Scale up -->
+<h-state name="demo:output" data-animate="scale"></h-state>`,
+            },
+            {
+              type: 'code',
+              lang: 'css',
+              label: 'Defining a custom preset',
+              text: `@keyframes h-state-rotate {
+  from { opacity: 0; transform: rotate(-5deg); }
+  to   { opacity: 1; transform: rotate(0); }
+}
+h-state[data-animate="rotate"][data-just-updated] {
+  animation: h-state-rotate 0.3s ease-out;
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'The animation is CSS-only. The engine sets data-just-updated after each frame apply and removes it on animationend. Your custom keyframe just needs to target h-state[data-animate="name"][data-just-updated].',
+            },
+          ],
+        },
+        {
           id: 'sequence',
           heading: 'Execution sequence',
           blocks: [
@@ -2212,6 +2263,57 @@ function SearchResults({ query }: { query: string }) {
   if (loading) return <Skeleton />;
   return <ResultList items={items} badge={badge} />;
 }`,
+            },
+          ],
+        },
+        {
+          id: 'animation',
+          heading: '애니메이션 프리셋',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '<h-state> 태그에 data-animate를 추가하면 상태 프레임이 해당 앵커를 업데이트할 때 표시 애니메이션이 활성화됩니다. 프리셋 이름을 값으로 설정하여 효과를 선택할 수 있습니다.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'fade — 불투명도만 변경. 깔끔하고 미니멀합니다.',
+                'slide-up — 아래에서 위로 이동 + 페이드. 점진적으로 로드되는 콘텐츠에 적합합니다.',
+                'scale — 약간 확대 + 페이드. 새로 나타나는 요소에 주의를 끕니다.',
+              ],
+            },
+            {
+              type: 'code',
+              lang: 'html',
+              label: 'Surface 레이아웃에서 프리셋 사용',
+              text: `<!-- 애니메이션 없음 — 앵커가 조용히 갱신됨 -->
+<h-state name="search:input"></h-state>
+
+<!-- 매 업데이트마다 페이드 인 -->
+<h-state name="search:results" data-animate="fade"></h-state>
+
+<!-- 아래에서 슬라이드 업 -->
+<h-state name="demo:timeline" data-animate="slide-up"></h-state>
+
+<!-- 스케일 업 -->
+<h-state name="demo:output" data-animate="scale"></h-state>`,
+            },
+            {
+              type: 'code',
+              lang: 'css',
+              label: '커스텀 프리셋 정의',
+              text: `@keyframes h-state-rotate {
+  from { opacity: 0; transform: rotate(-5deg); }
+  to   { opacity: 1; transform: rotate(0); }
+}
+h-state[data-animate="rotate"][data-just-updated] {
+  animation: h-state-rotate 0.3s ease-out;
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: '애니메이션은 CSS로만 동작합니다. 엔진 JS는 각 프레임 적용 후 data-just-updated를 설정하고 animationend에서 제거합니다. 커스텀 키프레임은 h-state[data-animate="name"][data-just-updated]를 타겟으로 하면 됩니다.',
             },
           ],
         },

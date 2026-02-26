@@ -6,10 +6,53 @@
 @source '../client/**/*.ts';
 @source '../client/**/*.tsx';
 
+/* ── Pending + reveal animation (opt-in via data-animate="preset") ── */
+
+h-state[data-animate] {
+  transition: opacity 0.18s ease-out, filter 0.18s ease-out;
+}
+
 h-state[data-pending] {
-  opacity: 0.5;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+}
+
+h-state[data-animate][data-pending] {
+  opacity: 0.45;
+  filter: saturate(0.3);
+}
+
+/* ── Reveal keyframes per preset ── */
+
+@keyframes h-state-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes h-state-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes h-state-scale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* bare data-animate (no value) defaults to fade */
+h-state[data-animate][data-just-updated] {
+  animation: h-state-fade 0.25s ease-out;
+}
+
+h-state[data-animate="fade"][data-just-updated] {
+  animation: h-state-fade 0.25s ease-out;
+}
+
+h-state[data-animate="slide-up"][data-just-updated] {
+  animation: h-state-slide-up 0.3s ease-out;
+}
+
+h-state[data-animate="scale"][data-just-updated] {
+  animation: h-state-scale 0.25s ease-out;
 }
 
 /* ── Prism custom theme (slate palette) ── */
