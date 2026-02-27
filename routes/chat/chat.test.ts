@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { app } from '../../server/index.js';
+import { app } from '../../engine/server/index.js';
 
 describe('GET /chat — SSR initial render', () => {
   it('returns 200 with all chat surface anchors', async () => {

@@ -749,16 +749,16 @@ Phase 15 전체는 이 첫 5분 → 10분 → 30분 이해 경로를 가이드�
 
 **구현 항목:**
 
-- [ ] `quickstart` slug를 기존 guide 라우트에 추가 또는 `routes/guide-quickstart/` 신설 결정.
-- [ ] `shared/content.ts`에 quickstart EN/KO 콘텐츠 추가 (8섹션, 각 섹션 복수 블록).
-- [ ] quickstart에 필요한 신규 블록 타입 추가:
-  - [ ] `diagram` 블록: 모노스페이스 텍스트 다이어그램 (ASCII 흐름도).
-  - [ ] `callout` 블록: tip/info/note 아이콘과 함께 강조 박스.
-- [ ] `guideContent.tsx`에 `diagram`/`callout` 렌더러 추가.
-- [ ] TOC(`guideToc.tsx`)에 `quickstart` 항목을 최상단에 표시.
-- [ ] quickstart 콘텐츠 EN 작성 (8섹션 × 복수 블록, 코드 복붙 가능).
-- [ ] quickstart 콘텐츠 KO 작성 (EN과 동일 구조, 섹션/블록 수 일치).
-- [ ] 스키마 테스트에 quickstart slug 추가.
+- [x] `quickstart` slug를 기존 guide 라우트에 추가 또는 `routes/guide-quickstart/` 신설 결정.
+- [x] `shared/content.ts`에 quickstart EN/KO 콘텐츠 추가 (8섹션, 각 섹션 복수 블록).
+- [x] quickstart에 필요한 신규 블록 타입 추가:
+  - [x] `diagram` 블록: 모노스페이스 텍스트 다이어그램 (ASCII 흐름도).
+  - [x] `callout` 블록: tip/info/note 아이콘과 함께 강조 박스.
+- [x] `guideContent.tsx`에 `diagram`/`callout` 렌더러 추가.
+- [x] TOC(`guideToc.tsx`)에 `quickstart` 항목을 최상단에 표시.
+- [x] quickstart 콘텐츠 EN 작성 (8섹션 × 복수 블록, 코드 복붙 가능).
+- [x] quickstart 콘텐츠 KO 작성 (EN과 동일 구조, 섹션/블록 수 일치).
+- [x] 스키마 테스트에 quickstart slug 추가.
 
 ---
 
@@ -844,24 +844,24 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 **TOC (가이드 목록) 개선:**
 
-- [ ] `guideToc.tsx`에 quickstart를 최상단에 "시작하기" 레이블로 표시.
-- [ ] 현재 가이드 페이지의 섹션 목록도 TOC에 표시 (섹션 앵커 jump 링크).
+- [x] `guideToc.tsx`에 quickstart를 최상단에 "시작하기" 레이블로 표시.
+- [x] 현재 가이드 페이지의 섹션 목록도 TOC에 표시 (섹션 앵커 jump 링크).
   - `sections` props를 guideToc에 전달하여 섹션별 앵커 링크 렌더링.
   - 모바일에서는 섹션 목록 TOC 숨김 (slug 목록만 표시).
 
 **콘텐츠 영역 개선:**
 
-- [ ] 각 섹션 헤딩에 섹션 ID 기반 앵커 링크(`#tldr`, `#steps` 등) 자동 부여.
-- [ ] `analogy` 블록: 구분되는 배경색(eg. indigo-50), 인용 아이콘.
-- [ ] `callout` 블록: 아이콘 종류(tip=💡, info=ℹ, warn=⚠) 구분.
-- [ ] `diagram` 블록: 모노스페이스 폰트, 배경색, 가로 스크롤.
-- [ ] `debug` 블록: 증상/원인/해결을 시각적으로 구분하는 카드 레이아웃.
-- [ ] 코드 블록에 "파일 경로" 라벨 클립보드 복사 버튼 (JS 필요 → `mount()` 활용).
+- [x] 각 섹션 헤딩에 섹션 ID 기반 앵커 링크(`#tldr`, `#steps` 등) 자동 부여.
+- [x] `analogy` 블록: 구분되는 배경색(eg. indigo-50), 인용 아이콘.
+- [x] `callout` 블록: 아이콘 종류(tip=💡, info=ℹ, warn=⚠) 구분.
+- [x] `diagram` 블록: 모노스페이스 폰트, 배경색, 가로 스크롤.
+- [x] `debug` 블록: 증상/원인/해결을 시각적으로 구분하는 카드 레이아웃.
+- [x] 코드 블록에 "파일 경로" 라벨 클립보드 복사 버튼 (JS 필요 → `mount()` 활용).
 
 **홈 페이지 연결:**
 
-- [ ] `/` 홈 페이지의 "Read the Guide" 버튼 → `/guide/quickstart`로 변경.
-- [ ] "개념 카드 4개" 아래에 "10분 퀵스타트로 시작하기" 링크 추가.
+- [x] `/` 홈 페이지의 "Read the Guide" 버튼 → `/guide/quickstart`로 변경.
+- [x] "개념 카드 4개" 아래에 "10분 퀵스타트로 시작하기" 링크 추가.
 
 ---
 
@@ -899,7 +899,7 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 **공통 완료 조건:**
 
-- [ ] 문서 동기화: `CLAUDE.md`의 guide 설명을 새 학습 구조에 맞게 업데이트.
+- [x] 문서 동기화: `CLAUDE.md`의 guide 설명을 새 학습 구조에 맞게 업데이트.
 - [ ] 문서 동기화: `README.md`에 "Guide로 시작하기" 섹션 추가.
 - [ ] Smoke check: `/guide/quickstart`에서 4단계 튜토리얼이 전부 표시된다.
 - [ ] Smoke check: `/guide/surface|template|transition|action`에서 analogy/debug 섹션이 보인다.

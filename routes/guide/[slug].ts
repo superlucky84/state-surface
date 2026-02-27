@@ -1,4 +1,4 @@
-import type { RouteModule } from '../../shared/routeModule.js';
+import type { RouteModule } from '../../engine/shared/routeModule.js';
 import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
 import { getLang } from '../../shared/i18n.js';
 import { guideLoadingState } from '../../shared/content.js';

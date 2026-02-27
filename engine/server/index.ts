@@ -8,7 +8,7 @@ import { getLang, isValidLang, langCookie } from '../../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
-import { setBasePath, prefixPath } from '../../shared/basePath.js';
+import { setBasePath, prefixPath } from '../shared/basePath.js';
 import type { RouteModule } from '../shared/routeModule.js';
 
 // Initialize basePath from environment variable (must be done before any route/content import)

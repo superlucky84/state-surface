@@ -1,4 +1,4 @@
-import { defineTemplate } from '../../../../shared/templateRegistry.js';
+import { defineTemplate } from '../../../../engine/shared/templateRegistry.js';
 
 type LogEntry = {
   id: number;

@@ -1,5 +1,5 @@
-import { defineTemplate } from '../../../shared/templateRegistry.js';
-import { prefixPath } from '../../../shared/basePath.js';
+import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { prefixPath } from '../../../engine/shared/basePath.js';
 import type { Block, DebugItem } from '../../../shared/content.js';
 
 // ── Block renderers ──

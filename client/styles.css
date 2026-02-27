@@ -5,6 +5,8 @@
 @source '../routes/**/*.tsx';
 @source '../client/**/*.ts';
 @source '../client/**/*.tsx';
+@source '../engine/client/**/*.ts';
+@source '../engine/client/**/*.tsx';
 
 /* ── MPA View Transition (cross-fade on page navigation) ── */
 

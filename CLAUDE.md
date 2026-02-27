@@ -34,7 +34,7 @@ When context is needed, read in this order:
 
 ```bash
 pnpm install
-pnpm dev                          # start dev server via tsx watch server/index.ts
+pnpm dev                          # start dev server via tsx watch engine/server/index.ts
 pnpm build                        # production build (Vite)
 pnpm test                         # run all tests with Vitest
 pnpm test path/to/file.test.ts    # run a single test file
@@ -57,7 +57,7 @@ BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
 ## Folder Structure
 
 ```
-engine/              # Framework core (server/client/shared runtime internals)
+engine/              # Framework core — users should not edit these files
   server/
     index.ts         # Express app assembly, route registration, transition endpoint, dev middleware
     bootstrap.ts     # Auto-register transitions & templates from routes/ at startup
@@ -69,48 +69,41 @@ engine/              # Framework core (server/client/shared runtime internals)
     transition.ts    # Transition registry & handler
     fsUtils.ts       # Shared filesystem utilities (listFiles, isModuleFile)
   client/
+    main.ts          # Browser bootstrap (StateSurface init, action binding, Prism highlight)
     stateSurface.ts  # Core: anchor discovery, hydration, transition streaming, frame queue
     actionDelegation.ts  # Declarative action binding (data-action click/submit delegation)
     lithentBridge.ts # Lithent VDOM integration (render/hydrate/update)
     devOverlay.ts    # Debug overlay UI (?debug=1)
+    templates/
+      auto.ts        # Auto-register route templates via glob import
+      registry.ts    # Template registry re-export
   shared/
+    basePath.ts      # Central basePath management (setBasePath, getBasePath, prefixPath)
     protocol.ts      # StateFrame types, validation, applyFrame (full/partial merge)
     ndjson.ts        # NDJSON encode/decode with streaming chunk parser
     routeModule.ts   # RouteModule type contract (layout, transition, params, initial, boot)
     templateRegistry.ts
     templateCheck.ts
-server/              # Thin server entrypoints (compat/public API)
-  index.ts           # Thin entrypoint re-exporting engine server app
-  transition.ts      # Transition helper re-export for route modules
-client/              # Browser entry + assets
-  main.ts            # Thin client entry — compose engine client runtime + boot/action binding
+client/              # User assets
   styles.css         # Tailwind CSS entry point (imported by surface HTML)
-  templates/
-    registry.ts      # Global template registry
-    auto.ts          # Auto-register route templates via glob import
-shared/              # App/shared data helpers + compatibility re-exports
-  basePath.ts        # Central basePath management (setBasePath, getBasePath, prefixPath)
+shared/              # User data helpers
   content.ts         # Bilingual content data (ko/en) for all demo pages
   i18n.ts            # i18n helpers (getLang from cookie, lang cookie path)
-  protocol.ts        # Re-export from engine/shared/protocol
-  ndjson.ts          # Re-export from engine/shared/ndjson
-  routeModule.ts     # Re-export from engine/shared/routeModule
-  templateRegistry.ts
-  templateCheck.ts
 layouts/             # Shared surface composition helpers (string-based HTML builders)
   surface.ts         # stateSlots, joinSurface, surfaceDocument, baseSurface
 routes/              # Route modules + page-specific templates/transitions (auto-loaded)
   index.ts           # GET / — home page (hero, concepts, features)
   search.ts          # GET /search — feature/concept search
   chat.ts            # GET /chat — chatbot demo (streaming + abort)
-  guide/[slug].ts    # GET /guide/:slug — concept guides (surface, template, transition, action)
+  guide/[slug].ts    # GET /guide/:slug — guides (quickstart + 5 concept guides)
   features/streaming.ts  # GET /features/streaming — frame flow visualization
   features/actions.ts    # GET /features/actions — action playground
+  features/view-transition.ts  # GET /features/view-transition — View Transition API morphing demo
   _shared/templates/ # Cross-route templates (pageHeader, systemError)
   _shared/transitions/   # Cross-route transitions (switchLang)
   <route>/templates/ # Per-route TSX projection components
   <route>/transitions/   # Per-route server-side state generators
-skills/              # AI agent skill docs (lithent, fp-pack) — not runtime code
+skills/              # (removed — previously held lithent/fp-pack reference docs)
 ```
 
 ## Architecture
@@ -185,7 +178,7 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 
 ### Base Path (Sub-Path Mounting)
 
-- `shared/basePath.ts` — central `setBasePath()` / `getBasePath()` / `prefixPath()` helpers
+- `engine/shared/basePath.ts` — central `setBasePath()` / `getBasePath()` / `prefixPath()` helpers
 - Set via `process.env.BASE_PATH` (e.g., `BASE_PATH=/demo pnpm dev`)
 - Server applies prefix to Express routes and transition endpoint
 - Client reads `<script id="__BASE_PATH__">` injected during SSR
@@ -197,9 +190,10 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 | Route | Slots | Demonstrated Features |
 |-------|-------|-----------------------|
 | `/` | `page:hero`, `page:concepts`, `page:features` | `initial` SSR only, surface composition |
-| `/guide/:slug` | `guide:content`, `guide:toc` | Dynamic `[param]`, boot auto-run, full→partial |
+| `/guide/:slug` | `guide:content`, `guide:toc` | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |
 | `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | Full/partial frames, `removed`, error frame |
 | `/features/actions` | `actions:playground`, `actions:log` | `data-action`, form submit, scoped pending |
+| `/features/view-transition` | `vt:description`, `vt:gallery` | View Transition API, `view-transition-name` morphing |
 | `/search` | `search:input`, `search:results` | Form `data-action`, pending state |
 | `/chat` | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate |
 
@@ -211,7 +205,7 @@ Two sibling projects serve as implementation references:
 
 ### `../lithent` — Lithent library source
 
-Key internals: SSR via `renderToString`/`hydration` from `lithent/ssr`, render with `isHydration` flag, JSX runtime compatible with `jsxImportSource: "lithent"`. Vite plugin `@lithent/lithent-vite` handles automatic JSX transform. See `skills/lithent/SKILL.md` for full API reference.
+Key internals: SSR via `renderToString`/`hydration` from `lithent/ssr`, render with `isHydration` flag, JSX runtime compatible with `jsxImportSource: "lithent"`. Vite plugin `@lithent/lithent-vite` handles automatic JSX transform.
 
 ### `../blog` — Vite + Lithent SSR prototype
 
@@ -226,11 +220,27 @@ Used as a DOM diff/patch engine only — no component API exposed to users. Key 
 - `renderToString`, `hydration` from `lithent/ssr`
 - `mount`, `cacheUpdate` from `lithent/helper` (used in chat for performance)
 - JSX automatic transform via `jsxImportSource: "lithent"` in tsconfig
-- See `skills/lithent/SKILL.md` for full API reference
 
-### fp-pack (optional)
+### Guide System
 
-- Prefer in `shared/` frame operation helpers (normalize, merge, precedence, apply)
-- Keep SSR/hydration boundary code explicit — avoid over-abstracted chains
-- Use `pipe`/`pipeAsync` for 2+ steps; call functions directly for single steps
-- See `skills/fp-pack/SKILL.md` for rules and patterns
+- 6 guides: `quickstart` + 5 concept guides (`surface`, `template`, `transition`, `action`, `accumulate`)
+- 10 block types: `paragraph`, `bullets`, `code`, `checklist`, `warning`, `sequence`, `diagram`, `callout`, `analogy`, `debug`
+- Bilingual (ko/en) with i18n parity enforced by tests (same section IDs, block counts, block types)
+- Guide content in `shared/content.ts` → `GUIDE_DATA[lang][slug]`
+- Block renderers in `routes/guide/[slug]/templates/guideContent.tsx`
+- TOC with section anchor jump links in `routes/guide/[slug]/templates/guideToc.tsx`
+
+### Animation Presets
+
+8 opt-in presets via `data-animate` attribute on `<h-state>`:
+`fade`, `slide-up`, `slide-down`, `slide-left`, `slide-right`, `scale`, `blur`, `flip`
+
+Each preset includes reveal animation (entrance) and per-preset pending visual hint.
+CSS-only — defined in `client/styles.css`.
+
+### View Transition API
+
+- MPA cross-fade: `@view-transition { navigation: auto; }` in `client/styles.css`
+- In-page slot updates: `sync()` wraps DOM changes with `document.startViewTransition()` (progressive enhancement)
+- `activeStates` updates synchronously outside the callback to prevent accumulate frame race conditions
+- Users can add `view-transition-name` in templates for element morphing — no engine changes needed

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { setBasePath, getBasePath, prefixPath } from '../../shared/basePath.js';
+import { setBasePath, getBasePath, prefixPath } from './basePath.js';
 
 afterEach(() => {
   // Reset singleton after each test
@@ -63,7 +63,7 @@ describe('prefixPath — with basePath set', () => {
     setBasePath('/demo');
     expect(prefixPath('/guide/surface')).toBe('/demo/guide/surface');
     expect(prefixPath('/transition/search')).toBe('/demo/transition/search');
-    expect(prefixPath('/client/main.ts')).toBe('/demo/client/main.ts');
+    expect(prefixPath('/engine/client/main.ts')).toBe('/demo/engine/client/main.ts');
   });
 
   it('adds leading slash to relative paths', () => {

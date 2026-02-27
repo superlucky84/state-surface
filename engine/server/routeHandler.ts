@@ -3,7 +3,7 @@ import type { RouteModule } from '../shared/routeModule.js';
 import { getInitialStates } from './initialStates.js';
 import { fillHState, buildStateScript, buildBootScript, buildBasePathScript } from './ssr.js';
 import { createSSRRenderer } from './ssrRenderer.js';
-import { getBasePath } from '../../shared/basePath.js';
+import { getBasePath } from '../shared/basePath.js';
 
 /**
  * Create an Express GET handler for a route module.

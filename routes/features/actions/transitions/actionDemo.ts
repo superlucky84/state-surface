@@ -1,5 +1,5 @@
-import type { StateFrame } from '../../../../shared/protocol.js';
-import { defineTransition } from '../../../../server/transition.js';
+import type { StateFrame } from '../../../../engine/shared/protocol.js';
+import { defineTransition } from '../../../../engine/server/transition.js';
 import { isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 

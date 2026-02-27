@@ -1,4 +1,4 @@
-import { prefixPath } from '../shared/basePath.js';
+import { prefixPath } from '../engine/shared/basePath.js';
 
 type SurfaceBlock = string | false | null | undefined;
 
@@ -24,7 +24,7 @@ export function surfaceDocument({
   body,
   styles,
   stateScript = '',
-  clientEntry = '/client/main.ts',
+  clientEntry = '/engine/client/main.ts',
   lang = 'en',
 }: SurfaceDocumentOptions): string {
   const styleBlock = styles
@@ -72,7 +72,7 @@ ${body}
 <h-state name="system:error"></h-state>
 </div>
 ${stateScript}
-  <script type="module" src="${prefixPath('/client/main.ts')}"></script>
+  <script type="module" src="${prefixPath('/engine/client/main.ts')}"></script>
 </body>
 </html>`;
 }
@@ -93,7 +93,7 @@ ${body}
 <h-state name="system:error"></h-state>
 </div>
 ${stateScript}
-  <script type="module" src="${prefixPath('/client/main.ts')}"></script>
+  <script type="module" src="${prefixPath('/engine/client/main.ts')}"></script>
 </body>
 </html>`;
 }

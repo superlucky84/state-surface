@@ -1,4 +1,4 @@
-import { getBasePath } from './basePath.js';
+import { getBasePath } from '../engine/shared/basePath.js';
 
 export type Lang = 'ko' | 'en';
 

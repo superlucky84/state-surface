@@ -1,5 +1,5 @@
-import { defineTemplate } from '../../../shared/templateRegistry.js';
-import { prefixPath } from '../../../shared/basePath.js';
+import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { prefixPath } from '../../../engine/shared/basePath.js';
 
 type TocSection = { id: string; heading: string };
 

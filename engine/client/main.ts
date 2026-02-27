@@ -1,7 +1,7 @@
-import { StateSurface } from '../engine/client/stateSurface.js';
-import { createLithentBridge } from '../engine/client/lithentBridge.js';
-import { attachDevOverlay } from '../engine/client/devOverlay.js';
-import { bindDeclarativeActions } from '../engine/client/actionDelegation.js';
+import { StateSurface } from './stateSurface.js';
+import { createLithentBridge } from './lithentBridge.js';
+import { attachDevOverlay } from './devOverlay.js';
+import { bindDeclarativeActions } from './actionDelegation.js';
 import { setBasePath } from '../shared/basePath.js';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-markup';
