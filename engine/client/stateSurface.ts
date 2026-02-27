@@ -301,47 +301,57 @@ export class StateSurface {
   }
 
   private sync(nextStates: Record<string, any>, changedKeys: string[], removedKeys: string[]) {
-    // Remove inactive templates
-    for (const key of removedKeys) {
-      if (this.mounted.has(key)) {
+    const doSync = () => {
+      // Remove inactive templates
+      for (const key of removedKeys) {
+        if (this.mounted.has(key)) {
+          const el = this.anchors.get(key);
+          this.unmountTemplate(key, el!);
+          this.mounted.delete(key);
+          // Clear anchor content
+          if (el) el.innerHTML = '';
+        }
+      }
+
+      // Update changed templates
+      for (const key of changedKeys) {
+        if (!(key in nextStates)) continue;
+
         const el = this.anchors.get(key);
-        this.unmountTemplate(key, el!);
-        this.mounted.delete(key);
-        // Clear anchor content
-        if (el) el.innerHTML = '';
+        if (!el) continue;
+
+        if (!this.mounted.has(key)) {
+          // First render for this anchor
+          this.renderTemplate(key, nextStates[key], el);
+          this.mounted.add(key);
+        } else {
+          // Update existing
+          this.updateTemplate(key, nextStates[key], el);
+        }
+
+        // Trigger reveal animation (opt-in via data-animate on <h-state>)
+        if (el.hasAttribute('data-animate')) {
+          el.removeAttribute('data-just-updated');
+          void el.offsetWidth; // force reflow to restart animation
+          el.setAttribute('data-just-updated', '');
+          el.addEventListener(
+            'animationend',
+            () => el.removeAttribute('data-just-updated'),
+            { once: true }
+          );
+        }
       }
-    }
+    };
 
-    // Update changed templates
-    for (const key of changedKeys) {
-      if (!(key in nextStates)) continue;
-
-      const el = this.anchors.get(key);
-      if (!el) continue;
-
-      if (!this.mounted.has(key)) {
-        // First render for this anchor
-        this.renderTemplate(key, nextStates[key], el);
-        this.mounted.add(key);
-      } else {
-        // Update existing
-        this.updateTemplate(key, nextStates[key], el);
-      }
-
-      // Trigger reveal animation (opt-in via data-animate on <h-state>)
-      if (el.hasAttribute('data-animate')) {
-        el.removeAttribute('data-just-updated');
-        void el.offsetWidth; // force reflow to restart animation
-        el.setAttribute('data-just-updated', '');
-        el.addEventListener(
-          'animationend',
-          () => el.removeAttribute('data-just-updated'),
-          { once: true }
-        );
-      }
-    }
-
+    // State must update synchronously (frame queue depends on this)
     this.activeStates = nextStates;
+
+    // Use View Transition API for smooth DOM transitions (progressive enhancement)
+    if (document.startViewTransition) {
+      document.startViewTransition(doSync);
+    } else {
+      doSync();
+    }
   }
 
   private markPending(targets?: string[]) {

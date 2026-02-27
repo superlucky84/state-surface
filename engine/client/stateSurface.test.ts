@@ -278,6 +278,76 @@ describe('StateSurface', () => {
     });
   });
 
+  // ── Accumulate Frame: activeStates Stays Synchronous ──
+
+  describe('accumulate frames update activeStates synchronously', () => {
+    it('preserves accumulated state across rapid consecutive frames', () => {
+      setupDOM(['chat:messages', 'chat:input']);
+
+      const { surface, rendered, updated } = createMockSurface();
+      surface.discoverAnchors();
+
+      // Full frame: initial chat state
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: {
+          'chat:messages': { messages: [{ role: 'bot', text: 'Hello' }] },
+          'chat:input': { value: '' },
+        },
+      });
+      (surface as any).flushQueue(true);
+
+      expect(surface.activeStates['chat:messages'].messages).toHaveLength(1);
+
+      // Partial frame: reset input (preserves messages)
+      (surface as any).frameQueue.push({
+        type: 'state',
+        full: false,
+        states: { 'chat:input': { value: '' } },
+        changed: ['chat:input'],
+      });
+      (surface as any).flushQueue(true);
+
+      // activeStates must be updated synchronously before next frame
+      expect(surface.activeStates['chat:messages'].messages).toHaveLength(1);
+
+      // Accumulate frame: append user message
+      (surface as any).frameQueue.push({
+        type: 'state',
+        accumulate: true,
+        states: { 'chat:messages': { messages: [{ role: 'user', text: 'Hi' }] } },
+        changed: ['chat:messages'],
+      });
+      (surface as any).flushQueue(true);
+
+      // Must have both messages (old + accumulated)
+      expect(surface.activeStates['chat:messages'].messages).toHaveLength(2);
+      expect(surface.activeStates['chat:messages'].messages[0]).toEqual({
+        role: 'bot',
+        text: 'Hello',
+      });
+      expect(surface.activeStates['chat:messages'].messages[1]).toEqual({
+        role: 'user',
+        text: 'Hi',
+      });
+
+      // Another accumulate: bot response
+      (surface as any).frameQueue.push({
+        type: 'state',
+        accumulate: true,
+        states: { 'chat:messages': { messages: [{ role: 'bot', text: 'How can I help?' }] } },
+        changed: ['chat:messages'],
+      });
+      (surface as any).flushQueue(true);
+
+      expect(surface.activeStates['chat:messages'].messages).toHaveLength(3);
+      expect(surface.activeStates['chat:messages'].messages[2]).toEqual({
+        role: 'bot',
+        text: 'How can I help?',
+      });
+    });
+  });
+
   // ── Error Handling ──
 
   describe('error handling', () => {

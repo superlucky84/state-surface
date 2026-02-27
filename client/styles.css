@@ -6,19 +6,40 @@
 @source '../client/**/*.ts';
 @source '../client/**/*.tsx';
 
+/* ── MPA View Transition (cross-fade on page navigation) ── */
+
+@view-transition {
+  navigation: auto;
+}
+
 /* ── Pending + reveal animation (opt-in via data-animate="preset") ── */
 
 h-state[data-animate] {
-  transition: opacity 0.18s ease-out, filter 0.18s ease-out;
+  transition: opacity 0.18s ease-out, filter 0.18s ease-out, transform 0.18s ease-out;
 }
 
 h-state[data-pending] {
   pointer-events: none;
 }
 
+/* Default pending (fade or bare data-animate) */
 h-state[data-animate][data-pending] {
   opacity: 0.45;
   filter: saturate(0.3);
+}
+
+/* slide-up pending: sink down slightly */
+h-state[data-animate="slide-up"][data-pending] {
+  opacity: 0.45;
+  filter: saturate(0.3);
+  transform: translateY(6px);
+}
+
+/* scale pending: shrink slightly */
+h-state[data-animate="scale"][data-pending] {
+  opacity: 0.45;
+  filter: saturate(0.3);
+  transform: scale(0.97);
 }
 
 /* ── Reveal keyframes per preset ── */

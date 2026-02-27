@@ -3198,6 +3198,66 @@ export function actionsContent(lang: Lang) {
   };
 }
 
+// ── View Transition demo page ──
+
+export function viewTransitionContent(lang: Lang) {
+  const ko = lang === 'ko';
+  const cards = [
+    {
+      id: 'alpha',
+      title: 'Alpha',
+      color: 'indigo',
+      description: ko
+        ? 'view-transition-name으로 카드↔상세 뷰 간 모핑 전환을 시연합니다.'
+        : 'Demonstrates morphing between card and detail view via view-transition-name.',
+      detail: ko
+        ? 'View Transition API는 브라우저가 DOM 변경 전후 스냅샷을 자동으로 캡처하여 부드러운 애니메이션을 만들어줍니다. view-transition-name이 같은 요소끼리 위치와 크기가 자연스럽게 전환됩니다.'
+        : 'The View Transition API captures snapshots before and after DOM changes, creating smooth animations automatically. Elements sharing the same view-transition-name morph their position and size seamlessly.',
+    },
+    {
+      id: 'beta',
+      title: 'Beta',
+      color: 'emerald',
+      description: ko
+        ? '프레임워크 수정 없이 CSS와 인라인 스타일만으로 구현됩니다.'
+        : 'Implemented with just CSS and inline styles — no framework changes needed.',
+      detail: ko
+        ? 'StateSurface 엔진이 sync()에서 startViewTransition()을 감싸고 있으므로, 템플릿에서 style={{ viewTransitionName: "이름" }}만 지정하면 모핑이 자동으로 적용됩니다.'
+        : 'Since the StateSurface engine wraps sync() with startViewTransition(), templates just need to set style={{ viewTransitionName: "name" }} and morphing happens automatically.',
+    },
+    {
+      id: 'gamma',
+      title: 'Gamma',
+      color: 'amber',
+      description: ko
+        ? '미지원 브라우저에서는 기존처럼 즉시 전환됩니다 (프로그레시브 인핸스먼트).'
+        : 'Falls back to instant transitions in unsupported browsers (progressive enhancement).',
+      detail: ko
+        ? '엔진이 document.startViewTransition 존재 여부를 확인하고, 미지원 브라우저에서는 콜백을 직접 호출합니다. 기능은 동일하게 동작하되 애니메이션만 생략됩니다.'
+        : 'The engine checks for document.startViewTransition and calls the callback directly in unsupported browsers. Functionality works identically — only the animation is skipped.',
+    },
+  ];
+
+  return {
+    'page:header': {
+      title: ko ? 'View Transition 데모' : 'View Transition Demo',
+      nav: 'view-transition',
+      lang,
+    },
+    'vt:description': {
+      title: ko ? 'View Transition Name 모핑' : 'View Transition Name Morphing',
+      description: ko
+        ? '카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. 뒤로가기를 누르면 역방향 모핑이 일어납니다.'
+        : 'Click a card to see the element morph smoothly into a detail view via view-transition-name. Press back for reverse morphing.',
+    },
+    'vt:gallery': {
+      mode: 'grid' as const,
+      cards,
+      lang,
+    },
+  };
+}
+
 // ── Search page ──
 
 type SearchableItem = {
