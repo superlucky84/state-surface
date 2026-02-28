@@ -37,7 +37,7 @@ Open `http://localhost:3000` — the demo site runs with SSR, streaming transiti
 
 ### Surface
 
-Define a page layout with named slots. The surface itself never changes during a page visit.
+Define a page layout mixing static HTML with dynamic slots. The surface never changes during a page visit — only the content inside each `<h-state>` updates.
 
 ```typescript
 // routes/dashboard.ts
@@ -46,8 +46,13 @@ import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
   layout: stateScript => baseSurface(joinSurface(
-    '<main class="grid grid-cols-3 gap-4">',
-    stateSlots('stock:price', 'stock:news', 'stock:chart'),
+    '<main class="max-w-6xl mx-auto p-6">',
+    '  <h1 class="text-2xl font-bold mb-6">Stock Dashboard</h1>',
+    '  <div class="grid grid-cols-3 gap-4 mb-8">',
+           stateSlots('stock:price', 'stock:news', 'stock:chart'),
+    '  </div>',
+    '  <h2 class="text-lg font-semibold mb-3">Market Analysis</h2>',
+           stateSlots('stock:analysis'),
     '</main>',
   ), stateScript),
 } satisfies RouteModule;
