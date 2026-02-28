@@ -27,28 +27,55 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 **Exit**: 모든 사용자 파일(`routes/`, `layouts/`, `shared/`)에서 engine import가 `'state-surface'`로 통일.
 
 ### 퍼사드 barrel
-- [ ] `engine/index.ts` 생성 — public API re-export:
+- [x] `engine/index.ts` 생성 — public API re-export:
   - `defineTemplate` (from `./shared/templateRegistry.js`)
   - `defineTransition` (from `./server/transition.js`)
   - `prefixPath`, `getBasePath` (from `./shared/basePath.js`)
   - `type RouteModule` (from `./shared/routeModule.js`)
   - `type StateFrame` (from `./shared/protocol.js`)
-- [ ] public API 외의 engine 내부 모듈은 barrel에 포함하지 않음 (경계 명확화).
+- [x] public API 외의 engine 내부 모듈은 barrel에 포함하지 않음 (경계 명확화).
 
 ### Alias 설정
-- [ ] `tsconfig.json` — `paths` 에 `"state-surface": ["./engine/index.ts"]` 추가.
-- [ ] `vite.config.ts` — `resolve.alias`에 `state-surface` → `engine/index.ts` 추가.
+- [x] `tsconfig.json` — `paths` 에 `"state-surface": ["./engine/index.ts"]` 추가.
+- [x] `vite.config.ts` — `resolve.alias`에 `state-surface` → `engine/index.ts` 추가.
+- [x] `vitest.config.ts` — `resolve.alias` 추가 (테스트 환경).
+- [x] `package.json` — `exports` self-reference 추가 (tsx 서버 환경).
 
 ### 사용자 코드 마이그레이션
-- [ ] `routes/**/*.ts`, `routes/**/*.tsx` — 상대경로 engine import를 `'state-surface'`로 일괄 변경.
-- [ ] `layouts/*.ts` — 동일 변경.
-- [ ] `shared/*.ts` (코드 import만, 가이드 콘텐츠 내 코드 예시 문자열은 별도) — 동일 변경.
-- [ ] `shared/content.ts` 내 가이드 코드 예시 문자열에서도 import 경로를 `'state-surface'`로 변경.
+- [x] `routes/**/*.ts`, `routes/**/*.tsx` — 상대경로 engine import를 `'state-surface'`로 일괄 변경.
+- [x] `layouts/*.ts` — 동일 변경.
+- [x] `shared/*.ts` (코드 import만, 가이드 콘텐츠 내 코드 예시 문자열은 별도) — 동일 변경.
+- [x] `shared/content.ts` 내 가이드 코드 예시 문자열에서도 import 경로를 `'state-surface'`로 변경.
 
 ### Baseline 테스트
-- [ ] `pnpm test` 전체 통과 (기존 347개 테스트 회귀 없음).
+- [x] `pnpm test` 전체 통과 (기존 347개 테스트 회귀 없음).
 - [ ] `pnpm dev` 실행 후 최소 1개 route SSR + 1개 transition NDJSON 응답 확인.
-- [ ] engine 내부 모듈 간 import는 상대경로 유지 (alias 미적용) 확인.
+- [x] engine 내부 모듈 간 import는 상대경로 유지 (alias 미적용) 확인.
+
+---
+
+## Phase 2-1.5: 가이드 코드 블록 UX 개선
+
+가이드 페이지의 코드 비교 섹션에서 React 예제가 30~60줄로 화면을 점유해 StateSurface 코드의 간결함이 묻힌다.
+소제목으로 구분감을 주고, React 비교 코드는 접어서 필요할 때만 펼쳐보게 한다.
+
+**Entry**: Phase 2-1 완료.
+**Exit**: 가이드 페이지에서 React 비교 코드가 `<details>`로 접혀있고, 코드 블록 간 소제목 구분이 명확.
+
+### 콘텐츠 모델 확장
+- [ ] `Block` 타입에 `collapsible?: boolean` 플래그 추가 (`shared/content.ts`의 code 블록 타입).
+- [ ] React 비교 코드 블록(`label`에 `✗` 포함)에 `collapsible: true` 적용 (en/ko 양쪽).
+
+### 렌더러 수정
+- [ ] `guideContent.tsx`의 `CodeBlock` — `collapsible` 일 때 `<details>/<summary>`로 감싸기.
+  - `<summary>`에 label 표시, 접힌 상태에서 "Click to expand" 힌트.
+  - 펼침/접힘 전환 애니메이션 (CSS `details[open]`).
+- [ ] `CodeBlock`의 `label`을 시각적으로 강조된 서브헤딩 스타일로 변경 (현재는 작은 회색 텍스트).
+
+### Baseline 테스트
+- [ ] `pnpm test` 전체 통과 (가이드 콘텐츠 i18n 패리티 테스트 포함).
+- [ ] `pnpm dev` → `/guide/surface` 에서 React 코드가 접혀있고 클릭 시 펼쳐짐 확인.
+- [ ] en/ko 양쪽 가이드에서 동일하게 동작 확인.
 
 ---
 
@@ -346,27 +373,28 @@ Phase 전체를 관통하는 통합 검증.
 
 | 순서 | Phase | 중요도 | 비고 |
 |------|-------|--------|------|
-| 1 | **2-1 퍼사드 + Alias** | Critical | DX 핵심, 이후 모든 문서/CLI의 전제 |
-| 2 | 2-2 라이선스 | Critical | 5분이면 끝남 |
-| 3 | 2-3 README | Critical | 오픈소스 첫인상 |
-| 4 | 2-5 package.json | Critical | 배포 기본 설정 |
-| 5 | 2-6 CLI | Critical | 사용자 진입점 |
-| 6 | 2-7 프로덕션 빌드 | High | 실사용 필수 |
-| 7 | 2-9 에러/보안 | High | 품질 신뢰도 |
-| 8 | 2-10 CI | High | 기여자 신뢰도 |
-| 9 | 2-4 문서 정리 | Medium | 혼란 방지 |
-| 10 | 2-8 설정 | Medium | 사용 편의 |
-| 11 | 2-11 커뮤니티 | Medium | 기여 촉진 |
-| 12 | 2-12 타입 | Medium | DX |
-| 13 | **2-13 Test Hardening** | Medium | 품질 게이트 |
-| 14 | **2-14 Integration Test** | Medium | 최종 검증 |
+| ~~1~~ | ~~**2-1 퍼사드 + Alias**~~ | ~~Critical~~ | ✅ 완료 (`78af4c3`) |
+| 2 | **2-1.5 가이드 코드 블록 UX** | High | 가이드 가독성, React 코드 접기 |
+| 3 | 2-2 라이선스 | Critical | 5분이면 끝남 |
+| 4 | 2-3 README | Critical | 오픈소스 첫인상 |
+| 5 | 2-5 package.json | Critical | 배포 기본 설정 |
+| 6 | 2-6 CLI | Critical | 사용자 진입점 |
+| 7 | 2-7 프로덕션 빌드 | High | 실사용 필수 |
+| 8 | 2-9 에러/보안 | High | 품질 신뢰도 |
+| 9 | 2-10 CI | High | 기여자 신뢰도 |
+| 10 | 2-4 문서 정리 | Medium | 혼란 방지 |
+| 11 | 2-8 설정 | Medium | 사용 편의 |
+| 12 | 2-11 커뮤니티 | Medium | 기여 촉진 |
+| 13 | 2-12 타입 | Medium | DX |
+| 14 | **2-13 Test Hardening** | Medium | 품질 게이트 |
+| 15 | **2-14 Integration Test** | Medium | 최종 검증 |
 | 15 | 2-15 로깅 | Low | 선택 |
 
 ---
 
 ## Handoff Status
 
-- **Done**: IMPLEMENT_PHASE2.md 초안 작성, IMPLEMENT.md 동결 안내 추가.
-- **Next**: Phase 2-1 (퍼사드 + alias) 착수.
+- **Done**: Phase 2-1 (퍼사드 + alias) 완료. 42파일 변경, 347 테스트 통과. `pnpm dev` 스모크 1건 미확인.
+- **Next**: Phase 2-2 (라이선스 — DC-01 확정 필요) → Phase 2-3 (README).
 - **Blockers**: 없음.
-- **Commit**: TBD (Phase 2 작업 시작 시 기록).
+- **Commit**: `78af4c3` refactor: add public API facade and 'state-surface' import alias.
