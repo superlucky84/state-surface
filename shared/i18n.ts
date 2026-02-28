@@ -1,4 +1,4 @@
-import { getBasePath } from '../engine/shared/basePath.js';
+import { getBasePath } from 'state-surface';
 
 export type Lang = 'ko' | 'en';
 

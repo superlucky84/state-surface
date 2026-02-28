@@ -1,4 +1,4 @@
-import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { defineTemplate } from 'state-surface';
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 

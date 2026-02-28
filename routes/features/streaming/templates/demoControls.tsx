@@ -1,4 +1,4 @@
-import { defineTemplate } from '../../../../engine/shared/templateRegistry.js';
+import { defineTemplate } from 'state-surface';
 
 type ControlsProps = {
   description: string;

@@ -1,5 +1,4 @@
-import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
-import { prefixPath } from '../../../engine/shared/basePath.js';
+import { defineTemplate, prefixPath } from 'state-surface';
 
 type HeroProps = {
   badge?: string;

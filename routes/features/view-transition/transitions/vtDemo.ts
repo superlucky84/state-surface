@@ -1,5 +1,5 @@
-import type { StateFrame } from '../../../../engine/shared/protocol.js';
-import { defineTransition } from '../../../../engine/server/transition.js';
+import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 import { isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 import { viewTransitionContent } from '../../../../shared/content.js';

@@ -1,5 +1,5 @@
 import type { Lang } from './i18n.js';
-import { prefixPath } from '../engine/shared/basePath.js';
+import { prefixPath } from 'state-surface';
 
 // ── Bilingual text helper ──
 
@@ -229,7 +229,7 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
               lang: 'typescript',
               label: '✓ StateSurface — 7 lines',
               text: `// routes/dashboard.ts — Stock dashboard with 3 independent panels
-import type { RouteModule } from '../engine/shared/routeModule.js';
+import type { RouteModule } from 'state-surface';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
@@ -459,7 +459,7 @@ function Dashboard() {
               type: 'sequence',
               steps: [
                 'Create routes/my-page/templates/myContent.tsx.',
-                'Import defineTemplate from engine/shared/templateRegistry.js.',
+                'Import defineTemplate from state-surface.',
                 'Define props type matching the data your transition sends in states.',
                 'Write a pure stateless function component.',
                 "Export: export default defineTemplate('slot-name', Component) — name must match <h-state name>.",
@@ -476,7 +476,7 @@ function Dashboard() {
               lang: 'tsx',
               label: '✓ StateSurface — 12 lines',
               text: `// routes/dashboard/templates/stockPrice.tsx
-import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { defineTemplate } from 'state-surface';
 
 type Props = { symbol: string; price: number; change: number; loading?: boolean };
 
@@ -680,7 +680,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'sequence',
               steps: [
                 'Create routes/my-page/transitions/myTransition.ts.',
-                'Import defineTransition from engine/server/transition.js and StateFrame from engine/shared/protocol.js.',
+                'Import defineTransition and StateFrame from state-surface.',
                 'Write async function*(params): AsyncGenerator<StateFrame>.',
                 'First yield must be a full frame (omit full or set full: true) — declares complete UI state.',
                 'Use full: false + changed/removed arrays for subsequent partial updates.',
@@ -699,8 +699,8 @@ function StockPrice({ symbol }: { symbol: string }) {
               lang: 'typescript',
               label: '✓ StateSurface — 18 lines, 3-stage UX',
               text: `// routes/search/transitions/search.ts — skeleton → cached → live
-import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   // Stage 1: loading skeleton
@@ -1223,8 +1223,8 @@ function ShippingForm() {
               type: 'code',
               lang: 'typescript',
               label: 'routes/chat/transitions/chat.ts',
-              text: `import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+              text: `import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   const userMsg = { id: crypto.randomUUID(), role: 'user', text: String(message) };
@@ -1410,7 +1410,7 @@ export default defineTransition('chat', chat);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books.ts  ← create this file',
-              text: `import type { RouteModule } from '../engine/shared/routeModule.js';
+              text: `import type { RouteModule } from 'state-surface';
 
 export default {
   layout: stateScript => \`<!DOCTYPE html>
@@ -1457,7 +1457,7 @@ export default {
               type: 'code',
               lang: 'tsx',
               label: 'routes/books/templates/booksSearch.tsx  ← search form (8 lines)',
-              text: `import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+              text: `import { defineTemplate } from 'state-surface';
 
 type Props = { query?: string };
 
@@ -1478,7 +1478,7 @@ export default defineTemplate('books:search', BooksSearch);`,
               type: 'code',
               lang: 'tsx',
               label: 'routes/books/templates/booksResults.tsx  ← results (9 lines)',
-              text: `import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+              text: `import { defineTemplate } from 'state-surface';
 
 type Book = { title: string; author: string };
 type Props = { loading?: boolean; books?: Book[] };
@@ -1524,8 +1524,8 @@ export default defineTemplate('books:results', BooksResults);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books/transitions/bookSearch.ts  ← server logic (12 lines)',
-              text: `import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+              text: `import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   // Frame 1 (full) — loading state
@@ -1714,7 +1714,7 @@ export default defineTransition('book-search', bookSearch);`,
               lang: 'typescript',
               label: '✓ StateSurface — 7줄',
               text: `// routes/dashboard.ts — 독립 업데이트되는 3패널 주식 대시보드
-import type { RouteModule } from '../engine/shared/routeModule.js';
+import type { RouteModule } from 'state-surface';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
@@ -1944,7 +1944,7 @@ function Dashboard() {
               type: 'sequence',
               steps: [
                 'routes/my-page/templates/myContent.tsx를 만듭니다.',
-                'engine/shared/templateRegistry.js에서 defineTemplate을 import합니다.',
+                'state-surface에서 defineTemplate을 import합니다.',
                 'transition이 states에 보낼 데이터와 일치하는 props 타입을 정의합니다.',
                 '순수 무상태 함수형 컴포넌트를 작성합니다.',
                 "export default defineTemplate('slot-name', Component)으로 export합니다 — 이름이 <h-state name>과 일치해야 합니다.",
@@ -1961,7 +1961,7 @@ function Dashboard() {
               lang: 'tsx',
               label: '✓ StateSurface — 12줄',
               text: `// routes/dashboard/templates/stockPrice.tsx
-import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { defineTemplate } from 'state-surface';
 
 type Props = { symbol: string; price: number; change: number; loading?: boolean };
 
@@ -2165,7 +2165,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'sequence',
               steps: [
                 'routes/my-page/transitions/myTransition.ts를 만듭니다.',
-                'engine/server/transition.js에서 defineTransition을, engine/shared/protocol.js에서 StateFrame을 import합니다.',
+                'state-surface에서 defineTransition과 StateFrame을 import합니다.',
                 'async function*(params): AsyncGenerator<StateFrame>을 작성합니다.',
                 '첫 yield는 반드시 full 프레임이어야 합니다 (full 생략 또는 true) — 전체 UI 상태를 선언합니다.',
                 '이후 부분 업데이트에는 full: false + changed/removed 배열을 사용합니다.',
@@ -2184,8 +2184,8 @@ function StockPrice({ symbol }: { symbol: string }) {
               lang: 'typescript',
               label: '✓ StateSurface — 18줄, 3단계 UX',
               text: `// routes/search/transitions/search.ts — 스켈레톤 → 캐시 → 실시간
-import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   // 1단계: 로딩 스켈레톤
@@ -2703,8 +2703,8 @@ function ShippingForm() {
               type: 'code',
               lang: 'typescript',
               label: 'routes/chat/transitions/chat.ts',
-              text: `import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+              text: `import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   const userMsg = { id: crypto.randomUUID(), role: 'user', text: String(message) };
@@ -2890,7 +2890,7 @@ export default defineTransition('chat', chat);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books.ts  ← 이 파일을 만드세요',
-              text: `import type { RouteModule } from '../engine/shared/routeModule.js';
+              text: `import type { RouteModule } from 'state-surface';
 
 export default {
   layout: stateScript => \`<!DOCTYPE html>
@@ -2937,7 +2937,7 @@ export default {
               type: 'code',
               lang: 'tsx',
               label: 'routes/books/templates/booksSearch.tsx  ← 검색 폼 (8줄)',
-              text: `import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+              text: `import { defineTemplate } from 'state-surface';
 
 type Props = { query?: string };
 
@@ -2958,7 +2958,7 @@ export default defineTemplate('books:search', BooksSearch);`,
               type: 'code',
               lang: 'tsx',
               label: 'routes/books/templates/booksResults.tsx  ← 결과 (9줄)',
-              text: `import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+              text: `import { defineTemplate } from 'state-surface';
 
 type Book = { title: string; author: string };
 type Props = { loading?: boolean; books?: Book[] };
@@ -3004,8 +3004,8 @@ export default defineTemplate('books:results', BooksResults);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books/transitions/bookSearch.ts  ← 서버 로직 (12줄)',
-              text: `import { defineTransition } from '../../../engine/server/transition.js';
-import type { StateFrame } from '../../../engine/shared/protocol.js';
+              text: `import { defineTransition } from 'state-surface';
+import type { StateFrame } from 'state-surface';
 
 async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
   // 프레임 1 (full) — 로딩 상태

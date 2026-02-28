@@ -1,4 +1,4 @@
-import { prefixPath } from '../engine/shared/basePath.js';
+import { prefixPath } from 'state-surface';
 
 type SurfaceBlock = string | false | null | undefined;
 

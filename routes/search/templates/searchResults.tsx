@@ -1,4 +1,4 @@
-import { defineTemplate } from '../../../engine/shared/templateRegistry.js';
+import { defineTemplate } from 'state-surface';
 
 type SearchItem = { title: string; description: string; href: string };
 type SearchResultsProps = {

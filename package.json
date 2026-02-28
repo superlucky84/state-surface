@@ -4,6 +4,9 @@
   "private": true,
   "description": "StateSurface reference implementation",
   "type": "module",
+  "exports": {
+    ".": "./engine/index.ts"
+  },
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.13.1",
   "scripts": {

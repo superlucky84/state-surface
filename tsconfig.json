@@ -10,7 +10,11 @@
     "rootDir": ".",
     "jsx": "react-jsx",
     "jsxImportSource": "lithent",
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "state-surface": ["./engine/index.ts"]
+    }
   },
   "include": ["engine", "server", "client", "shared", "routes", "layouts"],
   "exclude": ["node_modules", "dist"]
