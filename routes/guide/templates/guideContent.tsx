@@ -27,7 +27,17 @@ const PRISM_LANG_MAP: Record<string, string> = {
   js: 'javascript',
 };
 
-const CodeBlock = ({ lang, label, text }: { lang?: string; label?: string; text: string }) => {
+const CodeBlockInner = ({
+  lang,
+  label,
+  text,
+  showLabel,
+}: {
+  lang?: string;
+  label?: string;
+  text: string;
+  showLabel?: boolean;
+}) => {
   const prismLang = lang ? PRISM_LANG_MAP[lang] || lang : '';
   const langClass = prismLang ? `language-${prismLang}` : '';
   return (
@@ -39,7 +49,9 @@ const CodeBlock = ({ lang, label, text }: { lang?: string; label?: string; text:
               {lang}
             </span>
           )}
-          {label && <span class="font-mono text-xs text-slate-500">{label}</span>}
+          {showLabel && label && (
+            <span class="font-mono text-xs text-slate-500">{label}</span>
+          )}
         </div>
         <button
           type="button"
@@ -59,6 +71,50 @@ const CodeBlock = ({ lang, label, text }: { lang?: string; label?: string; text:
       <div class="overflow-x-auto">
         <pre class="code-with-lines p-4 font-mono text-xs leading-snug"><code class={langClass}>{text}</code></pre>
       </div>
+    </div>
+  );
+};
+
+const CodeBlock = ({
+  lang,
+  label,
+  text,
+  collapsible,
+}: {
+  lang?: string;
+  label?: string;
+  text: string;
+  collapsible?: boolean;
+}) => {
+  if (collapsible) {
+    return (
+      <div class="space-y-1.5">
+        <details class="code-collapsible group">
+          <summary class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-slate-500 transition select-none hover:bg-slate-100">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform group-open:rotate-90"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <path d="M6 3l5 5-5 5V3z" />
+            </svg>
+            {label}
+          </summary>
+          <div class="code-collapsible-body">
+            <CodeBlockInner lang={lang} text={text} />
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <div class="space-y-1.5">
+      {label && (
+        <p class="text-sm font-semibold text-emerald-600">{label}</p>
+      )}
+      <CodeBlockInner lang={lang} text={text} />
     </div>
   );
 };
@@ -196,7 +252,15 @@ function renderBlock(block: Block, idx: number) {
     case 'bullets':
       return <BulletsBlock key={idx} items={block.items} />;
     case 'code':
-      return <CodeBlock key={idx} lang={block.lang} label={block.label} text={block.text} />;
+      return (
+        <CodeBlock
+          key={idx}
+          lang={block.lang}
+          label={block.label}
+          text={block.text}
+          collapsible={block.collapsible}
+        />
+      );
     case 'checklist':
       return <ChecklistBlock key={idx} items={block.items} />;
     case 'warning':

@@ -11,7 +11,7 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 
 미해결 설계 결정. 해당 Phase 착수 전에 확정하고 근거를 기록한다.
 
-- [ ] **DC-01** 라이선스 선택: MIT / Apache-2.0 / ISC — TBD (Phase 2-2 착수 전 확정)
+- [x] **DC-01** 라이선스 선택: **MIT** 확정
 - [ ] **DC-02** 프로덕션 서버 실행 방식: `tsx` 직접 실행(A) vs `tsup`/`esbuild` 번들(B) — TBD (Phase 2-7 착수 전 확정)
 - [ ] **DC-03** 설정 파일 도입 여부: 환경 변수만(A) vs `state-surface.config.ts`(B) — TBD (Phase 2-8 착수 전 확정)
 - [ ] **DC-04** E2E 테스트 도구: Playwright(A) vs Cypress(B) vs 생략(C) — TBD (Phase 2-14 착수 전 확정)
@@ -63,17 +63,19 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 **Exit**: 가이드 페이지에서 React 비교 코드가 `<details>`로 접혀있고, 코드 블록 간 소제목 구분이 명확.
 
 ### 콘텐츠 모델 확장
-- [ ] `Block` 타입에 `collapsible?: boolean` 플래그 추가 (`shared/content.ts`의 code 블록 타입).
-- [ ] React 비교 코드 블록(`label`에 `✗` 포함)에 `collapsible: true` 적용 (en/ko 양쪽).
+- [x] `Block` 타입에 `collapsible?: boolean` 플래그 추가 (`shared/content.ts`의 code 블록 타입).
+- [x] React 비교 코드 블록(`label`에 `✗` 포함)에 `collapsible: true` 적용 (en/ko 양쪽, 8개).
 
 ### 렌더러 수정
-- [ ] `guideContent.tsx`의 `CodeBlock` — `collapsible` 일 때 `<details>/<summary>`로 감싸기.
-  - `<summary>`에 label 표시, 접힌 상태에서 "Click to expand" 힌트.
-  - 펼침/접힘 전환 애니메이션 (CSS `details[open]`).
-- [ ] `CodeBlock`의 `label`을 시각적으로 강조된 서브헤딩 스타일로 변경 (현재는 작은 회색 텍스트).
+- [x] `guideContent.tsx`의 `CodeBlock` — `collapsible` 일 때 `<details>/<summary>`로 감싸기.
+  - `<summary>`에 label 표시, 화살표 아이콘 포함, open 시 rotate-90 애니메이션.
+  - 펼침/접힘 전환 애니메이션 (CSS `grid-template-rows` 트랜지션).
+- [x] `CodeBlock`의 `label`을 시각적으로 강조된 서브헤딩 스타일로 변경.
+  - ✓ label: emerald-600 font-semibold (StateSurface 예제)
+  - ✗ label: red-400 font-semibold in summary (React 비교, collapsible)
 
 ### Baseline 테스트
-- [ ] `pnpm test` 전체 통과 (가이드 콘텐츠 i18n 패리티 테스트 포함).
+- [x] `pnpm test` 전체 통과 (347개, 가이드 콘텐츠 i18n 패리티 테스트 포함).
 - [ ] `pnpm dev` → `/guide/surface` 에서 React 코드가 접혀있고 클릭 시 펼쳐짐 확인.
 - [ ] en/ko 양쪽 가이드에서 동일하게 동작 확인.
 
@@ -84,12 +86,12 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 **Entry**: DC-01 확정.
 **Exit**: LICENSE 파일 존재, `package.json` license 필드 일치.
 
-- [ ] `LICENSE` 파일 생성 (DC-01에서 확정한 라이선스).
-- [ ] `package.json` — `"license"` 필드를 확정 라이선스로 변경.
+- [x] `LICENSE` 파일 생성 (MIT).
+- [x] `package.json` — `"license": "MIT"` 로 변경.
 
 ### Baseline 테스트
-- [ ] `LICENSE` 파일이 루트에 존재.
-- [ ] `package.json`의 `license` 필드와 `LICENSE` 파일 내용이 일치.
+- [x] `LICENSE` 파일이 루트에 존재.
+- [x] `package.json`의 `license` 필드와 `LICENSE` 파일 내용이 일치.
 
 ---
 
@@ -98,18 +100,18 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 **Entry**: Phase 2-1 (퍼사드 완료 — import 예시가 `'state-surface'`여야 함).
 **Exit**: README가 프로젝트 소개 + 퀵스타트 + 아키텍처 + API 개요를 포함.
 
-- [ ] 프로젝트 한줄 소개 + 핵심 컨셉 (MPA + NDJSON 스트리밍 + `<h-state>` 앵커).
-- [ ] 아키텍처 다이어그램 (Frame Flow: Action → POST → NDJSON → DOM).
-- [ ] 퀵스타트 (`npx create-state-surface my-app` → `pnpm dev`).
-- [ ] 4가지 핵심 개념 소개 (Surface, Template, Transition, Action).
-- [ ] 주요 기능 목록 (SSR, 스트리밍, abort previous, accumulate, i18n, View Transition API, 애니메이션 프리셋).
-- [ ] 프로젝트 구조 설명 (engine/ vs 사용자 코드).
-- [ ] 명령어 레퍼런스 (`pnpm dev`, `pnpm build`, `pnpm test` 등).
-- [ ] 라이선스 표기.
-- [ ] import 예시가 `'state-surface'` alias를 사용하는지 확인.
+- [x] 프로젝트 한줄 소개 + 핵심 컨셉 (MPA + NDJSON 스트리밍 + `<h-state>` 앵커).
+- [x] 아키텍처 다이어그램 (Frame Flow: Action → POST → NDJSON → DOM).
+- [x] 퀵스타트 (`npx create-state-surface my-app` → `pnpm dev`).
+- [x] 4가지 핵심 개념 소개 (Surface, Template, Transition, Action).
+- [x] 주요 기능 목록 (SSR, 스트리밍, abort previous, accumulate, i18n, View Transition API, 애니메이션 프리셋).
+- [x] 프로젝트 구조 설명 (engine/ vs 사용자 코드).
+- [x] 명령어 레퍼런스 (`pnpm dev`, `pnpm build`, `pnpm test` 등).
+- [x] 라이선스 표기.
+- [x] import 예시가 `'state-surface'` alias를 사용하는지 확인.
 
 ### Baseline 테스트
-- [ ] README 내 코드 예시의 import 경로가 전부 `'state-surface'`.
+- [x] README 내 코드 예시의 import 경로가 전부 `'state-surface'`.
 - [ ] README 내 명령어가 실제로 동작하는지 1회 수동 확인.
 
 ---

@@ -263,3 +263,27 @@ pre[class*="language-"] {
   user-select: none;
   pointer-events: none;
 }
+
+/* ── Collapsible code blocks (guide pages) ── */
+
+.code-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.code-collapsible summary::marker {
+  content: '';
+}
+
+.code-collapsible-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease-out;
+}
+
+.code-collapsible[open] > .code-collapsible-body {
+  grid-template-rows: 1fr;
+}
+
+.code-collapsible-body > * {
+  overflow: hidden;
+}

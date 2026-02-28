@@ -7,7 +7,7 @@
   "exports": {
     ".": "./engine/index.ts"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "tsx watch engine/server/index.ts",

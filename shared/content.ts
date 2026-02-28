@@ -130,7 +130,13 @@ export function homeContent(lang: Lang) {
 
 export type ParagraphBlock = { type: 'paragraph'; text: string };
 export type BulletsBlock = { type: 'bullets'; items: string[] };
-export type CodeBlock = { type: 'code'; lang?: string; label?: string; text: string };
+export type CodeBlock = {
+  type: 'code';
+  lang?: string;
+  label?: string;
+  text: string;
+  collapsible?: boolean;
+};
 export type ChecklistBlock = { type: 'checklist'; items: string[] };
 export type WarningBlock = { type: 'warning'; text: string };
 export type SequenceBlock = { type: 'sequence'; steps: string[] };
@@ -249,7 +255,8 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ Traditional approach — 27 lines, 2 hidden issues',
+              label: 'Traditional approach — 27 lines, manual state + coupled re-renders',
+              collapsible: true,
               text: `// React-style dashboard — each panel manages its own data
 import { useState, useEffect } from 'react';
 import { StockPrice } from './StockPrice';
@@ -503,7 +510,8 @@ export default defineTemplate('stock:price', StockPrice);`,
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ Traditional approach — 38 lines, 3 hidden bugs',
+              label: 'Traditional approach — 38 lines, manual fetch + lifecycle management',
+              collapsible: true,
               text: `// React-style stock price component
 import { useState, useEffect, useRef } from 'react';
 
@@ -736,7 +744,8 @@ export default defineTransition('search', search);`,
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ Traditional approach — 35 lines, 3 race condition bugs',
+              label: 'Traditional approach — 35 lines, manual async coordination',
+              collapsible: true,
               text: `// React-style search with 3-stage UX
 import { useState, useEffect, useRef } from 'react';
 
@@ -1007,7 +1016,8 @@ h-state[data-animate="rotate"][data-just-updated] {
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ Traditional approach — 42 lines, 3 hidden bugs',
+              label: 'Traditional approach — 42 lines, manual form state + fetch wiring',
+              collapsible: true,
               text: `// React-style shipping form — manual state + fetch
 import { useState, useEffect, useCallback } from 'react';
 
@@ -1734,7 +1744,8 @@ export default {
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ 기존 방식 — 27줄, 숨겨진 문제 2개',
+              label: '기존 방식 — 27줄, 수동 상태 관리 + 연쇄 re-render',
+              collapsible: true,
               text: `// React 방식 대시보드 — 각 패널이 자체 데이터를 관리
 import { useState, useEffect } from 'react';
 import { StockPrice } from './StockPrice';
@@ -1988,7 +1999,8 @@ export default defineTemplate('stock:price', StockPrice);`,
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ 기존 방식 — 38줄, 숨겨진 버그 3개',
+              label: '기존 방식 — 38줄, 수동 fetch + 생명주기 관리',
+              collapsible: true,
               text: `// React 방식 주가 컴포넌트
 import { useState, useEffect, useRef } from 'react';
 
@@ -2221,7 +2233,8 @@ export default defineTransition('search', search);`,
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ 기존 방식 — 35줄, 레이스 컨디션 버그 3개',
+              label: '기존 방식 — 35줄, 수동 비동기 조율',
+              collapsible: true,
               text: `// React 방식 3단계 UX 검색
 import { useState, useEffect, useRef } from 'react';
 
@@ -2487,7 +2500,8 @@ h-state[data-animate="rotate"][data-just-updated] {
             {
               type: 'code',
               lang: 'tsx',
-              label: '✗ 기존 방식 — 42줄, 숨겨진 버그 3개',
+              label: '기존 방식 — 42줄, 수동 폼 상태 + fetch 연결',
+              collapsible: true,
               text: `// React 방식 배송 폼 — 수동 state + fetch
 import { useState, useEffect, useCallback } from 'react';
 
