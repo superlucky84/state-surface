@@ -1,4 +1,7 @@
-# StateSurface Implementation Tracker
+# StateSurface Implementation Tracker (Phase 1 — 동결)
+
+> **Phase 2 (오픈소스 릴리스 준비)는 [`IMPLEMENT_PHASE2.md`](./IMPLEMENT_PHASE2.md)를 참조.**
+> 이 문서는 Phase 1 완료 기록으로 동결되었으며, 미완료 항목은 Phase 2로 이관됨.
 
 This document turns `DESIGN.md` into an executable implementation plan.
 If context is lost, read in order:
