@@ -136,16 +136,16 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 프로덕션 프레임워�
 **Entry**: Phase 2-2 완료.
 **Exit**: npm publish를 가로막는 필드가 제거되고 메타 필드 완비.
 
-- [ ] `"private": true` 제거.
-- [ ] `"keywords"` 추가 (`state-surface`, `mpa`, `ndjson`, `streaming`, `ssr` 등).
-- [ ] `"repository"`, `"homepage"`, `"bugs"` 필드 추가.
-- [ ] `"engines"` 필드 추가 (`"node": ">=20"`).
-- [ ] 버전 정책 확정 (0.x 시맨틱 버저닝).
+- [x] `"private": true` 제거.
+- [x] `"keywords"` 추가 (`state-surface`, `mpa`, `ndjson`, `streaming`, `ssr` 등).
+- [x] `"repository"`, `"homepage"`, `"bugs"` 필드 추가.
+- [x] `"engines"` 필드 추가 (`"node": ">=20"`).
+- [x] 버전 정책 확정 (0.x 시맨틱 버저닝).
 
 > Note: `exports` 맵은 Phase 2-12(Public API 분리)에서 `./server`, `./client` 진입점과 함께 확정.
 
 ### Baseline 테스트
-- [ ] `npm pack --dry-run` 실행 시 에러 없음.
+- [x] `npm pack --dry-run` 실행 시 에러 없음.
 
 ---
 

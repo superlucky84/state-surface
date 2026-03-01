@@ -1,13 +1,34 @@
 {
   "name": "state-surface",
   "version": "0.1.0",
-  "private": true,
   "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
   "exports": {
     ".": "./engine/index.ts"
   },
   "license": "MIT",
+  "keywords": [
+    "state-surface",
+    "mpa",
+    "ndjson",
+    "streaming",
+    "ssr",
+    "server-driven-ui",
+    "state-management",
+    "hydration",
+    "real-time"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superlucky84/state-surface.git"
+  },
+  "homepage": "https://github.com/superlucky84/state-surface#readme",
+  "bugs": {
+    "url": "https://github.com/superlucky84/state-surface/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "tsx watch engine/server/index.ts",
