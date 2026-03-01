@@ -76,8 +76,8 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 
 ### Baseline 테스트
 - [x] `pnpm test` 전체 통과 (347개, 가이드 콘텐츠 i18n 패리티 테스트 포함).
-- [ ] `pnpm dev` → `/guide/surface` 에서 React 코드가 접혀있고 클릭 시 펼쳐짐 확인.
-- [ ] en/ko 양쪽 가이드에서 동일하게 동작 확인.
+- [x] `pnpm dev` → `/guide/surface` 에서 React 코드가 접혀있고 클릭 시 펼쳐짐 확인.
+- [x] en/ko 양쪽 가이드에서 동일하게 동작 확인.
 
 ---
 
