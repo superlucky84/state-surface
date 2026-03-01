@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { app } from './index.js';
+import { createApp } from './index.js';
+
+let app: any;
+beforeAll(async () => {
+  ({ app } = await createApp());
+});
 import { registerTransition } from './transition.js';
 import type { StateFrame } from '../shared/protocol.js';
 import { decodeFrames } from '../shared/ndjson.js';

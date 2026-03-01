@@ -6,109 +6,27 @@ import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
 import { getLang, isValidLang, langCookie } from '../../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
-import { scanRoutes } from './routeScanner.js';
+import { scanRoutes, fileToUrlPattern } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
 import { setBasePath, prefixPath } from '../shared/basePath.js';
+import { loadManifest } from './assets.js';
 import type { RouteModule } from '../shared/routeModule.js';
 
-// Initialize basePath from environment variable (must be done before any route/content import)
-setBasePath(process.env.BASE_PATH ?? '');
+export interface StateSurfaceServerOptions {
+  port?: number;
+  basePath?: string;
+  securityHeaders?: boolean;
+  bodyLimit?: string;
+  transitionTimeout?: number;
+  // hooks?: TransitionHooks; ← Phase 2-8
+}
 
-const app = express();
-const PORT = 3000;
-
-app.use(express.json());
-
-// Auto-register transitions and templates
-await bootstrapServer();
-
-// Auto-discover and register route modules
 function resolveRootDir(): string {
   try {
     return fileURLToPath(new URL('../..', import.meta.url));
   } catch {
     return process.cwd();
   }
-}
-
-const routesDir = path.join(resolveRootDir(), 'routes');
-const scannedRoutes = await scanRoutes(routesDir);
-
-for (const route of scannedRoutes) {
-  const mod = await import(pathToFileURL(route.filePath).href);
-  const routeModule = extractRouteModule(mod);
-  app.get(prefixPath(route.urlPattern), createRouteHandler(routeModule));
-}
-
-// POST /transition/:name — NDJSON streaming endpoint
-app.post(prefixPath('/transition/:name'), async (req, res) => {
-  const handler = getTransition(req.params.name);
-
-  if (!handler) {
-    res.status(404).json({ error: `Transition "${req.params.name}" not found` });
-    return;
-  }
-
-  // Set language cookie for switch-lang transition
-  if (req.params.name === 'switch-lang' && isValidLang(req.body?.lang)) {
-    res.setHeader('Set-Cookie', langCookie(req.body.lang));
-  }
-
-  res.setHeader('Content-Type', 'application/x-ndjson');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Transfer-Encoding', 'chunked');
-
-  try {
-    // Auto-inject lang from cookie if not provided in body
-    const body = req.body ?? {};
-    if (!body.lang) body.lang = getLang(req);
-    const gen = handler(body);
-
-    for await (const frame of gen) {
-      // Validate before streaming
-      const result = validateStateFrame(frame);
-      if (!result.valid) {
-        const errorFrame = encodeFrame({
-          type: 'error',
-          message: `Invalid frame: ${result.reason}`,
-        });
-        res.write(errorFrame);
-        break;
-      }
-
-      res.write(encodeFrame(frame));
-
-      if (frame.type === 'done') break;
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown server error';
-    res.write(encodeFrame({ type: 'error', message }));
-  }
-
-  res.end();
-});
-
-// Dev server with Vite middleware for client-side TS
-async function startDev() {
-  const { createServer } = await import('vite');
-  const vite = await createServer({
-    server: { middlewareMode: true },
-    appType: 'custom',
-  });
-
-  // Vite handles client TS/JS module serving
-  app.use(vite.middlewares);
-
-  // 404 handler — AFTER Vite middleware so assets are served first
-  app.use((_req, res) => {
-    res.status(404).send('Not Found');
-  });
-
-  app.listen(PORT, () => {
-    console.log(`StateSurface dev server running at http://localhost:${PORT}`);
-    console.log(`  Routes: ${scannedRoutes.map(r => r.urlPattern).join(', ')}`);
-    console.log(`  Debug overlay: http://localhost:${PORT}/?debug=1`);
-  });
 }
 
 function extractRouteModule(mod: any): RouteModule {
@@ -119,13 +37,161 @@ function extractRouteModule(mod: any): RouteModule {
   throw new Error('Route module must default-export an object with a layout function');
 }
 
-// In test mode, add 404 handler directly (no Vite middleware)
-if (process.env.NODE_ENV === 'test') {
-  app.use((_req: express.Request, res: express.Response) => {
-    res.status(404).send('Not Found');
-  });
-} else {
-  startDev();
+type RouteEntry = { urlPattern: string; mod: any };
+
+/**
+ * Try loading route modules via import.meta.glob (works in Vite bundle).
+ * Returns null if glob is not available (e.g. plain Node.js / tsx dev mode).
+ */
+function loadRoutesFromGlob(): RouteEntry[] | null {
+  try {
+    const entries = Object.entries(
+      import.meta.glob(['/routes/**/*.ts', '!**/*.test.ts', '!**/transitions/**', '!**/templates/**', '!**/_shared/**'], { eager: true })
+    );
+    const routes: RouteEntry[] = [];
+    for (const [filePath, mod] of entries) {
+      // Convert glob path (e.g. /routes/search.ts) to relative path for URL pattern
+      const relativePath = filePath.replace(/^\/routes\//, '');
+      const urlPattern = fileToUrlPattern(relativePath);
+      routes.push({ urlPattern, mod });
+    }
+    // Sort: static before dynamic
+    return routes.sort((a, b) => {
+      const aDynamic = a.urlPattern.includes(':');
+      const bDynamic = b.urlPattern.includes(':');
+      if (aDynamic !== bDynamic) return aDynamic ? 1 : -1;
+      return a.urlPattern.localeCompare(b.urlPattern);
+    });
+  } catch {
+    return null;
+  }
 }
 
-export { app };
+export async function createApp(options?: StateSurfaceServerOptions) {
+  const port = options?.port ?? (Number(process.env.PORT) || 3000);
+  const basePath = options?.basePath ?? process.env.BASE_PATH ?? '';
+  setBasePath(basePath);
+
+  const app = express();
+  app.use(express.json({ limit: options?.bodyLimit ?? '100kb' }));
+
+  // Auto-register transitions and templates
+  await bootstrapServer();
+
+  // Auto-discover and register route modules
+  // Try glob first (works in Vite SSR bundle), fall back to filesystem scan
+  const registeredPatterns: string[] = [];
+  const globRoutes = loadRoutesFromGlob();
+  if (globRoutes) {
+    for (const { urlPattern, mod } of globRoutes) {
+      const routeModule = extractRouteModule(mod);
+      app.get(prefixPath(urlPattern), createRouteHandler(routeModule));
+      registeredPatterns.push(urlPattern);
+    }
+  } else {
+    const routesDir = path.join(resolveRootDir(), 'routes');
+    const scannedRoutes = await scanRoutes(routesDir);
+    for (const route of scannedRoutes) {
+      const mod = await import(pathToFileURL(route.filePath).href);
+      const routeModule = extractRouteModule(mod);
+      app.get(prefixPath(route.urlPattern), createRouteHandler(routeModule));
+      registeredPatterns.push(route.urlPattern);
+    }
+  }
+
+  // POST /transition/:name — NDJSON streaming endpoint
+  app.post(prefixPath('/transition/:name'), async (req, res) => {
+    const handler = getTransition(req.params.name);
+
+    if (!handler) {
+      res.status(404).json({ error: `Transition "${req.params.name}" not found` });
+      return;
+    }
+
+    // Set language cookie for switch-lang transition
+    if (req.params.name === 'switch-lang' && isValidLang(req.body?.lang)) {
+      res.setHeader('Set-Cookie', langCookie(req.body.lang));
+    }
+
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    try {
+      // Auto-inject lang from cookie if not provided in body
+      const body = req.body ?? {};
+      if (!body.lang) body.lang = getLang(req);
+      const gen = handler(body);
+
+      for await (const frame of gen) {
+        // Validate before streaming
+        const result = validateStateFrame(frame);
+        if (!result.valid) {
+          const errorFrame = encodeFrame({
+            type: 'error',
+            message: `Invalid frame: ${result.reason}`,
+          });
+          res.write(errorFrame);
+          break;
+        }
+
+        res.write(encodeFrame(frame));
+
+        if (frame.type === 'done') break;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown server error';
+      res.write(encodeFrame({ type: 'error', message }));
+    }
+
+    res.end();
+  });
+
+  // Dev server with Vite middleware for client-side TS
+  async function startDev() {
+    const { createServer } = await import('vite');
+    const vite = await createServer({
+      server: { middlewareMode: true },
+      appType: 'custom',
+    });
+
+    // Vite handles client TS/JS module serving
+    app.use(vite.middlewares);
+
+    // 404 handler — AFTER Vite middleware so assets are served first
+    app.use((_req, res) => {
+      res.status(404).send('Not Found');
+    });
+
+    app.listen(port, () => {
+      console.log(`StateSurface dev server running at http://localhost:${port}`);
+      console.log(`  Routes: ${registeredPatterns.join(', ')}`);
+      console.log(`  Debug overlay: http://localhost:${port}/?debug=1`);
+    });
+  }
+
+  // Production mode: serve static files from dist/client
+  // Use cwd() because resolveRootDir() is relative to source layout (engine/server/),
+  // which doesn't match the bundled dist/server.js location.
+  async function startProd() {
+    const rootDir = process.cwd();
+    loadManifest(rootDir);
+    app.use(express.static(path.join(rootDir, 'dist/client')));
+
+    app.use((_req, res) => {
+      res.status(404).send('Not Found');
+    });
+  }
+
+  if (process.env.NODE_ENV === 'test') {
+    app.use((_req: express.Request, res: express.Response) => {
+      res.status(404).send('Not Found');
+    });
+  } else if (process.env.NODE_ENV === 'production') {
+    await startProd();
+  } else {
+    await startDev();
+  }
+
+  return { app, port };
+}

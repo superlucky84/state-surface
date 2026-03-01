@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app } from '../engine/server/index.js';
+import { createApp } from '../engine/server/index.js';
+
+let app: any;
+beforeAll(async () => {
+  ({ app } = await createApp());
+});
 import { guideContent, guideLoadedState } from './content.js';
 import type { Block } from './content.js';
 

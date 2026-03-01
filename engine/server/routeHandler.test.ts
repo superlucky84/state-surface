@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app } from './index.js';
+import { createApp } from './index.js';
+
+let app: any;
+beforeAll(async () => {
+  ({ app } = await createApp());
+});
 
 describe('multi-route SSR', () => {
   it('GET / returns SSR-rendered home page', async () => {

@@ -4,9 +4,14 @@
  * Integration tests: server NDJSON stream → client StateSurface apply path.
  * Uses supertest for server and StateSurface with mock callbacks for client.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { app } from './index.js';
+import { createApp } from './index.js';
+
+let app: any;
+beforeAll(async () => {
+  ({ app } = await createApp());
+});
 import { decodeFrames } from '../shared/ndjson.js';
 import { StateSurface } from '../client/stateSurface.js';
 import type { TraceEvent, StateSurfaceOptions } from '../client/stateSurface.js';

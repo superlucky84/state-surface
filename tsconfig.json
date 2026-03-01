@@ -16,6 +16,6 @@
       "state-surface": ["./engine/index.ts"]
     }
   },
-  "include": ["engine", "server", "client", "shared", "routes", "layouts"],
+  "include": ["engine", "server.ts", "client", "shared", "routes", "layouts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -31,8 +31,9 @@
   },
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "dev": "tsx watch engine/server/index.ts",
-    "build": "vite build",
+    "dev": "tsx watch server.ts",
+    "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false",
+    "start": "NODE_ENV=production node dist/server.js",
     "test": "vitest run",
     "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts'",
     "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts'"

@@ -158,34 +158,34 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 프로덕션 프레임워�
 **Exit**: `createApp()` 팩토리로 서버 초기화. `pnpm build && pnpm start`로 프로덕션 서버 실행 가능.
 
 ### createApp 팩토리 (`DESIGN_PHASE2.md` §7.3–7.4)
-- [ ] `engine/server/index.ts`의 top-level await 코드를 `createApp(options)` 팩토리 함수로 래핑.
-- [ ] `StateSurfaceServerOptions` 인터페이스 정의 (`port`, `basePath`, `securityHeaders`, `bodyLimit`, `transitionTimeout`).
+- [x] `engine/server/index.ts`의 top-level await 코드를 `createApp(options)` 팩토리 함수로 래핑.
+- [x] `StateSurfaceServerOptions` 인터페이스 정의 (`port`, `basePath`, `securityHeaders`, `bodyLimit`, `transitionTimeout`).
   - `hooks` 필드는 Phase 2-8에서 추가.
-- [ ] `createApp()`이 `{ app, port }` 반환.
-- [ ] 사용자 공간에 서버 엔트리 파일 생성 (`server.ts`):
+- [x] `createApp()`이 `{ app, port }` 반환.
+- [x] 사용자 공간에 서버 엔트리 파일 생성 (`server.ts`):
   ```typescript
   import { createApp } from 'state-surface/server';
   const { app, port } = await createApp();
   app.listen(port, () => console.log(`Running at http://localhost:${port}`));
   ```
-- [ ] `pnpm dev` 스크립트를 `tsx watch server.ts`로 변경.
-- [ ] `PORT` 환경 변수 지원 (`process.env.PORT || 3000`).
+- [x] `pnpm dev` 스크립트를 `tsx watch server.ts`로 변경.
+- [x] `PORT` 환경 변수 지원 (`process.env.PORT || 3000`).
 
 ### Vite SSR 빌드 (`DESIGN_PHASE2.md` §3.1–3.4)
-- [ ] `vite.config.ts` — `build.outDir: 'dist/client'`, `ssr.noExternal: ['lithent']` 추가.
-- [ ] `pnpm build` 스크립트: `vite build && vite build --ssr server.ts --outDir dist`.
-- [ ] `pnpm start` 스크립트: `NODE_ENV=production node dist/server.js`.
-- [ ] `createApp()` 내 prod/dev/test 분기:
+- [x] `vite.config.ts` — `build.outDir: 'dist/client'`, `ssr.noExternal: ['lithent']` 추가.
+- [x] `pnpm build` 스크립트: `vite build && vite build --ssr server.ts --outDir dist`.
+- [x] `pnpm start` 스크립트: `NODE_ENV=production node dist/server.js`.
+- [x] `createApp()` 내 prod/dev/test 분기:
   - production: `express.static('dist/client')` + 404 핸들러 + listen.
   - test: 404 핸들러만.
   - development: Vite 미들웨어 모드 (`startDev()`).
 
 ### Graceful Shutdown (`DESIGN_PHASE2.md` §3.5)
-- [ ] `SIGTERM`/`SIGINT` 핸들러 추가.
-- [ ] 강제 종료 타임아웃 10초 (진행 중 스트림 drain 대기).
+- [x] `SIGTERM`/`SIGINT` 핸들러 추가.
+- [x] 강제 종료 타임아웃 10초 (진행 중 스트림 drain 대기).
 
 ### Baseline 테스트
-- [ ] `pnpm test` 전체 통과 (기존 테스트 회귀 없음).
+- [x] `pnpm test` 전체 통과 (기존 테스트 회귀 없음).
 - [ ] `PORT=4000 pnpm dev` → 4000번 포트에서 서버 기동.
 - [ ] `BASE_PATH=/demo PORT=4000 pnpm dev` → 복합 설정 동작.
 - [ ] `pnpm build` 성공 (클라이언트 + SSR 서버 빌드).
@@ -578,8 +578,7 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3 완료.
-- **Next**: Phase 2-5 (package.json 정비) → Phase 2-7 (createApp + 프로덕션 빌드).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7 완료.
+- **Next**: Phase 2-8 (서버 훅 + 클라이언트 플러그인).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만).
 - **Blockers**: 없음.
-- **Latest commit**: `d793455` docs: sync checklist for implement.
