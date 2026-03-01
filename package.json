@@ -2,7 +2,7 @@
   "name": "state-surface",
   "version": "0.1.0",
   "private": true,
-  "description": "StateSurface reference implementation",
+  "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
   "exports": {
     ".": "./engine/index.ts"

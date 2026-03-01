@@ -1,7 +1,7 @@
 
 # **StateSurface**
 
-> **A reference implementation of a state–layout mapping model.**
+> **A production-ready state–layout mapping framework.**
 
 **Page navigation is MPA.**
 Within a page, **DOM structure is synchronized to server-driven state streams.**
@@ -78,8 +78,8 @@ Protocol-level examples and validation cases are documented in `PROTOCOL.md`.
 
 * A **design record**
 * An **executable mental model**
-* A guide for building a **convincing prototype**
-* A **reference others can re-implement better**
+* A guide for building **production-ready server-driven UIs**
+* A **framework others can adopt and extend**
 
 ---
 
@@ -347,17 +347,17 @@ This project's route files should serve as a **well-structured site example**.
 Each page stands alone; navigating between pages is a full MPA load
 that brings a completely different surface and slot set.
 
-#### Demo Site: Self-Documenting Feature Showcase
+#### Showcase Site: Self-Documenting Feature Showcase
 
-The project's demo pages double as **feature documentation**.
-Each page's content explains the StateSurface concept it demonstrates —
+The project's showcase pages double as **feature documentation**.
+Each page's content explains the StateSurface concept it showcases —
 users learn by reading the content while experiencing the feature in action.
 
 | Route | Content | Demonstrated Features |
 |-------|---------|----------------------|
 | `/` | **StateSurface 소개** — 4 핵심 개념 카드, 각 기능 페이지 링크 | `initial` SSR only, surface 문자열 조합 |
 | `/guide/[slug]` | **개념별 가이드** — surface, template, transition, action 문서 동적 로드 | Dynamic `[param]`, boot auto-run, full→partial 스트리밍 |
-| `/features/streaming` | **스트리밍 데모** — 프레임 흐름 실시간 시각화, 버튼으로 직접 프레임 발사 | Full/partial frames, `removed`, error frame |
+| `/features/streaming` | **스트리밍** — 프레임 흐름 실시간 시각화, 버튼으로 직접 프레임 발사 | Full/partial frames, `removed`, error frame |
 | `/features/actions` | **액션 플레이그라운드** — 버튼, 폼, scoped pending 직접 체험 | `data-action`, form submit, `data-pending-targets`, 다중 액션 |
 | `/search` | **기능/개념 검색** — StateSurface 기능 목록에서 검색 | Form `data-action`, pending 상태 |
 | `/chat` | **Q&A 챗봇** — StateSurface에 대해 질문하며 체험 | Abort previous, progressive streaming, cacheUpdate |
@@ -472,7 +472,7 @@ location /state-surface/ {
 **시연 가치:**
 
 * 실전 배포 시나리오 — 대부분의 프레임워크가 `basePath`/`base` 옵션을 제공하는 이유.
-* StateSurface 데모 사이트 자체도 서브 경로로 배포 예정.
+* StateSurface 사이트 자체도 서브 경로로 배포 예정.
 * MPA + NDJSON 스트리밍 모델에서 basePath가 올바르게 전파되는 것을 검증.
 
 ---
@@ -1788,16 +1788,16 @@ article/
 
 ---
 
-## 12. Prototype Scope
+## 12. Core Scope
 
-### Must demonstrate
+### Must support
 
 * `<h-state>` DOM sync
 * HTTP streamed transitions
 * Progressive UI construction
 * Frame-level data/state pairing
 
-### Must not include
+### Deferred
 
 * Plugins
 * Auth
@@ -1811,8 +1811,8 @@ article/
 This succeeds if:
 
 * The idea is understandable by **reading HTML**
-* The demo feels **“weird but convincing”**
-* Others can re-implement it independently
+* The framework feels **natural and productive**
+* Others can adopt it for production use
 * A full flow is shown in **under 50 lines**
 
 ---

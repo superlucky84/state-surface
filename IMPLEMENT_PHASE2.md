@@ -1,9 +1,10 @@
-# StateSurface Phase 2 — 오픈소스 릴리스 준비
+# StateSurface Phase 2 — 프로덕션 프레임워크 릴리스
 
-Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필요한 신규 항목을 통합 정리한다.
+Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 프로덕션 프레임워크 전환 + 오픈소스 배포를 통합 정리한다.
+아키텍처 설계는 `DESIGN_PHASE2.md`에 정의. 이 문서는 **실행 체크리스트**.
 배포 모델은 **CLI 스캐폴딩** (`npx create-state-surface my-app`).
 
-읽기 순서: `DESIGN.md` → `PROTOCOL.md` → `IMPLEMENT.md`(Phase 1 이력) → **이 파일**.
+읽기 순서: `DESIGN.md` → `PROTOCOL.md` → `DESIGN_PHASE2.md`(설계) → **이 파일**(실행).
 
 ---
 
@@ -12,13 +13,13 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 미해결 설계 결정. 해당 Phase 착수 전에 확정하고 근거를 기록한다.
 
 - [x] **DC-01** 라이선스 선택: **MIT** 확정
-- [ ] **DC-02** 프로덕션 서버 실행 방식: `tsx` 직접 실행(A) vs `tsup`/`esbuild` 번들(B) — TBD (Phase 2-7 착수 전 확정)
-- [ ] **DC-03** 설정 파일 도입 여부: 환경 변수만(A) vs `state-surface.config.ts`(B) — TBD (Phase 2-8 착수 전 확정)
+- [x] **DC-02** 프로덕션 서버 빌드 방식: **Vite SSR 빌드** 확정 (`vite build --ssr`) → `DESIGN_PHASE2.md` §3
+- [x] **DC-03** 설정 파일 도입 여부: **환경 변수만** 확정 (설정 파일은 Phase 2 이후 필요 시 도입) → `DESIGN_PHASE2.md` §7.1
 - [ ] **DC-04** E2E 테스트 도구: Playwright(A) vs Cypress(B) vs 생략(C) — TBD (Phase 2-14 착수 전 확정)
 
 ---
 
-## Phase 2-1: Public API 퍼사드 + Import Alias
+## Phase 2-1: Public API 퍼사드 + Import Alias ✅
 
 사용자 코드에서 `../../../../engine/shared/protocol.js` 같은 상대경로를 제거한다.
 `state-surface` alias 하나로 모든 engine public API에 접근하게 한다.
@@ -54,7 +55,7 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 
 ---
 
-## Phase 2-1.5: 가이드 코드 블록 UX 개선
+## Phase 2-1.5: 가이드 코드 블록 UX 개선 ✅
 
 가이드 페이지의 코드 비교 섹션에서 React 예제가 30~60줄로 화면을 점유해 StateSurface 코드의 간결함이 묻힌다.
 소제목으로 구분감을 주고, React 비교 코드는 접어서 필요할 때만 펼쳐보게 한다.
@@ -81,7 +82,7 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 
 ---
 
-## Phase 2-2: 라이선스 및 기본 메타
+## Phase 2-2: 라이선스 및 기본 메타 ✅
 
 **Entry**: DC-01 확정.
 **Exit**: LICENSE 파일 존재, `package.json` license 필드 일치.
@@ -95,7 +96,7 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 
 ---
 
-## Phase 2-3: README.md 작성
+## Phase 2-3: README.md 작성 ✅
 
 **Entry**: Phase 2-1 (퍼사드 완료 — import 예시가 `'state-surface'`여야 함).
 **Exit**: README가 프로젝트 소개 + 퀵스타트 + 아키텍처 + API 개요를 포함.
@@ -141,97 +142,146 @@ Phase 1(`IMPLEMENT.md`, 동결)의 미완료 항목 + 오픈소스 배포에 필
 - [ ] `"engines"` 필드 추가 (`"node": ">=20"`).
 - [ ] 버전 정책 확정 (0.x 시맨틱 버저닝).
 
-> Note: `main`/`exports`/`files`는 Phase 2-6(CLI 패키지)에서 다룸.
-> state-surface 본체는 직접 npm install하는 패키지가 아닌 스캐폴딩 템플릿.
+> Note: `exports` 맵은 Phase 2-12(Public API 분리)에서 `./server`, `./client` 진입점과 함께 확정.
 
 ### Baseline 테스트
 - [ ] `npm pack --dry-run` 실행 시 에러 없음.
 
 ---
 
-## Phase 2-6: create-state-surface CLI
+## Phase 2-7: createApp 팩토리 + 프로덕션 빌드
 
-Phase 1의 Phase 16 승계. 사용자가 프로젝트를 시작하는 유일한 공식 경로.
+> 설계: `DESIGN_PHASE2.md` §3, §7.3–7.4
+> 의존: 이후 모든 엔진 변경(훅, 플러그인, 보안, 인스턴스 기반)의 기반.
 
-**Entry**: Phase 2-1 + 2-5 완료 (alias 적용된 코드가 템플릿 소스).
-**Exit**: `npx create-state-surface my-app` → `pnpm dev` → 데모 사이트 동작.
+**Entry**: Phase 2-5 완료.
+**Exit**: `createApp()` 팩토리로 서버 초기화. `pnpm build && pnpm start`로 프로덕션 서버 실행 가능.
 
-### 설계
-- [ ] `create-state-surface/` 디렉토리 구조 확정.
-- [ ] `../lithent/createLithent` 코드 참고해 CLI 진입점 구현 방식 결정.
-- [ ] 옵션 정책 확정 (기본: full demo 포함, 선택 옵션 최소화).
-- [ ] 생성 후 안내 문구 확정 (`cd`, `pnpm install`, `pnpm dev`).
-
-### 템플릿 소스
-- [ ] `create-state-surface/template/` 에 현재 프로젝트 구조 반영.
-- [ ] 불필요한 파일 제외 (`.git`, `node_modules`, `dist`, `IMPLEMENT*.md`, `DESIGN.md`, `PROTOCOL.md` 등).
-- [ ] `package.json.template` — 프로젝트명 치환 플레이스홀더 삽입.
-
-### CLI 구현
-- [ ] `bin/create-state-surface.js` — 프로젝트명 입력 → 디렉토리 생성 → 파일 복사 → 치환.
-- [ ] 프로젝트명/설명 치환 처리.
-- [ ] Git 초기화 (`git init`) 자동 실행.
-- [ ] 완료 후 안내 메시지 출력.
-
-### CLI 패키지 배포 설정
-- [ ] `create-state-surface/package.json` — `"name"`, `"bin"`, `"files"`, `"publishConfig"`.
-- [ ] `.npmignore` 또는 `"files"` 화이트리스트.
-- [ ] `npm pack` → 로컬 설치 검증.
-
-### Baseline 테스트
-- [ ] 빈 디렉토리에서 `npx create-state-surface my-app` 1회 실행으로 프로젝트 생성.
-- [ ] 생성 프로젝트에서 `pnpm install && pnpm test` 통과.
-- [ ] 생성 프로젝트에서 `pnpm dev` 후 주요 route 200 + transition 응답 확인.
-- [ ] 생성 결과물의 import 경로가 전부 `'state-surface'`.
-
----
-
-## Phase 2-7: 프로덕션 빌드 및 배포 경로
-
-**Entry**: DC-02 확정.
-**Exit**: `pnpm build && pnpm start`로 프로덕션 서버 실행 가능.
-
-- [ ] DC-02에서 확정한 방식으로 프로덕션 서버 엔트리 구성.
-- [ ] `pnpm start` (또는 `pnpm preview`) 스크립트 추가.
-- [ ] Vite 클라이언트 빌드 출력물을 프로덕션 서버에서 정적 서빙.
-- [ ] README에 프로덕션 배포 가이드 추가.
-
-### Baseline 테스트
-- [ ] `pnpm build` 성공.
-- [ ] `pnpm start` 후 주요 route 200 응답.
-- [ ] 정적 에셋(JS/CSS) 정상 로드.
-
----
-
-## Phase 2-8: 설정 및 환경 변수
-
-**Entry**: DC-03 확정.
-**Exit**: PORT 환경 변수 동작, 설정 방법 문서화.
-
+### createApp 팩토리 (`DESIGN_PHASE2.md` §7.3–7.4)
+- [ ] `engine/server/index.ts`의 top-level await 코드를 `createApp(options)` 팩토리 함수로 래핑.
+- [ ] `StateSurfaceServerOptions` 인터페이스 정의 (`port`, `basePath`, `securityHeaders`, `bodyLimit`, `transitionTimeout`).
+  - `hooks` 필드는 Phase 2-8에서 추가.
+- [ ] `createApp()`이 `{ app, port }` 반환.
+- [ ] 사용자 공간에 서버 엔트리 파일 생성 (`server.ts`):
+  ```typescript
+  import { createApp } from 'state-surface/server';
+  const { app, port } = await createApp();
+  app.listen(port, () => console.log(`Running at http://localhost:${port}`));
+  ```
+- [ ] `pnpm dev` 스크립트를 `tsx watch server.ts`로 변경.
 - [ ] `PORT` 환경 변수 지원 (`process.env.PORT || 3000`).
-- [ ] 환경 변수 목록 문서화 (`PORT`, `BASE_PATH`, `NODE_ENV`).
-- [ ] DC-03이 B(설정 파일)인 경우:
-  - [ ] `state-surface.config.ts` 로더 구현.
-  - [ ] 후보 옵션: `port`, `basePath`, `routesDir`, `layoutsDir`.
+
+### Vite SSR 빌드 (`DESIGN_PHASE2.md` §3.1–3.4)
+- [ ] `vite.config.ts` — `build.outDir: 'dist/client'`, `ssr.noExternal: ['lithent']` 추가.
+- [ ] `pnpm build` 스크립트: `vite build && vite build --ssr server.ts --outDir dist`.
+- [ ] `pnpm start` 스크립트: `NODE_ENV=production node dist/server.js`.
+- [ ] `createApp()` 내 prod/dev/test 분기:
+  - production: `express.static('dist/client')` + 404 핸들러 + listen.
+  - test: 404 핸들러만.
+  - development: Vite 미들웨어 모드 (`startDev()`).
+
+### Graceful Shutdown (`DESIGN_PHASE2.md` §3.5)
+- [ ] `SIGTERM`/`SIGINT` 핸들러 추가.
+- [ ] 강제 종료 타임아웃 10초 (진행 중 스트림 drain 대기).
 
 ### Baseline 테스트
+- [ ] `pnpm test` 전체 통과 (기존 테스트 회귀 없음).
 - [ ] `PORT=4000 pnpm dev` → 4000번 포트에서 서버 기동.
 - [ ] `BASE_PATH=/demo PORT=4000 pnpm dev` → 복합 설정 동작.
+- [ ] `pnpm build` 성공 (클라이언트 + SSR 서버 빌드).
+- [ ] `pnpm start` 후 주요 route 200 응답.
+- [ ] 정적 에셋(JS/CSS) 정상 로드.
+- [ ] 환경 변수 목록 문서화 (`PORT`, `BASE_PATH`, `NODE_ENV`).
+
+---
+
+## Phase 2-8: 서버 훅 + 클라이언트 플러그인
+
+> 설계: `DESIGN_PHASE2.md` §1(서버 훅), §2(클라이언트 플러그인)
+> 의존: Phase 2-7 (createApp 팩토리) 완료 필수.
+
+**Entry**: Phase 2-7 완료 (createApp 팩토리 존재).
+**Exit**: i18n 로직이 엔진에서 제거되고 훅으로 이동. Prism.js가 엔진에서 제거되고 플러그인으로 이동.
+
+### 서버 훅 시스템 (`DESIGN_PHASE2.md` §1)
+- [ ] `TransitionHooks` 인터페이스 정의 (`onBeforeTransition`, `onAfterTransition`).
+- [ ] `StateSurfaceServerOptions`에 `hooks` 필드 추가.
+- [ ] `engine/server/index.ts` 트랜지션 엔드포인트에 훅 호출 지점 추가:
+  - 트랜지션 핸들러 실행 전: `onBeforeTransition` 호출, 반환값으로 body 교체.
+  - `res.end()` 직전: `onAfterTransition` 호출.
+- [ ] `TransitionHooks` 타입을 `engine/server.ts` barrel에서 export.
+
+### i18n 분리 (`DESIGN_PHASE2.md` §1.3–1.4)
+- [ ] `engine/server/index.ts`에서 `shared/i18n.js` import 3개 제거 (`getLang`, `isValidLang`, `langCookie`).
+- [ ] `switch-lang` 하드코딩 (L53-55) 제거.
+- [ ] `body.lang = getLang(req)` 자동 주입 (L64) 제거.
+- [ ] `routes/_shared/hooks.ts` 생성 — i18n 로직을 사용자 훅으로 이동:
+  ```typescript
+  onBeforeTransition({ name, body, req, res }) {
+    if (!body.lang) body.lang = getLang(req);
+    if (name === 'switch-lang' && isValidLang(body.lang)) {
+      res.setHeader('Set-Cookie', langCookie(body.lang));
+    }
+    return body;
+  }
+  ```
+- [ ] `server.ts`에서 훅 등록: `createApp({ hooks: transitionHooks })`.
+
+### 클라이언트 플러그인 시스템 (`DESIGN_PHASE2.md` §2)
+- [ ] `StateSurfacePlugin` 인터페이스 정의 (`name`, `onInit`, `onMount`, `onUpdate`, `onUnmount`, `onTransitionStart`, `onTransitionEnd`).
+- [ ] `engine/client/main.ts`에 `createStateSurface(options)` 팩토리 함수 구현:
+  - `fallbackTemplate`, `plugins`, `debug` 옵션 수용.
+  - 플러그인 `onInit` 호출.
+  - `debug` 모드일 때만 `window.__surface` 노출.
+- [ ] `engine/client/stateSurface.ts`에 플러그인 호출 지점 추가:
+  - `mountTemplate()` 완료 후 → `plugin.onMount()`.
+  - `updateSlot()` 완료 후 → `plugin.onUpdate()`.
+  - `unmountTemplate()` 완료 후 → `plugin.onUnmount()`.
+  - `runTransition()` 시작 → `plugin.onTransitionStart()`.
+  - `runTransition()` 완료 → `plugin.onTransitionEnd()`.
+- [ ] `StateSurfacePlugin`, `createStateSurface` 타입을 `engine/client.ts` barrel에서 export.
+
+### Prism.js 분리 (`DESIGN_PHASE2.md` §2.3–2.4)
+- [ ] `engine/client/main.ts`에서 Prism.js import 6개 제거.
+- [ ] `engine/client/main.ts`에서 `highlightCode()` + MutationObserver 제거.
+- [ ] `client/plugins/prism.ts` 생성 — Prism.js를 플러그인으로 구현 (onMount/onUpdate에서 highlight).
+- [ ] `client/main.ts` (사용자 엔트리)에서 `createStateSurface({ plugins: [prismPlugin()] })` 호출.
+- [ ] `prismjs`를 `dependencies`에서 `devDependencies`로 이동 (또는 사용자가 직접 설치).
+
+### Baseline 테스트
+- [ ] `pnpm test` 전체 통과.
+- [ ] `pnpm dev` → 훅 경유한 i18n 동작 확인 (ko/en 전환, 쿠키 설정).
+- [ ] 훅 미등록 시에도 트랜지션 정상 동작 (훅 optional 검증).
+- [ ] Prism.js 플러그인으로 가이드 코드 하이라이팅 정상 동작.
+- [ ] 플러그인 미등록 시에도 StateSurface 코어 정상 동작.
+- [ ] `engine/server/index.ts`에 `shared/i18n` import 없음 (grep 검증).
+- [ ] `engine/client/main.ts`에 `prismjs` import 없음 (grep 검증).
 
 ---
 
 ## Phase 2-9: 에러 처리 및 보안 강화
 
-**Entry**: Phase 2-1 완료.
-**Exit**: 알려진 에러 처리 갭 해소, 최소 보안 헤더 적용.
+> 설계: `DESIGN_PHASE2.md` §4(에러), §5(보안)
 
-### 에러 처리
-- [ ] `engine/shared/ndjson.ts` — `JSON.parse` try/catch 추가. 파싱 실패 시 해당 청크 스킵 + trace.
-- [ ] `engine/server/routeHandler.ts` — `NODE_ENV=production`에서 SSR 에러 내부 메시지 미노출 (generic 응답).
+**Entry**: Phase 2-7 완료 (createApp 옵션에 보안 설정 포함).
+**Exit**: 알려진 에러 처리 갭 해소, 보안 헤더 적용, 스트림 타임아웃 동작.
+
+### 에러 처리 (`DESIGN_PHASE2.md` §4)
+- [ ] `engine/shared/ndjson.ts` — 3개 `JSON.parse` 호출에 try/catch 추가. 파싱 실패 시 해당 청크 스킵 + trace.
+- [ ] `engine/server/routeHandler.ts` — `NODE_ENV=production`에서 SSR 에러 내부 메시지 미노출 (generic "Internal Server Error" 응답).
 - [ ] transition 제너레이터 예외 시 에러 프레임 + 스트림 정상 종료 재확인.
 
-### 보안 헤더
-- [ ] 기본 보안 헤더 추가 (최소 `X-Content-Type-Options: nosniff`).
+### 트랜지션 스트림 타임아웃 (`DESIGN_PHASE2.md` §4.3)
+- [ ] 서버측: `createApp` 옵션의 `transitionTimeout`(기본 30초) 적용.
+  - AbortController로 타임아웃 시 에러 프레임 전송 + 스트림 종료.
+- [ ] `TransitionHandler` 타입에 `options?: { signal?: AbortSignal }` 파라미터 추가.
+- [ ] 클라이언트측: `stateSurface.ts`의 fetch에 timeout 설정 (`transitionTimeout` 옵션).
+
+### 보안 (`DESIGN_PHASE2.md` §5)
+- [ ] 기본 보안 헤더 미들웨어 추가 (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`).
+  - `createApp({ securityHeaders: false })`로 비활성화 가능.
+- [ ] SSR 응답에 `Content-Type: text/html; charset=utf-8` 명시 (`engine/server/routeHandler.ts`).
+- [ ] `express.json({ limit })` — `createApp({ bodyLimit })` 옵션 반영 (기본 `100kb`).
 - [ ] (선택) CORS 설정 옵션 제공.
 - [ ] (선택) CSP 헤더 기본 정책 또는 문서화.
 
@@ -239,6 +289,8 @@ Phase 1의 Phase 16 승계. 사용자가 프로젝트를 시작하는 유일한 
 - [ ] 잘못된 JSON 청크가 포함된 NDJSON 스트림을 파싱해도 uncaught 예외 없음 (단위 테스트).
 - [ ] `NODE_ENV=production` SSR 에러 응답에 스택 트레이스 미포함 (단위 테스트).
 - [ ] 응답 헤더에 `X-Content-Type-Options: nosniff` 포함 (단위 테스트).
+- [ ] SSR 응답 Content-Type이 `text/html; charset=utf-8` (단위 테스트).
+- [ ] 30초 초과 트랜지션이 타임아웃 에러 프레임으로 종료됨 (단위 테스트).
 
 ---
 
@@ -276,27 +328,105 @@ Phase 1의 Phase 16 승계. 사용자가 프로젝트를 시작하는 유일한 
 
 ---
 
-## Phase 2-12: TypeScript 타입 품질
+## Phase 2-12: Public API 분리 + 타입 품질
 
-**Entry**: Phase 2-1 완료 (퍼사드 barrel 존재).
-**Exit**: 스캐폴딩 프로젝트에서 IDE 자동완성 정상 동작.
+> 설계: `DESIGN_PHASE2.md` §6
+> 의존: Phase 2-8 (훅·플러그인) 완료 필수 — 새 export 대상(`TransitionHooks`, `StateSurfacePlugin`, `createStateSurface`, `createApp`)이 확정되어야 함.
 
+**Entry**: Phase 2-8 완료 (서버 훅 + 클라이언트 플러그인 존재).
+**Exit**: `'state-surface'`, `'state-surface/server'`, `'state-surface/client'` 3개 진입점 동작. IDE 자동완성 정상.
+
+### Public API 3분할 (`DESIGN_PHASE2.md` §6.2–6.3)
+- [ ] `engine/index.ts` — 공통 타입/유틸만 export:
+  - `prefixPath`, `getBasePath`, `defineTemplate`
+  - `type RouteModule`, `type BootConfig`, `type StateFrame`, `type TemplateModule`
+- [ ] `engine/server.ts` 생성 — 서버 전용 API export:
+  - `createApp`, `defineTransition`
+  - `type TransitionHandler`, `type TransitionHooks`, `type StateSurfaceServerOptions`
+- [ ] `engine/client.ts` 생성 — 클라이언트 전용 API export:
+  - `createStateSurface`
+  - `type StateSurfacePlugin`
+- [ ] `package.json` `exports` 맵 확장:
+  ```json
+  {
+    ".": "./engine/index.ts",
+    "./server": "./engine/server.ts",
+    "./client": "./engine/client.ts"
+  }
+  ```
+- [ ] `tsconfig.json` `paths` 추가 (`state-surface/server`, `state-surface/client`).
+- [ ] `vite.config.ts` `resolve.alias` 추가.
+- [ ] 사용자 코드 import 경로 마이그레이션:
+  - `defineTransition` → `import from 'state-surface/server'`
+  - `createStateSurface` → `import from 'state-surface/client'`
+
+### TypeScript 타입 품질
 - [ ] `tsconfig.json`에서 `declaration: true` 활성화 여부 검토.
-- [ ] public API 타입 정리 (`StateFrame`, `RouteModule`, `TransitionHandler`, `StateSurfaceOptions`).
+- [ ] public API 타입 정리 (`StateFrame`, `RouteModule`, `TransitionHandler`, `StateSurfaceServerOptions`, `StateSurfacePlugin`).
 - [ ] 스캐폴딩 프로젝트에서 `'state-surface'` import 후 자동완성 확인.
 
 ### Baseline 테스트
-- [ ] `import { defineTemplate } from 'state-surface'` 에서 TS 에러 없음.
-- [ ] `defineTemplate`, `defineTransition`의 파라미터 타입이 IDE에서 추론됨.
+- [ ] `import { defineTemplate } from 'state-surface'` — TS 에러 없음.
+- [ ] `import { createApp } from 'state-surface/server'` — TS 에러 없음.
+- [ ] `import { createStateSurface } from 'state-surface/client'` — TS 에러 없음.
+- [ ] 서버 전용 API가 `'state-surface'`(공통)에서 import 불가 확인.
+- [ ] `pnpm test` 전체 통과.
 
 ---
 
-## Phase 2-13: Test Hardening
+## Phase 2-6: create-state-surface CLI
 
-Phase 1 잔여 스모크 + Phase 2 추가 항목을 자동화 또는 수동 확인.
+Phase 1의 Phase 16 승계. 사용자가 프로젝트를 시작하는 유일한 공식 경로.
 
-**Entry**: Phase 2-1 ~ 2-9 완료.
-**Exit**: 모든 스모크 항목 pass 또는 자동화 완료.
+**Entry**: Phase 2-12 완료 (Public API 분리 + 타입 확정).
+**Exit**: `npx create-state-surface my-app` → `pnpm dev` → 사이트 동작.
+
+### 설계
+- [ ] `create-state-surface/` 디렉토리 구조 확정.
+- [ ] `../lithent/createLithent` 코드 참고해 CLI 진입점 구현 방식 결정.
+- [ ] 옵션 정책 확정 (기본: 전체 포함, 선택 옵션 최소화).
+- [ ] 생성 후 안내 문구 확정 (`cd`, `pnpm install`, `pnpm dev`).
+
+### 템플릿 소스
+- [ ] `create-state-surface/template/` 에 현재 프로젝트 구조 반영.
+- [ ] 불필요한 파일 제외 (`.git`, `node_modules`, `dist`, `IMPLEMENT*.md`, `DESIGN*.md`, `PROTOCOL.md` 등).
+- [ ] `package.json.template` — 프로젝트명 치환 플레이스홀더 삽입.
+- [ ] 템플릿에 `server.ts` (사용자 서버 엔트리), `client/main.ts` (사용자 클라이언트 엔트리) 포함.
+- [ ] 템플릿에 `routes/_shared/hooks.ts` (i18n 훅) 포함.
+- [ ] 템플릿에 `client/plugins/prism.ts` (Prism 플러그인) 포함.
+
+### CLI 구현
+- [ ] `bin/create-state-surface.js` — 프로젝트명 입력 → 디렉토리 생성 → 파일 복사 → 치환.
+- [ ] 프로젝트명/설명 치환 처리.
+- [ ] Git 초기화 (`git init`) 자동 실행.
+- [ ] 완료 후 안내 메시지 출력.
+
+### CLI 패키지 배포 설정
+- [ ] `create-state-surface/package.json` — `"name"`, `"bin"`, `"files"`, `"publishConfig"`.
+- [ ] `.npmignore` 또는 `"files"` 화이트리스트.
+- [ ] `npm pack` → 로컬 설치 검증.
+
+### Baseline 테스트
+- [ ] 빈 디렉토리에서 `npx create-state-surface my-app` 1회 실행으로 프로젝트 생성.
+- [ ] 생성 프로젝트에서 `pnpm install && pnpm test` 통과.
+- [ ] 생성 프로젝트에서 `pnpm dev` 후 주요 route 200 + transition 응답 확인.
+- [ ] 생성 결과물의 import 경로가 `'state-surface'`, `'state-surface/server'`, `'state-surface/client'` 사용.
+- [ ] 생성 프로젝트에서 `pnpm build && pnpm start` → 프로덕션 모드 동작.
+
+---
+
+## Phase 2-13: 전역 싱글턴 → 인스턴스 기반 + Test Hardening
+
+> 설계: `DESIGN_PHASE2.md` §8
+
+**Entry**: Phase 2-8 완료 (createApp 팩토리 존재).
+**Exit**: 서버측 레지스트리가 인스턴스 기반. 모든 스모크 항목 pass.
+
+### 싱글턴 → 인스턴스 (`DESIGN_PHASE2.md` §8)
+- [ ] `createApp()` 내부에서 격리된 `templateRegistry`, `transitionRegistry` 인스턴스 생성.
+- [ ] `bootstrapServer()`에 레지스트리 인스턴스 주입 파라미터 추가.
+- [ ] `transitionRegistry`에 `clearRegistry()` 추가 (templateRegistry와 일관성).
+- [ ] 클라이언트측 templateRegistry는 모듈 레벨 유지 (브라우저는 단일 인스턴스).
 
 ### Phase 1 잔여 스모크
 - [ ] Action: search/features/chat 페이지 `data-action` end-to-end.
@@ -313,9 +443,10 @@ Phase 1 잔여 스모크 + Phase 2 추가 항목을 자동화 또는 수동 확�
 
 ### Phase 2 추가 스모크
 - [ ] 프로덕션 빌드 후 전체 route 접근 가능.
-- [ ] `npx create-state-surface` 생성물이 데모와 시각적 일치.
+- [ ] `npx create-state-surface` 생성물이 기준 사이트와 시각적 일치.
 
 ### Baseline 테스트 자동화
+- [ ] 테스트 간 레지스트리 격리 확인 (병렬 테스트에서 상태 누수 없음).
 - [ ] basePath 통합 테스트 추가 (Express 라우트 접근, transition URL, 쿠키 Path).
 - [ ] NDJSON malformed JSON 청크 스킵 테스트.
 - [ ] SSR production 에러 응답 테스트.
@@ -334,6 +465,8 @@ Phase 전체를 관통하는 통합 검증.
 - [ ] `pnpm build && pnpm start` → 프로덕션 모드 동작.
 - [ ] `BASE_PATH=/demo pnpm dev` → 서브패스 동작.
 - [ ] ko/en 언어 전환 → 쿠키 유지 → MPA 네비게이션.
+- [ ] 훅 기반 i18n 동작 검증 (엔진에 i18n 하드코딩 없음 확인).
+- [ ] 플러그인 기반 Prism 동작 검증 (엔진에 Prism 하드코딩 없음 확인).
 
 ### (선택) E2E 자동화
 - [ ] DC-04 확정 후 E2E 도구 도입.
@@ -356,15 +489,33 @@ Phase 전체를 관통하는 통합 검증.
 
 ---
 
-## Definition of Done (v0.1.0 오픈소스 릴리스)
+## Definition of Done (v0.1.0 프로덕션 릴리스)
 
+### 엔진 아키텍처
+- [ ] `createApp()` 팩토리로 서버 초기화 (top-level side effect 없음).
+- [ ] `createStateSurface()` 팩토리로 클라이언트 초기화 (앱 코드 분리).
+- [ ] 서버 훅 시스템 동작 (`TransitionHooks`).
+- [ ] 클라이언트 플러그인 시스템 동작 (`StateSurfacePlugin`).
+- [ ] i18n/Prism.js 코드가 엔진에서 완전 제거, 사용자 공간으로 이동.
+- [ ] Public API 3분할: `state-surface`, `state-surface/server`, `state-surface/client`.
+
+### 프로덕션 빌드
+- [ ] `pnpm build` — Vite SSR 빌드 (클라이언트 + 서버).
+- [ ] `pnpm start` — 프로덕션 서버 실행.
+- [ ] Graceful shutdown 동작.
+- [ ] 보안 헤더 기본 적용.
+- [ ] 트랜지션 스트림 타임아웃 동작.
+
+### 배포
 - [ ] `npx create-state-surface my-app`으로 프로젝트 생성 가능.
-- [ ] 생성된 프로젝트에서 `pnpm dev` + `pnpm test` + `pnpm build` 전부 동작.
-- [ ] 사용자 코드 import가 전부 `'state-surface'` alias 사용.
+- [ ] 생성된 프로젝트에서 `pnpm dev` + `pnpm test` + `pnpm build && pnpm start` 전부 동작.
+- [ ] npm에 `create-state-surface` 패키지 배포.
+
+### 품질
+- [ ] 사용자 코드 import가 `'state-surface'`/`'state-surface/server'`/`'state-surface/client'` 사용.
 - [ ] README에 퀵스타트, 아키텍처, 핵심 개념 문서화.
 - [ ] 오픈소스 라이선스 적용 (LICENSE 파일 존재).
 - [ ] GitHub Actions CI green.
-- [ ] npm에 `create-state-surface` 패키지 배포.
 - [ ] Phase 2-13 스모크 항목 전부 pass.
 - [ ] Phase 2-14 통합 테스트 전부 pass.
 - [ ] Open Decisions 전부 resolved.
@@ -373,30 +524,62 @@ Phase 전체를 관통하는 통합 검증.
 
 ## 우선순위 요약
 
-| 순서 | Phase | 중요도 | 비고 |
-|------|-------|--------|------|
-| ~~1~~ | ~~**2-1 퍼사드 + Alias**~~ | ~~Critical~~ | ✅ 완료 (`78af4c3`) |
-| 2 | **2-1.5 가이드 코드 블록 UX** | High | 가이드 가독성, React 코드 접기 |
-| 3 | 2-2 라이선스 | Critical | 5분이면 끝남 |
-| 4 | 2-3 README | Critical | 오픈소스 첫인상 |
-| 5 | 2-5 package.json | Critical | 배포 기본 설정 |
-| 6 | 2-6 CLI | Critical | 사용자 진입점 |
-| 7 | 2-7 프로덕션 빌드 | High | 실사용 필수 |
-| 8 | 2-9 에러/보안 | High | 품질 신뢰도 |
-| 9 | 2-10 CI | High | 기여자 신뢰도 |
-| 10 | 2-4 문서 정리 | Medium | 혼란 방지 |
-| 11 | 2-8 설정 | Medium | 사용 편의 |
-| 12 | 2-11 커뮤니티 | Medium | 기여 촉진 |
-| 13 | 2-12 타입 | Medium | DX |
-| 14 | **2-13 Test Hardening** | Medium | 품질 게이트 |
-| 15 | **2-14 Integration Test** | Medium | 최종 검증 |
-| 15 | 2-15 로깅 | Low | 선택 |
+| 순서 | Phase | 중요도 | DESIGN 섹션 | 비고 |
+|------|-------|--------|------------|------|
+| ~~1~~ | ~~**2-1 퍼사드 + Alias**~~ | ~~Critical~~ | — | ✅ 완료 |
+| ~~2~~ | ~~**2-1.5 가이드 UX**~~ | ~~High~~ | — | ✅ 완료 |
+| ~~3~~ | ~~**2-2 라이선스**~~ | ~~Critical~~ | — | ✅ 완료 |
+| ~~4~~ | ~~**2-3 README**~~ | ~~Critical~~ | — | ✅ 완료 |
+| 5 | **2-5 package.json** | Critical | — | 배포 기본 설정 |
+| 6 | **2-7 createApp + 프로덕션 빌드** | **Critical** | §3, §7 | 이후 모든 변경의 기반 |
+| 7 | **2-8 서버 훅 + 클라이언트 플러그인** | **Critical** | §1, §2 | i18n·Prism 분리 |
+| 8 | **2-9 에러/보안** | **High** | §4, §5 | 안정성·타임아웃 |
+| 9 | **2-12 Public API 분리 + 타입** | **High** | §6 | 3분할 진입점 |
+| 10 | **2-6 CLI** | **Critical** | — | 사용자 진입점 |
+| 11 | 2-10 CI | High | — | 기여자 신뢰도 |
+| 12 | 2-4 문서 정리 | Medium | — | 혼란 방지 |
+| 13 | 2-11 커뮤니티 | Medium | — | 기여 촉진 |
+| 14 | **2-13 싱글턴→인스턴스 + Test Hardening** | Medium | §8 | 테스트 품질 |
+| 15 | **2-14 Integration Test** | Medium | — | 최종 검증 |
+| 16 | 2-15 로깅 | Low | — | 선택 |
+
+### 의존성 그래프
+
+```
+2-5 package.json
+  └── 2-7 createApp + 프로덕션 빌드     ← 기반
+        ├── 2-8 서버 훅 + 클라이언트 플러그인
+        │     └── 2-12 Public API 분리
+        │           └── 2-6 CLI (API 확정 후 템플릿 생성)
+        ├── 2-9 에러/보안
+        └── 2-13 싱글턴→인스턴스
+
+2-10 CI, 2-11 커뮤니티, 2-4 문서 정리 — 독립 (병행 가능)
+2-14 Integration Test — 모든 Phase 완료 후
+2-15 로깅 — 선택, 독립
+```
+
+---
+
+## 마이그레이션 참조
+
+> 상세: `DESIGN_PHASE2.md` §10
+
+| Phase | Breaking Change | 마이그레이션 |
+|-------|----------------|-------------|
+| 2-7 | 서버 엔트리 → `createApp()` 팩토리 | `server.ts` 파일 생성, `pnpm dev` 스크립트 변경 |
+| 2-8 | i18n 자동 주입 제거 | `routes/_shared/hooks.ts`에 훅으로 이동 |
+| 2-8 | 클라이언트 엔트리 → `createStateSurface()` | `client/main.ts` 수정, Prism 플러그인으로 이동 |
+| 2-12 | `defineTransition` import 경로 변경 | `'state-surface'` → `'state-surface/server'` |
+
+각 단계는 `pnpm test` 통과를 게이트로 한다.
 
 ---
 
 ## Handoff Status
 
-- **Done**: Phase 2-1 (퍼사드 + alias) 완료. 42파일 변경, 347 테스트 통과. `pnpm dev` 스모크 1건 미확인.
-- **Next**: Phase 2-2 (라이선스 — DC-01 확정 필요) → Phase 2-3 (README).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3 완료.
+- **Next**: Phase 2-5 (package.json 정비) → Phase 2-7 (createApp + 프로덕션 빌드).
+- **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만).
 - **Blockers**: 없음.
-- **Commit**: `78af4c3` refactor: add public API facade and 'state-surface' import alias.
+- **Latest commit**: `d793455` docs: sync checklist for implement.

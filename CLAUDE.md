@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-StateSurface is a **state-layout mapping runtime** — a reference implementation where the server owns state and the client owns DOM projection. It is **not** an SPA framework, component system, or template language.
+StateSurface is a **state-layout mapping runtime** — a production-ready framework where the server owns state and the client owns DOM projection. It is **not** an SPA framework, component system, or template language.
 
 - Page navigation is **MPA** (full page loads)
 - In-page updates come from **NDJSON state streams** over HTTP POST
@@ -17,8 +17,10 @@ StateSurface is a **state-layout mapping runtime** — a reference implementatio
 When context is needed, read in this order:
 1. `DESIGN.md` — frozen core ideas, full architecture, frame model, runtime pseudocode
 2. `PROTOCOL.md` — NDJSON frame contract (valid/invalid examples, precedence rules)
-3. `IMPLEMENT.md` — phased implementation checklist with progress tracking
-4. `BOOTSTRAP.md` — minimum folder layout and file creation order for first runnable skeleton
+3. `DESIGN_PHASE2.md` — production framework architecture (hooks, plugins, build, security)
+4. `IMPLEMENT.md` — Phase 1 implementation checklist (frozen)
+5. `IMPLEMENT_PHASE2.md` — Phase 2 execution checklist (open-source release)
+6. `BOOTSTRAP.md` — minimum folder layout and file creation order for first runnable skeleton
 
 ## Tech Stack
 
@@ -87,18 +89,18 @@ engine/              # Framework core — users should not edit these files
 client/              # User assets
   styles.css         # Tailwind CSS entry point (imported by surface HTML)
 shared/              # User data helpers
-  content.ts         # Bilingual content data (ko/en) for all demo pages
+  content.ts         # Bilingual content data (ko/en) for all pages
   i18n.ts            # i18n helpers (getLang from cookie, lang cookie path)
 layouts/             # Shared surface composition helpers (string-based HTML builders)
   surface.ts         # stateSlots, joinSurface, surfaceDocument, baseSurface
 routes/              # Route modules + page-specific templates/transitions (auto-loaded)
   index.ts           # GET / — home page (hero, concepts, features)
   search.ts          # GET /search — feature/concept search
-  chat.ts            # GET /chat — chatbot demo (streaming + abort)
+  chat.ts            # GET /chat — chatbot (streaming + abort)
   guide/[slug].ts    # GET /guide/:slug — guides (quickstart + 5 concept guides)
   features/streaming.ts  # GET /features/streaming — frame flow visualization
   features/actions.ts    # GET /features/actions — action playground
-  features/view-transition.ts  # GET /features/view-transition — View Transition API morphing demo
+  features/view-transition.ts  # GET /features/view-transition — View Transition API morphing
   _shared/templates/ # Cross-route templates (pageHeader, systemError)
   _shared/transitions/   # Cross-route transitions (switchLang)
   <route>/templates/ # Per-route TSX projection components
@@ -170,7 +172,7 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 
 ### i18n (Korean / English)
 
-- All demo pages support bilingual content (ko/en) driven by `lang` cookie
+- All pages support bilingual content (ko/en) driven by `lang` cookie
 - Language switch is a transition (`data-action="switch-lang"`) — server yields full frame in target language
 - `shared/content.ts` holds `{ ko, en }` content; server sends only the selected language's data
 - `shared/i18n.ts` provides `getLang(req)` helper (reads cookie, defaults to `en`)
@@ -185,9 +187,9 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 - All template hrefs and navigation links use `prefixPath()` for correct URLs
 - Zero-cost default: empty basePath behaves identically to no basePath
 
-### Demo Site Pages
+### Showcase Site Pages
 
-| Route | Slots | Demonstrated Features |
+| Route | Slots | Features |
 |-------|-------|-----------------------|
 | `/` | `page:hero`, `page:concepts`, `page:features` | `initial` SSR only, surface composition |
 | `/guide/:slug` | `guide:content`, `guide:toc` | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |

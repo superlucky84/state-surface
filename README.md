@@ -24,7 +24,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000` — the demo site runs with SSR, streaming transitions, and live action binding out of the box.
+Open `http://localhost:3000` — the app runs with SSR, streaming transitions, and live action binding out of the box.
 
 ## Core Concepts
 
@@ -150,9 +150,9 @@ engine/                  # Framework core (do not edit)
 routes/                  # Your route modules + templates + transitions
   index.ts               #   GET / — home page
   search.ts              #   GET /search
-  chat.ts                #   GET /chat (streaming + abort demo)
+  chat.ts                #   GET /chat (streaming + abort)
   guide/[slug].ts        #   GET /guide/:slug (dynamic param)
-  features/              #   Feature demo pages
+  features/              #   Feature showcase pages
   _shared/               #   Cross-route templates & transitions
   <route>/templates/     #   Per-route TSX projection components
   <route>/transitions/   #   Per-route server-side state generators

@@ -169,7 +169,7 @@ Keep the boundary strict:
 - [x] Add optional dev overlay (`?debug=1`) showing current `activeStates`.
 - [x] Smoke check: trace output and overlay both work in dev mode.
 
-### Phase 6: Reference Flows (Must Demo)
+### Phase 6: Reference Flows
 
 - [x] Implement article loading flow (loading -> content -> comments).
 - [x] Implement search flow with state combinations.
@@ -328,11 +328,11 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 - [ ] Smoke check: search/features/chat 페이지 액션이 `data-action`으로 end-to-end 동작.
 - [ ] Smoke check: pending visual feedback visible during slow transitions.
 
-### Phase 12: Demo Site Redesign — Self-Documenting Feature Showcase
+### Phase 12: Showcase Site Redesign — Self-Documenting Feature Showcase
 
 (Phase 11 action system 완료 후 진행)
 
-기존 데모 페이지를 재기획하여, 각 페이지가 StateSurface의 특정 기능을 **콘텐츠로 설명**하면서
+기존 페이지를 재기획하여, 각 페이지가 StateSurface의 특정 기능을 **콘텐츠로 설명**하면서
 동시에 해당 기능을 **구현으로 시연**하는 자기문서화(self-documenting) 사이트로 전환한다.
 
 **설계 원칙:**
@@ -421,9 +421,9 @@ engine이 자동으로 이벤트 위임, transition 호출, pending 표시를 �
 
 ### Phase 12.1: i18n — Korean / English Bilingual Content
 
-(Phase 12 demo site 완료 후 진행)
+(Phase 12 showcase site 완료 후 진행)
 
-모든 데모 페이지에 한/영 전환 기능을 추가한다.
+모든 페이지에 한/영 전환 기능을 추가한다.
 헤더 상단에 언어 전환 버튼, 쿠키 기반 언어 유지, SSR 시점부터 올바른 언어 렌더링.
 
 **설계:**
@@ -518,10 +518,10 @@ basePath 설정 기능을 추가한다. 환경변수 `BASE_PATH`로 설정하면
 
 (Phase 12.1 i18n 완료 후 진행)
 
-StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑됨을 보여주는 데모 route.
+StateSurface의 스트리밍 아키텍처가 챗봇 UI와 자연스럽게 매핑됨을 보여주는 route.
 LLM 응답 스트리밍 → NDJSON partial frame → progressive UI construction.
 
-**Why this demo matters:**
+**Why this matters:**
 
 - NDJSON 스트리밍이 가장 빛나는 실전 유스케이스
 - `abort previous` = 생성 중단 (별도 취소 로직 불필요)
@@ -994,13 +994,13 @@ debug 섹션 (증상 → 원인 → 해결 3단):
 
 목표는 **현재 프로젝트 안에 독립 CLI 도구 `createStateSurface`를 만드는 것**이다.
 `../lithent/createLithent`는 구현 방식의 참고 레퍼런스로만 활용한다.
-신규 사용자가 `npx create-state-surface` 한 번으로 현재 데모 사이트
+신규 사용자가 `npx create-state-surface` 한 번으로 현재 사이트
 (라우트/템플릿/트랜지션/스타일/문서)를 그대로 설치해 실행할 수 있게 만든다.
 
 **배포 목표:**
 
 - `npx create-state-surface` 한 번으로 프로젝트 생성.
-- 생성 직후 `pnpm install && pnpm dev`로 현재 데모와 동일한 동작/화면 재현.
+- 생성 직후 `pnpm install && pnpm dev`로 현재 사이트와 동일한 동작/화면 재현.
 - 가이드/예제 페이지(`/`, `/guide/*`, `/features/*`, `/search`, `/chat`)가 모두 포함.
 
 **CLI 위치:**
@@ -1048,9 +1048,9 @@ create-state-surface/   ← 현재 저장소 안 별도 패키지
   - [ ] 프로젝트명/설명 치환 처리.
   - [ ] Git 초기화 (`git init`) 자동 실행.
   - [ ] 완료 후 안내 메시지 출력.
-- [ ] demo parity 보장:
+- [ ] parity 보장:
   - [ ] 생성 프로젝트에서 라우트 목록이 기준과 동일한지 검증.
-  - [ ] chat/search/features/guide 동작이 기준 데모와 기능적으로 동일한지 검증.
+  - [ ] chat/search/features/guide 동작이 기준 사이트와 기능적으로 동일한지 검증.
   - [ ] ko/en 전환, pending, abort previous, NDJSON 스트리밍이 동일하게 동작하는지 검증.
 - [ ] 자동 검증 파이프라인:
   - [ ] 템플릿 스캐폴딩 e2e 테스트 추가 (생성 → 설치 → 테스트/스모크).
@@ -1063,18 +1063,18 @@ create-state-surface/   ← 현재 저장소 안 별도 패키지
 - [ ] Smoke check:
   - [ ] 완전히 빈 디렉토리에서 `npx create-state-surface my-app` 1회 실행으로 프로젝트 생성.
   - [ ] 설치 후 5분 내 `pnpm dev` + 핵심 페이지 확인 가능.
-  - [ ] 생성 결과물이 현재 레퍼런스 데모와 시각/동작상 큰 차이 없이 일치.
+  - [ ] 생성 결과물이 현재 사이트와 시각/동작상 큰 차이 없이 일치.
 
-## Definition of Done (v1 Prototype)
+## Definition of Done (v1)
 
-- [x] End-to-end demo works with real NDJSON streamed transitions.
+- [x] End-to-end flow works with real NDJSON streamed transitions.
 - [x] Partial hydration/update works at `<h-state>` boundary.
 - [x] Locked protocol rules are enforced by tests.
 - [x] Debug trace + overlay available in dev mode.
 - [x] Multi-page routing works with file-based route discovery.
 - [ ] README includes run instructions and architecture summary.
 - [ ] Guide pages provide step-by-step onboarding with runnable examples.
-- [ ] `createStateSurface` CLI can scaffold the full StateSurface demo project via `npx create-state-surface`.
+- [ ] `createStateSurface` CLI can scaffold a full StateSurface project via `npx create-state-surface`.
 
 ## Open Questions (Keep Short)
 
