@@ -26,6 +26,27 @@ pnpm dev
 
 Open `http://localhost:3000` — the app runs with SSR, streaming transitions, and live action binding out of the box.
 
+## Install and Update Model
+
+Use **CLI scaffolding for new projects**, and **package upgrade for existing projects**.
+
+- `create-state-surface`: project bootstrap only
+- `state-surface`: runtime dependency to upgrade over time
+
+Do not re-run `npx create-state-surface` to update an existing app.
+
+### Update Existing Project
+
+Run this inside your generated app directory:
+
+```bash
+pnpm up state-surface
+pnpm test
+pnpm build
+```
+
+For breaking releases, follow release notes and migration guidance.
+
 ## Core Concepts
 
 | Concept | What | File location |
@@ -171,6 +192,7 @@ pnpm test                         # Run all tests (Vitest)
 pnpm test path/to/file.test.ts    # Run a single test file
 pnpm format                       # Format with Prettier
 pnpm format:check                 # Check formatting
+pnpm up state-surface             # Upgrade framework runtime (in generated app)
 
 BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ```

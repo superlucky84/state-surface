@@ -525,6 +525,25 @@ export type { StateSurfacePlugin } from './client/types.js';
 
 `tsconfig.json`의 `paths`와 `vite.config.ts`의 `resolve.alias`도 동일하게 추가.
 
+### 6.4 프레임워크 패키지 분리 및 배포 모델
+
+Phase 2의 배포 단위는 **코어 런타임 패키지**와 **스캐폴딩 CLI 패키지**를 분리한다.
+
+- `state-surface`:
+  - 프레임워크 런타임 배포 단위.
+  - public API 진입점(`.`, `./server`, `./client`)과 타입 선언을 포함.
+  - 기존 프로젝트는 이 패키지 버전을 올려 업데이트한다.
+- `create-state-surface`:
+  - 신규 프로젝트 생성 전용 CLI.
+  - 생성된 템플릿의 `package.json`은 `state-surface`를 의존성으로 가진다.
+  - 프레임워크 업데이트 수단으로 재실행하지 않는다.
+
+업데이트 경로는 다음을 기본 원칙으로 한다.
+
+1. 기존 프로젝트: `pnpm up state-surface`로 업그레이드.
+2. 브레이킹 변경: `MIGRATION.md`를 기준으로 수정.
+3. 반복되는 브레이킹 패턴은 `state-surface migrate` codemod로 자동화.
+
 ---
 
 ## 7. 설정 시스템
@@ -670,7 +689,8 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 | 5 | §4 에러 처리 | 2-9 | **High** — 안정성 |
 | 6 | §5 보안 | 2-9 | **High** — 안정성 |
 | 7 | §6 Public API 분리 | 2-12 (확장) | **Medium** — DX |
-| 8 | §8 싱글턴 → 인스턴스 | 2-13 (확장) | **Medium** — 테스트 품질 |
+| 8 | §6.4 패키지 분리/배포 | 2-6 (확장) | **Critical** — 재스캐폴딩 없는 업데이트 경로 |
+| 9 | §8 싱글턴 → 인스턴스 | 2-13 (확장) | **Medium** — 테스트 품질 |
 
 ### 구현 의존성 그래프
 
@@ -688,6 +708,9 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 §4 에러 처리 (독립 — 언제든 적용 가능)
 
 §6 Public API 분리 (§1, §2 완료 후 — 새 export 대상이 확정되어야)
+  └── §6.4 패키지 분리/배포
+        ├── state-surface 패키지 배포
+        └── create-state-surface 템플릿 의존성 정렬
 ```
 
 ---
@@ -704,6 +727,7 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 | `engine/client/main.ts` → `createStateSurface()` | 클라이언트 엔트리가 사용자 코드로 이동 | `client/main.ts` 수정, Prism 코드 플러그인으로 이동 |
 | `import from 'state-surface'` → `/server`, `/client` 분리 | 일부 import 경로 변경 | `defineTransition` → `'state-surface/server'` |
 | i18n 로직 엔진에서 제거 | 기존 자동 lang 주입 동작 변경 | 훅으로 명시적 등록 필요 |
+| 업데이트 경로 전환 (`재스캐폴딩` → `패키지 업그레이드`) | 운영 중 프로젝트의 업데이트 방식 변경 | `pnpm up state-surface` + 브레이킹 시 `MIGRATION.md`/`state-surface migrate` 적용 |
 
 ### 10.2 단계별 적용
 
@@ -711,6 +735,7 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 2. **서버 훅** 추가 후 i18n 분리 (기존 동작 유지하면서 훅 기반으로 전환).
 3. **클라이언트 플러그인** 추가 후 Prism 분리.
 4. **Public API 분리** 마지막 (export 대상 확정 후).
+5. **패키지 분리/배포 모델** 적용 (`state-surface` 업그레이드 경로 + `create-state-surface` 생성 전용 역할 확정).
 
 각 단계는 `pnpm test` 통과를 게이트로 한다.
 
