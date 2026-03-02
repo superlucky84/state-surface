@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StateSurface } from './stateSurface.js';
+import type { StateSurfacePlugin } from './stateSurface.js';
 import type { TraceEvent } from './stateSurface.js';
 
 function createMockSurface() {
@@ -31,6 +32,13 @@ function createMockSurface() {
   });
 
   return { surface, rendered, hydrated, updated, unmounted, traces };
+}
+
+function createMockPlugin(overrides: Partial<StateSurfacePlugin> = {}): StateSurfacePlugin {
+  return {
+    name: 'mock-plugin',
+    ...overrides,
+  };
 }
 
 function setupDOM(anchors: string[], stateJson?: Record<string, any>) {
@@ -528,6 +536,89 @@ describe('StateSurface', () => {
 
       expect(a.hasAttribute('data-pending')).toBe(false);
       expect(b.hasAttribute('data-pending')).toBe(false);
+      fetchSpy.mockRestore();
+    });
+  });
+
+  // ── Plugin Hooks ──
+
+  describe('plugin hooks', () => {
+    it('calls mount/update/unmount plugin hooks during state sync', () => {
+      setupDOM(['a', 'b']);
+
+      const mounted: string[] = [];
+      const updated: string[] = [];
+      const unmounted: string[] = [];
+
+      const plugin = createMockPlugin({
+        onMount(slotName) {
+          mounted.push(slotName);
+        },
+        onUpdate(slotName) {
+          updated.push(slotName);
+        },
+        onUnmount(slotName) {
+          unmounted.push(slotName);
+        },
+      });
+
+      const { surface } = createMockSurface();
+      (surface as any).plugins = [plugin];
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: {
+          a: { v: 1 },
+          b: { v: 1 },
+        },
+      });
+      (surface as any).flushQueue(true);
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        full: false,
+        states: { a: { v: 2 } },
+        changed: ['a'],
+        removed: ['b'],
+      });
+      (surface as any).flushQueue(true);
+
+      expect(mounted).toEqual(['a', 'b']);
+      expect(updated).toEqual(['a']);
+      expect(unmounted).toEqual(['b']);
+    });
+
+    it('calls transition start/end hooks and propagates transition error', async () => {
+      setupDOM(['a']);
+
+      const starts: string[] = [];
+      const ends: Array<{ name: string; error?: Error }> = [];
+      const plugin = createMockPlugin({
+        onTransitionStart(name) {
+          starts.push(name);
+        },
+        onTransitionEnd(name, error) {
+          ends.push({ name, error });
+        },
+      });
+
+      const { surface } = createMockSurface();
+      (surface as any).plugins = [plugin];
+      surface.discoverAnchors();
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('', { status: 500 }));
+
+      await surface.transition('demo');
+
+      expect(starts).toEqual(['demo']);
+      expect(ends).toHaveLength(1);
+      expect(ends[0].name).toBe('demo');
+      expect(ends[0].error).toBeInstanceOf(Error);
+      expect(ends[0].error?.message).toBe('HTTP 500');
+
       fetchSpy.mockRestore();
     });
   });

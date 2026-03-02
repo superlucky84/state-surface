@@ -81,7 +81,7 @@ describe('all routes render valid HTML', () => {
       expect(res.text).toContain('<!DOCTYPE html>');
       expect(res.text).toContain('<html');
       expect(res.text).toContain('</html>');
-      expect(res.text).toContain('<script type="module" src="/engine/client/main.ts">');
+      expect(res.text).toContain('<script type="module" src="/client/main.ts">');
     });
   }
 });

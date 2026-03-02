@@ -1,10 +1,22 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from './index.js';
 
 let app: any;
+let appWithHooks: any;
+const afterHook = vi.fn();
 beforeAll(async () => {
   ({ app } = await createApp());
+  ({ app: appWithHooks } = await createApp({
+    hooks: {
+      onBeforeTransition({ body }) {
+        return { ...body, fromHook: true };
+      },
+      onAfterTransition({ name }) {
+        afterHook(name);
+      },
+    },
+  }));
 });
 import { registerTransition } from './transition.js';
 import type { StateFrame } from '../shared/protocol.js';
@@ -12,6 +24,8 @@ import { decodeFrames } from '../shared/ndjson.js';
 
 describe('POST /transition/:name', () => {
   beforeEach(() => {
+    afterHook.mockClear();
+
     // Register a test transition
     registerTransition('test:article', async function* (params) {
       yield {
@@ -82,5 +96,49 @@ describe('POST /transition/:name', () => {
     const frames = decodeFrames(res.text);
 
     expect(frames.some(f => f.type === 'error')).toBe(true);
+  });
+
+  it('keeps default body when hooks are not registered', async () => {
+    registerTransition('test:no-hooks', async function* (params) {
+      yield {
+        type: 'state',
+        states: { payload: params },
+      } satisfies StateFrame;
+      yield { type: 'done' } satisfies StateFrame;
+    });
+
+    const res = await request(app).post('/transition/test:no-hooks').send({ q: 1 });
+    const frames = decodeFrames(res.text);
+
+    expect(frames[0].type).toBe('state');
+    if (frames[0].type === 'state') {
+      expect(frames[0].states.payload).toMatchObject({ q: 1 });
+      expect(frames[0].states.payload).not.toHaveProperty('fromHook');
+    }
+  });
+
+  it('applies onBeforeTransition body transform when hooks are registered', async () => {
+    registerTransition('test:with-hooks', async function* (params) {
+      yield {
+        type: 'state',
+        states: { payload: params },
+      } satisfies StateFrame;
+      yield { type: 'done' } satisfies StateFrame;
+    });
+
+    const res = await request(appWithHooks).post('/transition/test:with-hooks').send({ q: 1 });
+    const frames = decodeFrames(res.text);
+
+    expect(frames[0].type).toBe('state');
+    if (frames[0].type === 'state') {
+      expect(frames[0].states.payload).toMatchObject({ q: 1, fromHook: true });
+    }
+  });
+
+  it('calls onAfterTransition after stream completion', async () => {
+    await request(appWithHooks).post('/transition/test:article').send({ articleId: 7 });
+
+    expect(afterHook).toHaveBeenCalledWith('test:article');
+    expect(afterHook).toHaveBeenCalledTimes(1);
   });
 });

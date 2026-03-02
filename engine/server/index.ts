@@ -4,13 +4,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
 import { validateStateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
-import { getLang, isValidLang, langCookie } from '../../shared/i18n.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes, fileToUrlPattern } from './routeScanner.js';
 import { createRouteHandler } from './routeHandler.js';
 import { setBasePath, prefixPath } from '../shared/basePath.js';
 import { loadManifest } from './assets.js';
 import type { RouteModule } from '../shared/routeModule.js';
+import type { TransitionHooks } from './hooks.js';
 
 export interface StateSurfaceServerOptions {
   port?: number;
@@ -18,7 +18,7 @@ export interface StateSurfaceServerOptions {
   securityHeaders?: boolean;
   bodyLimit?: string;
   transitionTimeout?: number;
-  // hooks?: TransitionHooks; ← Phase 2-8
+  hooks?: TransitionHooks;
 }
 
 function resolveRootDir(): string {
@@ -46,7 +46,16 @@ type RouteEntry = { urlPattern: string; mod: any };
 function loadRoutesFromGlob(): RouteEntry[] | null {
   try {
     const entries = Object.entries(
-      import.meta.glob(['/routes/**/*.ts', '!**/*.test.ts', '!**/transitions/**', '!**/templates/**', '!**/_shared/**'], { eager: true })
+      import.meta.glob(
+        [
+          '/routes/**/*.ts',
+          '!**/*.test.ts',
+          '!**/transitions/**',
+          '!**/templates/**',
+          '!**/_shared/**',
+        ],
+        { eager: true }
+      )
     );
     const routes: RouteEntry[] = [];
     for (const [filePath, mod] of entries) {
@@ -108,19 +117,21 @@ export async function createApp(options?: StateSurfaceServerOptions) {
       return;
     }
 
-    // Set language cookie for switch-lang transition
-    if (req.params.name === 'switch-lang' && isValidLang(req.body?.lang)) {
-      res.setHeader('Set-Cookie', langCookie(req.body.lang));
-    }
-
     res.setHeader('Content-Type', 'application/x-ndjson');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-      // Auto-inject lang from cookie if not provided in body
-      const body = req.body ?? {};
-      if (!body.lang) body.lang = getLang(req);
+      const defaultBody =
+        req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+      const body = options?.hooks?.onBeforeTransition
+        ? ((await options.hooks.onBeforeTransition({
+            name: req.params.name,
+            body: { ...defaultBody },
+            req,
+            res,
+          })) ?? defaultBody)
+        : defaultBody;
       const gen = handler(body);
 
       for await (const frame of gen) {
@@ -142,9 +153,19 @@ export async function createApp(options?: StateSurfaceServerOptions) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown server error';
       res.write(encodeFrame({ type: 'error', message }));
+    } finally {
+      try {
+        await options?.hooks?.onAfterTransition?.({
+          name: req.params.name,
+          req,
+          res,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[TransitionHook] onAfterTransition failed: ${message}`);
+      }
+      res.end();
     }
-
-    res.end();
   });
 
   // Dev server with Vite middleware for client-side TS

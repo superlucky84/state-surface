@@ -18,6 +18,7 @@ export interface StateSurfaceOptions {
   hydrateTemplate: TemplateHydrator;
   updateTemplate: TemplateUpdater;
   unmountTemplate: (name: string, el: HTMLElement) => void;
+  plugins?: StateSurfacePlugin[];
   maxQueue?: number;
   frameBudgetMs?: number;
   trace?: (event: TraceEvent) => void;
@@ -26,6 +27,16 @@ export interface StateSurfaceOptions {
 
 export interface TransitionOptions {
   pendingTargets?: string[];
+}
+
+export interface StateSurfacePlugin {
+  name: string;
+  onInit?(surface: StateSurface): void;
+  onMount?(slotName: string, el: Element, data: unknown): void;
+  onUpdate?(slotName: string, el: Element, data: unknown): void;
+  onUnmount?(slotName: string, el: Element): void;
+  onTransitionStart?(name: string): void;
+  onTransitionEnd?(name: string, error?: Error): void;
 }
 
 // ── StateSurface ──
@@ -46,6 +57,7 @@ export class StateSurface {
   private updateTemplate: TemplateUpdater;
   private unmountTemplate: (name: string, el: HTMLElement) => void;
   private basePath: string;
+  private plugins: StateSurfacePlugin[];
 
   trace?: (event: TraceEvent) => void;
 
@@ -54,6 +66,7 @@ export class StateSurface {
     this.hydrateTemplate = options.hydrateTemplate;
     this.updateTemplate = options.updateTemplate;
     this.unmountTemplate = options.unmountTemplate;
+    this.plugins = options.plugins ?? [];
     this.maxQueue = options.maxQueue ?? 20;
     this.frameBudgetMs = options.frameBudgetMs ?? 33;
     this.trace = options.trace;
@@ -91,6 +104,7 @@ export class StateSurface {
 
       this.hydrateTemplate(name, data, el);
       this.mounted.add(name);
+      this.notifyMount(name, el, data);
     }
   }
 
@@ -109,6 +123,8 @@ export class StateSurface {
     this.abortController = new AbortController();
     const transitionController = this.abortController;
     const { signal } = transitionController;
+    let transitionError: Error | undefined;
+    this.notifyTransitionStart(name);
     this.markPending(options.pendingTargets);
     let firstFrameHandled = false;
 
@@ -121,6 +137,7 @@ export class StateSurface {
       });
 
       if (!res.ok || !res.body) {
+        transitionError = new Error(`HTTP ${res.status}`);
         this.trace?.({ kind: 'error', detail: `HTTP ${res.status}` });
         if (this.abortController === transitionController) {
           this.clearPending();
@@ -153,6 +170,7 @@ export class StateSurface {
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
+        transitionError = err instanceof Error ? err : new Error(String(err));
         this.trace?.({ kind: 'error', detail: err });
         if (this.abortController === transitionController) {
           this.clearPending();
@@ -160,6 +178,8 @@ export class StateSurface {
       } else if (this.abortController === transitionController) {
         this.clearPending();
       }
+    } finally {
+      this.notifyTransitionEnd(name, transitionError);
     }
   }
 
@@ -308,6 +328,7 @@ export class StateSurface {
           const el = this.anchors.get(key);
           this.unmountTemplate(key, el!);
           this.mounted.delete(key);
+          if (el) this.notifyUnmount(key, el);
           // Clear anchor content
           if (el) el.innerHTML = '';
         }
@@ -324,9 +345,11 @@ export class StateSurface {
           // First render for this anchor
           this.renderTemplate(key, nextStates[key], el);
           this.mounted.add(key);
+          this.notifyMount(key, el, nextStates[key]);
         } else {
           // Update existing
           this.updateTemplate(key, nextStates[key], el);
+          this.notifyUpdate(key, el, nextStates[key]);
         }
 
         // Trigger reveal animation (opt-in via data-animate on <h-state>)
@@ -334,11 +357,9 @@ export class StateSurface {
           el.removeAttribute('data-just-updated');
           void el.offsetWidth; // force reflow to restart animation
           el.setAttribute('data-just-updated', '');
-          el.addEventListener(
-            'animationend',
-            () => el.removeAttribute('data-just-updated'),
-            { once: true }
-          );
+          el.addEventListener('animationend', () => el.removeAttribute('data-just-updated'), {
+            once: true,
+          });
         }
       }
     };
@@ -377,5 +398,41 @@ export class StateSurface {
     }
 
     this.pendingAnchors.clear();
+  }
+
+  private notifyMount(slotName: string, el: Element, data: unknown) {
+    this.runPluginHook('onMount', plugin => plugin.onMount?.(slotName, el, data));
+  }
+
+  private notifyUpdate(slotName: string, el: Element, data: unknown) {
+    this.runPluginHook('onUpdate', plugin => plugin.onUpdate?.(slotName, el, data));
+  }
+
+  private notifyUnmount(slotName: string, el: Element) {
+    this.runPluginHook('onUnmount', plugin => plugin.onUnmount?.(slotName, el));
+  }
+
+  private notifyTransitionStart(name: string) {
+    this.runPluginHook('onTransitionStart', plugin => plugin.onTransitionStart?.(name));
+  }
+
+  private notifyTransitionEnd(name: string, error?: Error) {
+    this.runPluginHook('onTransitionEnd', plugin => plugin.onTransitionEnd?.(name, error));
+  }
+
+  private runPluginHook(
+    hook: keyof StateSurfacePlugin,
+    callback: (plugin: StateSurfacePlugin) => void
+  ) {
+    for (const plugin of this.plugins) {
+      try {
+        callback(plugin);
+      } catch (err) {
+        this.trace?.({
+          kind: 'error',
+          detail: { plugin: plugin.name, hook, message: err instanceof Error ? err.message : err },
+        });
+      }
+    }
   }
 }

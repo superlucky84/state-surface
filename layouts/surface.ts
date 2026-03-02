@@ -25,7 +25,7 @@ export function surfaceDocument({
   body,
   styles,
   stateScript = '',
-  clientEntry = '/engine/client/main.ts',
+  clientEntry = '/client/main.ts',
   lang = 'en',
 }: SurfaceDocumentOptions): string {
   const styleBlock = styles
@@ -79,7 +79,7 @@ ${body}
 <h-state name="system:error"></h-state>
 </div>
 ${stateScript}
-  <script type="module" src="${resolveAsset('/engine/client/main.ts')}"></script>
+  <script type="module" src="${resolveAsset('/client/main.ts')}"></script>
 </body>
 </html>`;
 }
@@ -104,7 +104,7 @@ ${body}
 <h-state name="system:error"></h-state>
 </div>
 ${stateScript}
-  <script type="module" src="${resolveAsset('/engine/client/main.ts')}"></script>
+  <script type="module" src="${resolveAsset('/client/main.ts')}"></script>
 </body>
 </html>`;
 }

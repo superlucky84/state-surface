@@ -154,7 +154,7 @@ Trigger transitions from HTML attributes — no JS event handlers needed.
 - **Abort previous** — concurrent transitions auto-cancel earlier ones
 - **Accumulate frames** — append/concat data into existing slots (arrays, strings, objects)
 - **Per-anchor hydration** — SHA256 hash mismatch triggers client-side fallback, not full-page rehydration
-- **i18n** — bilingual (ko/en) content driven by `lang` cookie
+- **i18n** — bilingual (ko/en) content driven by `lang` cookie + transition hook
 - **View Transition API** — MPA cross-fade + in-page element morphing via `view-transition-name`
 - **Animation presets** — 8 opt-in CSS animations via `data-animate` attribute (`fade`, `slide-up`, `scale`, `blur`, etc.)
 - **Sub-path mounting** — `BASE_PATH=/demo pnpm dev` serves under any prefix
@@ -174,13 +174,13 @@ routes/                  # Your route modules + templates + transitions
   chat.ts                #   GET /chat (streaming + abort)
   guide/[slug].ts        #   GET /guide/:slug (dynamic param)
   features/              #   Feature showcase pages
-  _shared/               #   Cross-route templates & transitions
+  _shared/               #   Cross-route templates, transitions, hooks
   <route>/templates/     #   Per-route TSX projection components
   <route>/transitions/   #   Per-route server-side state generators
 
 layouts/                 # Page composition helpers (HTML string builders)
 shared/                  # Data helpers, i18n utilities
-client/                  # User assets (styles.css)
+client/                  # User entry/plugins/assets (main.ts, plugins/, styles.css)
 ```
 
 ## Commands

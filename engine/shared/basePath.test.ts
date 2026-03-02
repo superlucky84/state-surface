@@ -63,7 +63,7 @@ describe('prefixPath — with basePath set', () => {
     setBasePath('/demo');
     expect(prefixPath('/guide/surface')).toBe('/demo/guide/surface');
     expect(prefixPath('/transition/search')).toBe('/demo/transition/search');
-    expect(prefixPath('/engine/client/main.ts')).toBe('/demo/engine/client/main.ts');
+    expect(prefixPath('/client/main.ts')).toBe('/demo/client/main.ts');
   });
 
   it('adds leading slash to relative paths', () => {

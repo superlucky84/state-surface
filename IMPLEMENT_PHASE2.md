@@ -206,18 +206,18 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Exit**: i18n 로직이 엔진에서 제거되고 훅으로 이동. Prism.js가 엔진에서 제거되고 플러그인으로 이동.
 
 ### 서버 훅 시스템 (`DESIGN_PHASE2.md` §1)
-- [ ] `TransitionHooks` 인터페이스 정의 (`onBeforeTransition`, `onAfterTransition`).
-- [ ] `StateSurfaceServerOptions`에 `hooks` 필드 추가.
-- [ ] `engine/server/index.ts` 트랜지션 엔드포인트에 훅 호출 지점 추가:
+- [x] `TransitionHooks` 인터페이스 정의 (`onBeforeTransition`, `onAfterTransition`).
+- [x] `StateSurfaceServerOptions`에 `hooks` 필드 추가.
+- [x] `engine/server/index.ts` 트랜지션 엔드포인트에 훅 호출 지점 추가:
   - 트랜지션 핸들러 실행 전: `onBeforeTransition` 호출, 반환값으로 body 교체.
   - `res.end()` 직전: `onAfterTransition` 호출.
-- [ ] `TransitionHooks` 타입을 `engine/server.ts` barrel에서 export.
+- [x] `TransitionHooks` 타입을 `engine/server.ts` barrel에서 export.
 
 ### i18n 분리 (`DESIGN_PHASE2.md` §1.3–1.4)
-- [ ] `engine/server/index.ts`에서 `shared/i18n.js` import 3개 제거 (`getLang`, `isValidLang`, `langCookie`).
-- [ ] `switch-lang` 하드코딩 (L53-55) 제거.
-- [ ] `body.lang = getLang(req)` 자동 주입 (L64) 제거.
-- [ ] `routes/_shared/hooks.ts` 생성 — i18n 로직을 사용자 훅으로 이동:
+- [x] `engine/server/index.ts`에서 `shared/i18n.js` import 3개 제거 (`getLang`, `isValidLang`, `langCookie`).
+- [x] `switch-lang` 하드코딩 (L53-55) 제거.
+- [x] `body.lang = getLang(req)` 자동 주입 (L64) 제거.
+- [x] `routes/_shared/hooks.ts` 생성 — i18n 로직을 사용자 훅으로 이동:
   ```typescript
   onBeforeTransition({ name, body, req, res }) {
     if (!body.lang) body.lang = getLang(req);
@@ -227,37 +227,37 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
     return body;
   }
   ```
-- [ ] `server.ts`에서 훅 등록: `createApp({ hooks: transitionHooks })`.
+- [x] `server.ts`에서 훅 등록: `createApp({ hooks: transitionHooks })`.
 
 ### 클라이언트 플러그인 시스템 (`DESIGN_PHASE2.md` §2)
-- [ ] `StateSurfacePlugin` 인터페이스 정의 (`name`, `onInit`, `onMount`, `onUpdate`, `onUnmount`, `onTransitionStart`, `onTransitionEnd`).
-- [ ] `engine/client/main.ts`에 `createStateSurface(options)` 팩토리 함수 구현:
+- [x] `StateSurfacePlugin` 인터페이스 정의 (`name`, `onInit`, `onMount`, `onUpdate`, `onUnmount`, `onTransitionStart`, `onTransitionEnd`).
+- [x] `engine/client/main.ts`에 `createStateSurface(options)` 팩토리 함수 구현:
   - `fallbackTemplate`, `plugins`, `debug` 옵션 수용.
   - 플러그인 `onInit` 호출.
   - `debug` 모드일 때만 `window.__surface` 노출.
-- [ ] `engine/client/stateSurface.ts`에 플러그인 호출 지점 추가:
+- [x] `engine/client/stateSurface.ts`에 플러그인 호출 지점 추가:
   - `mountTemplate()` 완료 후 → `plugin.onMount()`.
   - `updateSlot()` 완료 후 → `plugin.onUpdate()`.
   - `unmountTemplate()` 완료 후 → `plugin.onUnmount()`.
   - `runTransition()` 시작 → `plugin.onTransitionStart()`.
   - `runTransition()` 완료 → `plugin.onTransitionEnd()`.
-- [ ] `StateSurfacePlugin`, `createStateSurface` 타입을 `engine/client.ts` barrel에서 export.
+- [x] `StateSurfacePlugin`, `createStateSurface` 타입을 `engine/client.ts` barrel에서 export.
 
 ### Prism.js 분리 (`DESIGN_PHASE2.md` §2.3–2.4)
-- [ ] `engine/client/main.ts`에서 Prism.js import 6개 제거.
-- [ ] `engine/client/main.ts`에서 `highlightCode()` + MutationObserver 제거.
-- [ ] `client/plugins/prism.ts` 생성 — Prism.js를 플러그인으로 구현 (onMount/onUpdate에서 highlight).
-- [ ] `client/main.ts` (사용자 엔트리)에서 `createStateSurface({ plugins: [prismPlugin()] })` 호출.
+- [x] `engine/client/main.ts`에서 Prism.js import 6개 제거.
+- [x] `engine/client/main.ts`에서 `highlightCode()` + MutationObserver 제거.
+- [x] `client/plugins/prism.ts` 생성 — Prism.js를 플러그인으로 구현 (onMount/onUpdate에서 highlight).
+- [x] `client/main.ts` (사용자 엔트리)에서 `createStateSurface({ plugins: [prismPlugin()] })` 호출.
 - [ ] `prismjs`를 `dependencies`에서 `devDependencies`로 이동 (또는 사용자가 직접 설치).
 
 ### Baseline 테스트
-- [ ] `pnpm test` 전체 통과.
+- [x] `pnpm test` 전체 통과.
 - [ ] `pnpm dev` → 훅 경유한 i18n 동작 확인 (ko/en 전환, 쿠키 설정).
-- [ ] 훅 미등록 시에도 트랜지션 정상 동작 (훅 optional 검증).
+- [x] 훅 미등록 시에도 트랜지션 정상 동작 (훅 optional 검증).
 - [ ] Prism.js 플러그인으로 가이드 코드 하이라이팅 정상 동작.
-- [ ] 플러그인 미등록 시에도 StateSurface 코어 정상 동작.
-- [ ] `engine/server/index.ts`에 `shared/i18n` import 없음 (grep 검증).
-- [ ] `engine/client/main.ts`에 `prismjs` import 없음 (grep 검증).
+- [x] 플러그인 미등록 시에도 StateSurface 코어 정상 동작.
+- [x] `engine/server/index.ts`에 `shared/i18n` import 없음 (grep 검증).
+- [x] `engine/client/main.ts`에 `prismjs` import 없음 (grep 검증).
 
 ---
 
@@ -556,7 +556,7 @@ Phase 전체를 관통하는 통합 검증.
 | ~~4~~ | ~~**2-3 README**~~ | ~~Critical~~ | — | ✅ 완료 |
 | 5 | **2-5 package.json** | Critical | — | 배포 기본 설정 |
 | 6 | **2-7 createApp + 프로덕션 빌드** | **Critical** | §3, §7 | 이후 모든 변경의 기반 |
-| 7 | **2-8 서버 훅 + 클라이언트 플러그인** | **Critical** | §1, §2 | i18n·Prism 분리 |
+| ~~7~~ | ~~**2-8 서버 훅 + 클라이언트 플러그인**~~ | ~~**Critical**~~ | §1, §2 | ✅ 완료 (i18n·Prism 분리) |
 | 8 | **2-9 에러/보안** | **High** | §4, §5 | 안정성·타임아웃 |
 | 9 | **2-12 Public API 분리 + 타입** | **High** | §6 | 3분할 진입점 |
 | 10 | **2-6 코어 패키지 + CLI** | **Critical** | §6.4 | 생성/업데이트 경로 분리 |
@@ -603,7 +603,7 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7 완료.
-- **Next**: Phase 2-8 (서버 훅 + 클라이언트 플러그인).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7, 2-8 완료.
+- **Next**: Phase 2-12 (Public API 분리 + 타입 품질).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
 - **Blockers**: 없음.

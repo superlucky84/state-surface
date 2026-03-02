@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from './index.js';
+import { transitionHooks } from '../../routes/_shared/hooks.js';
 
 let app: any;
 beforeAll(async () => {
-  ({ app } = await createApp());
+  ({ app } = await createApp({ hooks: transitionHooks }));
 });
 
 describe('demo SSR page', () => {

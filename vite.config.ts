@@ -15,7 +15,7 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'engine/client/main.ts'),
+        main: path.resolve(__dirname, 'client/main.ts'),
         styles: path.resolve(__dirname, 'client/styles.css'),
       },
     },
