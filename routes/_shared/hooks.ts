@@ -1,4 +1,4 @@
-import type { TransitionHooks } from '../../engine/server.js';
+import type { TransitionHooks } from 'state-surface/server';
 import { getLang, isValidLang, langCookie } from '../../shared/i18n.js';
 
 export const transitionHooks: TransitionHooks = {

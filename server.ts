@@ -1,4 +1,4 @@
-import { createApp } from './engine/server/index.js';
+import { createApp } from 'state-surface/server';
 import { transitionHooks } from './routes/_shared/hooks.js';
 
 const { app, port } = await createApp({ hooks: transitionHooks });

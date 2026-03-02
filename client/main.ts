@@ -1,4 +1,4 @@
-import { createStateSurface } from '../engine/client.js';
+import { createStateSurface } from 'state-surface/client';
 import { prismPlugin } from './plugins/prism.js';
 
 createStateSurface({

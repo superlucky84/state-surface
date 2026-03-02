@@ -1,4 +1,4 @@
-import { defineTransition } from 'state-surface';
+import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 import { isValidLang } from '../../../shared/i18n.js';
 import type { Lang } from '../../../shared/i18n.js';

@@ -4,7 +4,9 @@
   "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
   "exports": {
-    ".": "./engine/index.ts"
+    ".": "./engine/index.ts",
+    "./server": "./engine/server.ts",
+    "./client": "./engine/client.ts"
   },
   "license": "MIT",
   "keywords": [

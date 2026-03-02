@@ -106,7 +106,7 @@ An async generator that yields state frames. Each `yield` = one NDJSON line = on
 
 ```typescript
 // routes/dashboard/transitions/loadDashboard.ts
-import { defineTransition } from 'state-surface';
+import { defineTransition } from 'state-surface/server';
 
 export default defineTransition('dashboard-load', async function* (_params, _req) {
   yield {
@@ -199,23 +199,38 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 
 ## API Reference
 
-All public exports are available from `'state-surface'`:
+Public APIs are split into three entry points:
 
 ```typescript
 import {
   defineTemplate,       // Register a template component for an anchor name
-  defineTransition,     // Register a transition handler
   prefixPath,           // Prepend BASE_PATH to a URL
   getBasePath,          // Get the current BASE_PATH value
 } from 'state-surface';
+
+import {
+  createApp,            // Create server app instance
+  defineTransition,     // Register a transition handler
+} from 'state-surface/server';
+
+import {
+  createStateSurface,   // Bootstrap client runtime
+} from 'state-surface/client';
 
 import type {
   RouteModule,          // Route module contract (layout, transition, initial, boot)
   BootConfig,           // Boot transition config
   StateFrame,           // NDJSON state frame type
   TemplateModule,       // Template module shape
-  TransitionHandler,    // Transition async generator type
 } from 'state-surface';
+
+import type {
+  TransitionHandler,    // Transition async generator type
+  StateSurfaceServerOptions,
+  TransitionHooks,
+} from 'state-surface/server';
+
+import type { StateSurfacePlugin } from 'state-surface/client';
 ```
 
 ## Tech Stack

@@ -4,7 +4,7 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-tsx';
-import type { StateSurfacePlugin } from '../../engine/client.js';
+import type { StateSurfacePlugin } from 'state-surface/client';
 
 function highlight(root: Element) {
   root.querySelectorAll('pre code[class*="language-"]:not(.prism-done)').forEach(el => {

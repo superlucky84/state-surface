@@ -339,16 +339,16 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Exit**: `'state-surface'`, `'state-surface/server'`, `'state-surface/client'` 3개 진입점 동작. IDE 자동완성 정상.
 
 ### Public API 3분할 (`DESIGN_PHASE2.md` §6.2–6.3)
-- [ ] `engine/index.ts` — 공통 타입/유틸만 export:
+- [x] `engine/index.ts` — 공통 타입/유틸만 export:
   - `prefixPath`, `getBasePath`, `defineTemplate`
   - `type RouteModule`, `type BootConfig`, `type StateFrame`, `type TemplateModule`
-- [ ] `engine/server.ts` 생성 — 서버 전용 API export:
+- [x] `engine/server.ts` 생성 — 서버 전용 API export:
   - `createApp`, `defineTransition`
   - `type TransitionHandler`, `type TransitionHooks`, `type StateSurfaceServerOptions`
-- [ ] `engine/client.ts` 생성 — 클라이언트 전용 API export:
+- [x] `engine/client.ts` 생성 — 클라이언트 전용 API export:
   - `createStateSurface`
   - `type StateSurfacePlugin`
-- [ ] `package.json` `exports` 맵 확장:
+- [x] `package.json` `exports` 맵 확장:
   ```json
   {
     ".": "./engine/index.ts",
@@ -356,23 +356,26 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
     "./client": "./engine/client.ts"
   }
   ```
-- [ ] `tsconfig.json` `paths` 추가 (`state-surface/server`, `state-surface/client`).
-- [ ] `vite.config.ts` `resolve.alias` 추가.
-- [ ] 사용자 코드 import 경로 마이그레이션:
+- [x] `tsconfig.json` `paths` 추가 (`state-surface/server`, `state-surface/client`).
+- [x] `vite.config.ts` `resolve.alias` 추가.
+- [x] 사용자 코드 import 경로 마이그레이션:
   - `defineTransition` → `import from 'state-surface/server'`
   - `createStateSurface` → `import from 'state-surface/client'`
 
 ### TypeScript 타입 품질
-- [ ] `tsconfig.json`에서 `declaration: true` 활성화 여부 검토.
-- [ ] public API 타입 정리 (`StateFrame`, `RouteModule`, `TransitionHandler`, `StateSurfaceServerOptions`, `StateSurfacePlugin`).
+- [x] `tsconfig.json`에서 `declaration: true` 활성화 여부 검토.
+  - 검토 결과: 현재 monorepo/패키지 분리(Phase 2-6) 전 단계이므로 `declaration`은 이번 phase에서 미활성 유지.
+- [x] public API 타입 정리 (`StateFrame`, `RouteModule`, `TransitionHandler`, `StateSurfaceServerOptions`, `StateSurfacePlugin`).
 - [ ] 스캐폴딩 프로젝트에서 `'state-surface'` import 후 자동완성 확인.
 
 ### Baseline 테스트
 - [ ] `import { defineTemplate } from 'state-surface'` — TS 에러 없음.
 - [ ] `import { createApp } from 'state-surface/server'` — TS 에러 없음.
 - [ ] `import { createStateSurface } from 'state-surface/client'` — TS 에러 없음.
-- [ ] 서버 전용 API가 `'state-surface'`(공통)에서 import 불가 확인.
-- [ ] `pnpm test` 전체 통과.
+- [x] 서버 전용 API가 `'state-surface'`(공통)에서 import 불가 확인.
+- [x] `pnpm test` 전체 통과.
+
+> Note: 저장소의 기존 광범위 TypeScript 오류로 인해(`npx tsc --noEmit`) 3개 import의 "TS 에러 없음" 항목은 분리 검증을 완료하지 못해 미체크 상태로 유지.
 
 ---
 
@@ -558,7 +561,7 @@ Phase 전체를 관통하는 통합 검증.
 | 6 | **2-7 createApp + 프로덕션 빌드** | **Critical** | §3, §7 | 이후 모든 변경의 기반 |
 | ~~7~~ | ~~**2-8 서버 훅 + 클라이언트 플러그인**~~ | ~~**Critical**~~ | §1, §2 | ✅ 완료 (i18n·Prism 분리) |
 | 8 | **2-9 에러/보안** | **High** | §4, §5 | 안정성·타임아웃 |
-| 9 | **2-12 Public API 분리 + 타입** | **High** | §6 | 3분할 진입점 |
+| ~~9~~ | ~~**2-12 Public API 분리 + 타입**~~ | ~~**High**~~ | §6 | ✅ 완료 (3분할 진입점) |
 | 10 | **2-6 코어 패키지 + CLI** | **Critical** | §6.4 | 생성/업데이트 경로 분리 |
 | 11 | 2-10 CI | High | — | 기여자 신뢰도 |
 | 12 | 2-4 문서 정리 | Medium | — | 혼란 방지 |
@@ -603,7 +606,8 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7, 2-8 완료.
-- **Next**: Phase 2-12 (Public API 분리 + 타입 품질).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7, 2-8, 2-12 완료.
+- **Next**: Phase 2-9 (에러 처리 및 보안 강화).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
 - **Blockers**: 없음.
+- **Latest commit**: not committed yet.

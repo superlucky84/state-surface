@@ -688,7 +688,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'sequence',
               steps: [
                 'Create routes/my-page/transitions/myTransition.ts.',
-                'Import defineTransition and StateFrame from state-surface.',
+                'Import defineTransition from state-surface/server and StateFrame from state-surface.',
                 'Write async function*(params): AsyncGenerator<StateFrame>.',
                 'First yield must be a full frame (omit full or set full: true) — declares complete UI state.',
                 'Use full: false + changed/removed arrays for subsequent partial updates.',
@@ -707,7 +707,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               lang: 'typescript',
               label: '✓ StateSurface — 18 lines, 3-stage UX',
               text: `// routes/search/transitions/search.ts — skeleton → cached → live
-import { defineTransition } from 'state-surface';
+import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
@@ -1233,7 +1233,7 @@ function ShippingForm() {
               type: 'code',
               lang: 'typescript',
               label: 'routes/chat/transitions/chat.ts',
-              text: `import { defineTransition } from 'state-surface';
+              text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
@@ -1534,7 +1534,7 @@ export default defineTemplate('books:results', BooksResults);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books/transitions/bookSearch.ts  ← server logic (12 lines)',
-              text: `import { defineTransition } from 'state-surface';
+              text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
@@ -2177,7 +2177,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'sequence',
               steps: [
                 'routes/my-page/transitions/myTransition.ts를 만듭니다.',
-                'state-surface에서 defineTransition과 StateFrame을 import합니다.',
+                'state-surface/server에서 defineTransition을, state-surface에서 StateFrame을 import합니다.',
                 'async function*(params): AsyncGenerator<StateFrame>을 작성합니다.',
                 '첫 yield는 반드시 full 프레임이어야 합니다 (full 생략 또는 true) — 전체 UI 상태를 선언합니다.',
                 '이후 부분 업데이트에는 full: false + changed/removed 배열을 사용합니다.',
@@ -2196,7 +2196,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               lang: 'typescript',
               label: '✓ StateSurface — 18줄, 3단계 UX',
               text: `// routes/search/transitions/search.ts — 스켈레톤 → 캐시 → 실시간
-import { defineTransition } from 'state-surface';
+import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* search({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {
@@ -2717,7 +2717,7 @@ function ShippingForm() {
               type: 'code',
               lang: 'typescript',
               label: 'routes/chat/transitions/chat.ts',
-              text: `import { defineTransition } from 'state-surface';
+              text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* chat({ message }: Record<string, unknown>): AsyncGenerator<StateFrame> {
@@ -3018,7 +3018,7 @@ export default defineTemplate('books:results', BooksResults);`,
               type: 'code',
               lang: 'typescript',
               label: 'routes/books/transitions/bookSearch.ts  ← 서버 로직 (12줄)',
-              text: `import { defineTransition } from 'state-surface';
+              text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
 async function* bookSearch({ query }: Record<string, unknown>): AsyncGenerator<StateFrame> {

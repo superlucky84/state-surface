@@ -13,7 +13,9 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "state-surface": ["./engine/index.ts"]
+      "state-surface": ["./engine/index.ts"],
+      "state-surface/server": ["./engine/server.ts"],
+      "state-surface/client": ["./engine/client.ts"]
     }
   },
   "include": ["engine", "server.ts", "client", "shared", "routes", "layouts"],
