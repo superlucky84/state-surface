@@ -31,10 +31,20 @@ function mapByText(nodes: HTMLElement[]): Map<string, HTMLElement> {
 async function captureMutations(
   target: HTMLElement,
   run: () => void | Promise<void>
-): Promise<{ addedNodes: number; removedNodes: number; characterDataMutations: number; removedMessageTexts: string[] }> {
+): Promise<{
+  addedNodes: number;
+  removedNodes: number;
+  characterDataMutations: number;
+  removedMessageTexts: string[];
+}> {
   const records: MutationRecord[] = [];
   const observer = new MutationObserver(next => records.push(...next));
-  observer.observe(target, { childList: true, subtree: true, attributes: true, characterData: true });
+  observer.observe(target, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    characterData: true,
+  });
 
   await run();
   await Promise.resolve();

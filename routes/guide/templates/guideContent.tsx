@@ -49,9 +49,7 @@ const CodeBlockInner = ({
               {lang}
             </span>
           )}
-          {showLabel && label && (
-            <span class="font-mono text-xs text-slate-500">{label}</span>
-          )}
+          {showLabel && label && <span class="font-mono text-xs text-slate-500">{label}</span>}
         </div>
         <button
           type="button"
@@ -69,7 +67,9 @@ const CodeBlockInner = ({
         </button>
       </div>
       <div class="overflow-x-auto">
-        <pre class="code-with-lines p-4 font-mono text-xs leading-snug"><code class={langClass}>{text}</code></pre>
+        <pre class="code-with-lines p-4 font-mono text-xs leading-snug">
+          <code class={langClass}>{text}</code>
+        </pre>
       </div>
     </div>
   );
@@ -111,9 +111,7 @@ const CodeBlock = ({
 
   return (
     <div class="space-y-1.5">
-      {label && (
-        <p class="text-sm font-semibold text-emerald-600">{label}</p>
-      )}
+      {label && <p class="text-sm font-semibold text-emerald-600">{label}</p>}
       <CodeBlockInner lang={lang} text={text} />
     </div>
   );
@@ -143,7 +141,12 @@ const ChecklistBlock = ({ items }: { items: string[] }) => (
 const WarningBlock = ({ text }: { text: string }) => (
   <div class="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
     <span class="mt-0.5 shrink-0 text-amber-500">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-4 w-4"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+      >
         <path d="M8 1.5a.5.5 0 0 1 .447.276l6 11A.5.5 0 0 1 14 13.5H2a.5.5 0 0 1-.447-.724l6-11A.5.5 0 0 1 8 1.5zM8 5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 5zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" />
       </svg>
     </span>
@@ -210,7 +213,12 @@ const CalloutBlock = ({ kind, text }: { kind: 'tip' | 'info' | 'note'; text: str
 const AnalogyBlock = ({ text }: { text: string }) => (
   <div class="flex gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
     <span class="mt-0.5 shrink-0 text-indigo-400">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-4 w-4"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+      >
         <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zm-.25 2a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-1.75H7a.75.75 0 0 1-.75-.75z" />
       </svg>
     </span>
@@ -297,7 +305,14 @@ type GuideContentProps = {
 
 const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action'];
 
-const GuideContent = ({ slug, loading, title, sections, demoHref, demoLabel }: GuideContentProps) => {
+const GuideContent = ({
+  slug,
+  loading,
+  title,
+  sections,
+  demoHref,
+  demoLabel,
+}: GuideContentProps) => {
   if (loading) {
     return (
       <div class="space-y-6">
@@ -341,11 +356,13 @@ const GuideContent = ({ slug, loading, title, sections, demoHref, demoLabel }: G
       <h2 class="text-2xl font-semibold tracking-tight text-slate-900">{title}</h2>
 
       {(sections ?? []).map(s => (
-        <section key={s.id} id={s.id} class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section
+          key={s.id}
+          id={s.id}
+          class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
           <h3 class="mb-3 text-base font-semibold text-slate-900">{s.heading}</h3>
-          <div class="space-y-3">
-            {(s.blocks ?? []).map((block, i) => renderBlock(block, i))}
-          </div>
+          <div class="space-y-3">{(s.blocks ?? []).map((block, i) => renderBlock(block, i))}</div>
         </section>
       ))}
 
@@ -356,7 +373,14 @@ const GuideContent = ({ slug, loading, title, sections, demoHref, demoLabel }: G
             class="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
           >
             {demoLabel}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-3.5 w-3.5"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M3 7h8M7 3l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </a>

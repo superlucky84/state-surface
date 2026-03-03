@@ -30,9 +30,7 @@ function createTestSurface() {
 }
 
 function setupAnchors(names: string[], stateJson?: Record<string, any>) {
-  document.body.innerHTML = names
-    .map(name => `<h-state name="${name}"></h-state>`)
-    .join('');
+  document.body.innerHTML = names.map(name => `<h-state name="${name}"></h-state>`).join('');
 
   if (stateJson) {
     const script = document.createElement('script');

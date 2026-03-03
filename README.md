@@ -1,5 +1,7 @@
 # StateSurface
 
+[![CI](https://github.com/superlucky84/state-surface/actions/workflows/ci.yml/badge.svg)](https://github.com/superlucky84/state-surface/actions/workflows/ci.yml)
+
 A **state-layout mapping runtime** for MPA pages with NDJSON streaming updates.
 
 The server owns state. The client owns DOM projection. Pages load as real HTML; in-page updates stream through `<h-state>` anchors — no SPA router, no client-side state management.

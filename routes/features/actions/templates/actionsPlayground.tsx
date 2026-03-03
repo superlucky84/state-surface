@@ -26,7 +26,9 @@ const ActionsPlayground = ({ lastAction, result, processing, lang }: PlaygroundP
       {/* Button action */}
       <div class="space-y-2">
         <h3 class="text-sm font-semibold text-slate-700">
-          {ko ? '버튼 액션 (data-action + data-params)' : 'Button Action (data-action + data-params)'}
+          {ko
+            ? '버튼 액션 (data-action + data-params)'
+            : 'Button Action (data-action + data-params)'}
         </h3>
         <div class="flex flex-wrap gap-2">
           <button

@@ -6,9 +6,7 @@ import { searchContent, searchResults } from '../../../shared/content.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function* search(
-  params: Record<string, unknown>
-): AsyncGenerator<StateFrame, void, unknown> {
+async function* search(params: Record<string, unknown>): AsyncGenerator<StateFrame, void, unknown> {
   const query = (params.query as string) ?? '';
   const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
 

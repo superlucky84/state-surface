@@ -45,8 +45,7 @@ describe('fillHState', () => {
   });
 
   it('fills multiple anchors', () => {
-    const html =
-      '<h-state name="page:article"></h-state><h-state name="panel:comments"></h-state>';
+    const html = '<h-state name="page:article"></h-state><h-state name="panel:comments"></h-state>';
     const states = {
       'page:article': { title: 'Test' },
       'panel:comments': { count: 5 },

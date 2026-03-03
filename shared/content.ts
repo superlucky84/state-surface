@@ -380,17 +380,20 @@ function Dashboard() {
               items: [
                 {
                   symptom: 'The page loads but the anchor area is completely empty.',
-                  cause: 'The slot name in stateSlots() does not match the name in defineTemplate().',
+                  cause:
+                    'The slot name in stateSlots() does not match the name in defineTemplate().',
                   fix: 'Compare <h-state name="..."> value with the first argument of defineTemplate("..."). They must be character-for-character identical including the colon.',
                 },
                 {
                   symptom: 'Tailwind styles are applied in dev but break in production.',
-                  cause: 'Tailwind purges classes it cannot detect in surface string templates at build time.',
+                  cause:
+                    'Tailwind purges classes it cannot detect in surface string templates at build time.',
                   fix: "Add the surface file pattern to tailwind.config content array (e.g. './routes/**/*.ts') or use safelist for dynamic class strings.",
                 },
                 {
                   symptom: 'Anchor content flashes on first load.',
-                  cause: 'SSR hash mismatch — the server-rendered HTML differs from the client hydration output.',
+                  cause:
+                    'SSR hash mismatch — the server-rendered HTML differs from the client hydration output.',
                   fix: 'Ensure the template renders identically server-side and client-side. Avoid window/document references at render time; move them inside mount().',
                 },
               ],
@@ -420,7 +423,7 @@ function Dashboard() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Template is a JSX component that receives data from the server and renders it. You don\'t fetch data or manage state — the server sends props, and the template just displays them. Same function works for both SSR and client updates.',
+              text: "Template is a JSX component that receives data from the server and renders it. You don't fetch data or manage state — the server sends props, and the template just displays them. Same function works for both SSR and client updates.",
             },
           ],
         },
@@ -586,7 +589,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'checklist',
               items: [
                 'File is under routes/**/templates/*.tsx (auto-discovery path).',
-                "defineTemplate('name', ...) name matches <h-state name=\"...\"> exactly.",
+                'defineTemplate(\'name\', ...) name matches <h-state name="..."> exactly.',
                 'Props type matches what the transition sends in states.',
                 'Lists use key prop to prevent incorrect diffing.',
                 'No server-driven data stored in local state.',
@@ -603,17 +606,20 @@ function StockPrice({ symbol }: { symbol: string }) {
               items: [
                 {
                   symptom: 'Clicking a button does nothing — the anchor never re-renders.',
-                  cause: "The name in defineTemplate('name', ...) does not match the <h-state name=\"...\"> attribute.",
+                  cause:
+                    'The name in defineTemplate(\'name\', ...) does not match the <h-state name="..."> attribute.',
                   fix: 'Copy the exact string from <h-state name="..."> and paste it as the first argument to defineTemplate. Check for typos, missing colons, or case mismatches.',
                 },
                 {
                   symptom: 'Content renders on the first load but breaks after a transition.',
-                  cause: 'Props type mismatch — the transition sends different shape data than the template expects.',
+                  cause:
+                    'Props type mismatch — the transition sends different shape data than the template expects.',
                   fix: 'Align the TypeScript type in the template with exactly what the transition yields in states. Add console.log(props) inside the template to inspect received data.',
                 },
                 {
                   symptom: 'Hydration error in the browser console.',
-                  cause: 'The SSR output and CSR output differ — usually caused by using Date.now(), Math.random(), or window inside the render function.',
+                  cause:
+                    'The SSR output and CSR output differ — usually caused by using Date.now(), Math.random(), or window inside the render function.',
                   fix: 'Move any client-only logic (window, document, random values) inside mount() so it runs only after hydration, not during render.',
                 },
               ],
@@ -886,8 +892,9 @@ h-state[data-animate="rotate"][data-just-updated] {
               items: [
                 {
                   symptom: 'The client receives the stream but the UI never updates.',
-                  cause: 'The first yielded frame has full: false — the client rejects partial-first streams.',
-                  fix: "Remove full: false from the first yield, or omit the full field entirely. Full is the default. Only set full: false on frames after the first.",
+                  cause:
+                    'The first yielded frame has full: false — the client rejects partial-first streams.',
+                  fix: 'Remove full: false from the first yield, or omit the full field entirely. Full is the default. Only set full: false on frames after the first.',
                 },
                 {
                   symptom: 'A partial frame fires but the target anchor does not re-render.',
@@ -900,8 +907,10 @@ h-state[data-animate="rotate"][data-just-updated] {
                   fix: 'Add yield { type: "done" } as the last statement in the async generator function.',
                 },
                 {
-                  symptom: 'An error thrown inside the generator silently swallows without user feedback.',
-                  cause: 'Unhandled errors in async generators close the stream without sending an error frame.',
+                  symptom:
+                    'An error thrown inside the generator silently swallows without user feedback.',
+                  cause:
+                    'Unhandled errors in async generators close the stream without sending an error frame.',
                   fix: "Wrap async operations in try/catch and yield { type: 'error', template: 'system:error', data: { message } } to surface errors to the UI.",
                 },
               ],
@@ -976,8 +985,8 @@ h-state[data-animate="rotate"][data-just-updated] {
             {
               type: 'sequence',
               steps: [
-                "Add data-action=\"transition-name\" to a <button> or <form>.",
-                "Add data-params='{\"key\":\"value\"}' for static JSON params (optional).",
+                'Add data-action="transition-name" to a <button> or <form>.',
+                'Add data-params=\'{"key":"value"}\' for static JSON params (optional).',
                 'For forms, <input name="..."> field values auto-merge with data-params.',
                 'Add data-pending-targets="slot1,slot2" to scope the pending indicator (optional; defaults to all anchors).',
                 'No JS required — the engine listens via delegated click/submit on document.',
@@ -1101,7 +1110,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'warning',
-              text: "data-params must be valid JSON with double-quoted keys. data-params=\"{query: 'foo'}\" silently fails — use data-params='{\"query\":\"foo\"}'.",
+              text: 'data-params must be valid JSON with double-quoted keys. data-params="{query: \'foo\'}" silently fails — use data-params=\'{"query":"foo"}\'.',
             },
             {
               type: 'checklist',
@@ -1124,22 +1133,26 @@ function ShippingForm() {
               items: [
                 {
                   symptom: 'Click does nothing — no network request appears in DevTools.',
-                  cause: 'data-action typo or missing attribute; element may be inside a shadow DOM that blocks delegation.',
+                  cause:
+                    'data-action typo or missing attribute; element may be inside a shadow DOM that blocks delegation.',
                   fix: 'Check the attribute name (data-action, not data-transition or action). Inspect the element in DevTools to confirm the attribute is present.',
                 },
                 {
                   symptom: 'POST fires but server responds 404.',
-                  cause: 'Transition file is missing or named differently from the data-action value.',
+                  cause:
+                    'Transition file is missing or named differently from the data-action value.',
                   fix: 'Confirm that routes/<page>/transitions/<name>.ts exists and that <name> matches the data-action string exactly.',
                 },
                 {
                   symptom: 'Form submit sends empty params — input values are not included.',
-                  cause: 'Form inputs are missing name attributes, or data-action is on the button instead of the <form>.',
+                  cause:
+                    'Form inputs are missing name attributes, or data-action is on the button instead of the <form>.',
                   fix: 'Add name="..." to every <input>. Place data-action on the <form> element, not the submit button.',
                 },
                 {
                   symptom: 'Pending spinner stays forever after action completes.',
-                  cause: 'Server generator exited without yielding a done frame, or an uncaught error killed the stream.',
+                  cause:
+                    'Server generator exited without yielding a done frame, or an uncaught error killed the stream.',
                   fix: 'Ensure the transition generator has a finally block that yields { type: "done" }. Wrap async operations in try/catch.',
                 },
               ],
@@ -1188,7 +1201,7 @@ function ShippingForm() {
             {
               type: 'callout',
               kind: 'info',
-              text: 'The chat demo at /chat uses accumulate frames for streaming. Each token the server yields appends to the bot\'s response string — the template receives the fully concatenated text every time, with no local state.',
+              text: "The chat demo at /chat uses accumulate frames for streaming. Each token the server yields appends to the bot's response string — the template receives the fully concatenated text every time, with no local state.",
             },
           ],
         },
@@ -1215,8 +1228,8 @@ function ShippingForm() {
             {
               type: 'sequence',
               steps: [
-                'Yield a full frame first to initialise the slot (e.g., messages: [], text: \'\').',
-                'For each delta, yield { type: \'state\', accumulate: true, states: { \'slot\': delta } }.',
+                "Yield a full frame first to initialise the slot (e.g., messages: [], text: '').",
+                "For each delta, yield { type: 'state', accumulate: true, states: { 'slot': delta } }.",
                 'Arrays are concatenated: [...existingArray, ...incomingArray].',
                 'Strings are concatenated: existingString + incomingString.',
                 'Scalars replace: incomingValue replaces existingValue.',
@@ -1292,7 +1305,7 @@ export default defineTransition('chat', chat);`,
               type: 'sequence',
               steps: [
                 "Full frame: { 'chat:messages': { messages: [] } } — initialises slot.",
-                "Accumulate frame: { messages: [userMsg] } — runtime appends → messages: [userMsg].",
+                'Accumulate frame: { messages: [userMsg] } — runtime appends → messages: [userMsg].',
                 "Accumulate frame: { 'chat:current': { text: 'Hello' } } — runtime concat → text: 'Hello'.",
                 "Accumulate frame: { text: ' world!' } — runtime concat → text: 'Hello world!'.",
                 'Full frame resets: new session start, all accumulated state replaced.',
@@ -1328,12 +1341,14 @@ export default defineTransition('chat', chat);`,
               items: [
                 {
                   symptom: 'Accumulated array keeps growing after starting a new session.',
-                  cause: 'A full frame was not yielded at the start of the new session — old state was still in activeStates.',
+                  cause:
+                    'A full frame was not yielded at the start of the new session — old state was still in activeStates.',
                   fix: "Always begin a new session with a full frame that resets the slot (e.g., messages: []). The chat transition's first yield is always a full frame for this reason.",
                 },
                 {
                   symptom: 'Bot response text shows duplicated content after rapid user messages.',
-                  cause: 'Previous streaming session was aborted but chat:current was not reset — next session accumulates onto leftover text.',
+                  cause:
+                    'Previous streaming session was aborted but chat:current was not reset — next session accumulates onto leftover text.',
                   fix: "Include chat:current: { text: '' } in the full frame at the start of each transition to clear it. Alternatively, use removed: ['chat:current'] in a partial frame after the stream ends.",
                 },
                 {
@@ -1351,7 +1366,7 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: 'Open the Chat demo to see accumulate in action — each token the server yields appends to the bot\'s response string, with no local state in the template.',
+              text: "Open the Chat demo to see accumulate in action — each token the server yields appends to the bot's response string, with no local state in the template.",
             },
           ],
         },
@@ -1868,18 +1883,22 @@ function Dashboard() {
               type: 'debug',
               items: [
                 {
-                  symptom: '페이지가 빈 화면으로 렌더링됩니다 — <h-state> 안에 아무것도 보이지 않습니다.',
-                  cause: 'stateSlots()가 surface 문자열에서 누락되었거나 transition이 해당 슬롯 이름에 상태를 보내지 않습니다.',
+                  symptom:
+                    '페이지가 빈 화면으로 렌더링됩니다 — <h-state> 안에 아무것도 보이지 않습니다.',
+                  cause:
+                    'stateSlots()가 surface 문자열에서 누락되었거나 transition이 해당 슬롯 이름에 상태를 보내지 않습니다.',
                   fix: 'layout에서 각 앵커에 stateSlots("slot-name")이 있는지 확인하세요. SSR HTML 소스에서 <h-state name="slot-name">을 검색해 확인하세요.',
                 },
                 {
                   symptom: 'Hydration 오류 — 콘솔에 mismatch 경고가 표시됩니다.',
-                  cause: 'SSR에서 렌더링된 내용이 클라이언트 재렌더링 결과와 다릅니다. 가장 흔한 원인은 surface에 동적 값이 직접 포함된 경우입니다.',
+                  cause:
+                    'SSR에서 렌더링된 내용이 클라이언트 재렌더링 결과와 다릅니다. 가장 흔한 원인은 surface에 동적 값이 직접 포함된 경우입니다.',
                   fix: '동적 콘텐츠는 surface 문자열에서 제거하고 <h-state> + Template을 통해 주입하세요.',
                 },
                 {
                   symptom: '특정 앵커만 갱신되지 않습니다.',
-                  cause: '<h-state name> 속성이 defineTemplate 등록 이름 또는 transition states 키와 다릅니다.',
+                  cause:
+                    '<h-state name> 속성이 defineTemplate 등록 이름 또는 transition states 키와 다릅니다.',
                   fix: '세 위치의 이름이 완전히 일치하는지 확인하세요: stateSlots("name"), defineTemplate("name", ...), states["name"].',
                 },
               ],
@@ -2069,13 +2088,13 @@ function StockPrice({ symbol }: { symbol: string }) {
           blocks: [
             {
               type: 'warning',
-              text: "defineTemplate('name', ...)의 이름은 <h-state name=\"...\"> 속성과 정확히 일치해야 합니다. 불일치 시 렌더링이 자동으로 건너뛰어집니다 — 에러가 발생하지 않습니다.",
+              text: 'defineTemplate(\'name\', ...)의 이름은 <h-state name="..."> 속성과 정확히 일치해야 합니다. 불일치 시 렌더링이 자동으로 건너뛰어집니다 — 에러가 발생하지 않습니다.',
             },
             {
               type: 'checklist',
               items: [
                 '파일이 routes/**/templates/*.tsx 하위에 있습니다 (자동 발견 경로).',
-                "defineTemplate('name', ...)의 이름이 <h-state name=\"...\">와 정확히 일치합니다.",
+                'defineTemplate(\'name\', ...)의 이름이 <h-state name="...">와 정확히 일치합니다.',
                 'props 타입이 transition의 states에서 보내는 것과 정확히 일치합니다.',
                 '리스트는 key prop을 사용하여 올바른 diff를 보장합니다.',
                 '서버 구동 데이터가 로컬 상태에 저장되지 않습니다.',
@@ -2092,18 +2111,21 @@ function StockPrice({ symbol }: { symbol: string }) {
               items: [
                 {
                   symptom: 'Template이 전혀 렌더링되지 않습니다 — 앵커가 빈 상태입니다.',
-                  cause: "defineTemplate('name', ...)의 이름이 <h-state name=\"...\"> 속성과 다르거나 템플릿 파일이 routes/**/templates/ 경로에 없습니다.",
-                  fix: "두 이름이 완전히 동일한지 확인하세요. 파일 경로가 routes/my-page/templates/myContent.tsx 형식인지 확인하세요.",
+                  cause:
+                    'defineTemplate(\'name\', ...)의 이름이 <h-state name="..."> 속성과 다르거나 템플릿 파일이 routes/**/templates/ 경로에 없습니다.',
+                  fix: '두 이름이 완전히 동일한지 확인하세요. 파일 경로가 routes/my-page/templates/myContent.tsx 형식인지 확인하세요.',
                 },
                 {
                   symptom: 'TypeScript 오류: props 타입이 맞지 않습니다.',
-                  cause: 'transition에서 yield하는 states 객체의 필드명/타입이 Template의 props 타입 정의와 다릅니다.',
+                  cause:
+                    'transition에서 yield하는 states 객체의 필드명/타입이 Template의 props 타입 정의와 다릅니다.',
                   fix: 'transition 파일의 states 객체 구조와 Template의 Props 타입을 나란히 놓고 필드 이름과 타입을 맞추세요.',
                 },
                 {
                   symptom: '리스트 아이템이 갱신 시 깜빡이거나 순서가 틀립니다.',
-                  cause: '리스트 아이템에 key prop이 없어 Lithent diff가 인덱스 기반으로 동작합니다.',
-                  fix: "items.map(item => <li key={item.id}>{item.name}</li>) 처럼 안정적인 고유 key를 사용하세요.",
+                  cause:
+                    '리스트 아이템에 key prop이 없어 Lithent diff가 인덱스 기반으로 동작합니다.',
+                  fix: 'items.map(item => <li key={item.id}>{item.name}</li>) 처럼 안정적인 고유 key를 사용하세요.',
                 },
               ],
             },
@@ -2375,7 +2397,8 @@ h-state[data-animate="rotate"][data-just-updated] {
               items: [
                 {
                   symptom: '첫 프레임 직후 클라이언트가 스트림 전체를 무시합니다.',
-                  cause: '첫 프레임이 full: false (partial)로 yield되었습니다. 프로토콜 위반입니다.',
+                  cause:
+                    '첫 프레임이 full: false (partial)로 yield되었습니다. 프로토콜 위반입니다.',
                   fix: '첫 yield 프레임에서 full: false를 제거하거나 full: true를 명시하세요. 모든 스트림은 full 프레임으로 시작해야 합니다.',
                 },
                 {
@@ -2461,7 +2484,7 @@ h-state[data-animate="rotate"][data-just-updated] {
               type: 'sequence',
               steps: [
                 '<button> 또는 <form>에 data-action="transition-name"을 추가합니다.',
-                "정적 JSON 파라미터가 있다면 data-params='{\"key\":\"value\"}'를 추가합니다 (선택사항).",
+                '정적 JSON 파라미터가 있다면 data-params=\'{"key":"value"}\'를 추가합니다 (선택사항).',
                 '폼의 경우 <input name="..."> 필드 값이 data-params와 자동으로 병합됩니다.',
                 '필요하다면 data-pending-targets="slot1,slot2"로 pending 표시를 제한합니다 (기본값: 모든 앵커).',
                 'JS가 필요 없습니다 — 엔진이 document에서 위임 방식으로 click/submit을 수신합니다.',
@@ -2585,7 +2608,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'warning',
-              text: "data-params는 반드시 이중 따옴표로 된 키를 사용한 유효한 JSON이어야 합니다. data-params=\"{query: 'foo'}\"는 자동으로 실패합니다 — data-params='{\"query\":\"foo\"}'를 사용하세요.",
+              text: 'data-params는 반드시 이중 따옴표로 된 키를 사용한 유효한 JSON이어야 합니다. data-params="{query: \'foo\'}"는 자동으로 실패합니다 — data-params=\'{"query":"foo"}\'를 사용하세요.',
             },
             {
               type: 'checklist',
@@ -2607,8 +2630,10 @@ function ShippingForm() {
               type: 'debug',
               items: [
                 {
-                  symptom: '클릭해도 아무 반응이 없습니다 — DevTools에 네트워크 요청이 나타나지 않습니다.',
-                  cause: 'data-action 속성 오타 또는 누락. 또는 shadow DOM 내부 요소일 수 있습니다.',
+                  symptom:
+                    '클릭해도 아무 반응이 없습니다 — DevTools에 네트워크 요청이 나타나지 않습니다.',
+                  cause:
+                    'data-action 속성 오타 또는 누락. 또는 shadow DOM 내부 요소일 수 있습니다.',
                   fix: 'DevTools에서 요소를 클릭하여 data-action 속성이 실제로 있는지 확인하세요. data-transition이나 action 등 다른 이름을 사용하지 않았는지 확인하세요.',
                 },
                 {
@@ -2618,12 +2643,14 @@ function ShippingForm() {
                 },
                 {
                   symptom: '폼 제출 시 input 값이 서버에 전달되지 않습니다.',
-                  cause: 'input에 name 속성이 없거나, data-action이 form 대신 submit 버튼에 있습니다.',
+                  cause:
+                    'input에 name 속성이 없거나, data-action이 form 대신 submit 버튼에 있습니다.',
                   fix: '모든 <input>에 name="..." 속성을 추가하고, data-action을 submit 버튼이 아닌 <form> 요소에 놓으세요.',
                 },
                 {
                   symptom: '액션 완료 후에도 pending 스피너가 계속 표시됩니다.',
-                  cause: '서버 generator가 done 프레임 없이 종료되거나 uncaught 예외로 스트림이 끊겼습니다.',
+                  cause:
+                    '서버 generator가 done 프레임 없이 종료되거나 uncaught 예외로 스트림이 끊겼습니다.',
                   fix: "transition에 finally 블록을 추가하여 항상 yield { type: 'done' }이 전송되도록 하세요. async 작업은 try/catch로 감싸세요.",
                 },
               ],
@@ -2699,7 +2726,7 @@ function ShippingForm() {
             {
               type: 'sequence',
               steps: [
-                '먼저 full 프레임을 yield하여 슬롯을 초기화합니다 (예: messages: [], text: \'\').',
+                "먼저 full 프레임을 yield하여 슬롯을 초기화합니다 (예: messages: [], text: '').",
                 "각 delta마다 { type: 'state', accumulate: true, states: { 'slot': delta } }를 yield합니다.",
                 '배열 필드: [...기존배열, ...새배열]로 연결됩니다.',
                 '문자열 필드: 기존문자열 + 새문자열로 연결됩니다.',
@@ -2812,12 +2839,14 @@ export default defineTransition('chat', chat);`,
               items: [
                 {
                   symptom: '새 세션 시작 후에도 누적 배열이 계속 커진다.',
-                  cause: '새 세션 시작 시 full 프레임을 yield하지 않아 이전 activeStates가 남아있음.',
+                  cause:
+                    '새 세션 시작 시 full 프레임을 yield하지 않아 이전 activeStates가 남아있음.',
                   fix: '모든 transition은 슬롯을 초기화하는 full 프레임(예: messages: [])으로 시작해야 합니다. 채팅 transition의 첫 번째 yield가 항상 full 프레임인 이유입니다.',
                 },
                 {
                   symptom: '빠른 메시지 전송 후 봇 응답 텍스트가 중복 표시된다.',
-                  cause: '이전 스트리밍 세션이 abort됐지만 chat:current가 초기화되지 않아 다음 세션이 남은 텍스트에 누적.',
+                  cause:
+                    '이전 스트리밍 세션이 abort됐지만 chat:current가 초기화되지 않아 다음 세션이 남은 텍스트에 누적.',
                   fix: "각 transition 시작의 full 프레임에 'chat:current': { text: '' }를 포함하여 초기화하세요. 또는 스트림 종료 후 partial 프레임의 removed: ['chat:current']를 사용하세요.",
                 },
                 {
@@ -3180,9 +3209,10 @@ export function streamingContent(lang: Lang) {
       lang,
     },
     'demo:controls': {
-      description: lang === 'ko'
-        ? '버튼을 클릭하여 다양한 프레임 유형을 시연하는 transition을 실행하세요. 타임라인과 출력이 실시간으로 업데이트됩니다.'
-        : 'Click a button to fire a transition that demonstrates different frame types. Watch the timeline and output update in real time.',
+      description:
+        lang === 'ko'
+          ? '버튼을 클릭하여 다양한 프레임 유형을 시연하는 transition을 실행하세요. 타임라인과 출력이 실시간으로 업데이트됩니다.'
+          : 'Click a button to fire a transition that demonstrates different frame types. Watch the timeline and output update in real time.',
       runLabel: lang === 'ko' ? '전체 시퀀스 실행' : 'Run Full Sequence',
       errorLabel: lang === 'ko' ? '에러 프레임 발생' : 'Trigger Error Frame',
     },
@@ -3283,32 +3313,163 @@ type SearchableItem = {
 
 const SEARCH_FEATURES: I18nObj<SearchableItem[]> = {
   en: [
-    { title: 'Surface', description: 'Page shell with <h-state> anchors declared as plain HTML strings.', href: '/guide/surface', tags: ['surface', 'layout', 'html', 'anchor', 'h-state', 'shell'] },
-    { title: 'Template', description: 'TSX projection components that render inside each <h-state> anchor.', href: '/guide/template', tags: ['template', 'tsx', 'projection', 'component', 'render'] },
-    { title: 'Transition', description: 'Server-side async generators that yield state frames progressively.', href: '/guide/transition', tags: ['transition', 'stream', 'frame', 'ndjson', 'generator', 'server'] },
-    { title: 'Action', description: 'Declarative triggers via data-action attributes for transition invocation.', href: '/guide/action', tags: ['action', 'data-action', 'click', 'submit', 'form', 'pending'] },
-    { title: 'Streaming Demo', description: 'Full/partial frames, removed keys, and error frames in real time.', href: '/features/streaming', tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo'] },
-    { title: 'Actions Playground', description: 'Button actions, form submissions, scoped pending, and multiple actions.', href: '/features/actions', tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo'] },
-    { title: 'Full Frame', description: 'Declares complete UI state. Replaces all activeStates. First frame must be full.', href: '/features/streaming', tags: ['full', 'frame', 'replace', 'state'] },
-    { title: 'Partial Frame', description: 'Merges changes via "changed" and "removed" arrays into existing state.', href: '/features/streaming', tags: ['partial', 'frame', 'changed', 'removed', 'merge'] },
-    { title: 'Hydration', description: 'Per <h-state> root hydration with SSR hash mismatch fallback.', href: '/guide/template', tags: ['hydration', 'ssr', 'hash', 'boundary'] },
-    { title: 'Abort Previous', description: 'Starting a new transition cancels the previous in-flight stream.', href: '/features/streaming', tags: ['abort', 'cancel', 'concurrency', 'previous'] },
-    { title: 'Pending State', description: 'data-pending attribute on anchors during transition, removed on first frame.', href: '/features/actions', tags: ['pending', 'data-pending', 'loading', 'spinner'] },
-    { title: 'Boot Auto-Run', description: 'SSR renders initial state, then client auto-runs transition after hydration.', href: '/guide/transition', tags: ['boot', 'auto', 'ssr', 'hydration', 'initial'] },
+    {
+      title: 'Surface',
+      description: 'Page shell with <h-state> anchors declared as plain HTML strings.',
+      href: '/guide/surface',
+      tags: ['surface', 'layout', 'html', 'anchor', 'h-state', 'shell'],
+    },
+    {
+      title: 'Template',
+      description: 'TSX projection components that render inside each <h-state> anchor.',
+      href: '/guide/template',
+      tags: ['template', 'tsx', 'projection', 'component', 'render'],
+    },
+    {
+      title: 'Transition',
+      description: 'Server-side async generators that yield state frames progressively.',
+      href: '/guide/transition',
+      tags: ['transition', 'stream', 'frame', 'ndjson', 'generator', 'server'],
+    },
+    {
+      title: 'Action',
+      description: 'Declarative triggers via data-action attributes for transition invocation.',
+      href: '/guide/action',
+      tags: ['action', 'data-action', 'click', 'submit', 'form', 'pending'],
+    },
+    {
+      title: 'Streaming Demo',
+      description: 'Full/partial frames, removed keys, and error frames in real time.',
+      href: '/features/streaming',
+      tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo'],
+    },
+    {
+      title: 'Actions Playground',
+      description: 'Button actions, form submissions, scoped pending, and multiple actions.',
+      href: '/features/actions',
+      tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo'],
+    },
+    {
+      title: 'Full Frame',
+      description:
+        'Declares complete UI state. Replaces all activeStates. First frame must be full.',
+      href: '/features/streaming',
+      tags: ['full', 'frame', 'replace', 'state'],
+    },
+    {
+      title: 'Partial Frame',
+      description: 'Merges changes via "changed" and "removed" arrays into existing state.',
+      href: '/features/streaming',
+      tags: ['partial', 'frame', 'changed', 'removed', 'merge'],
+    },
+    {
+      title: 'Hydration',
+      description: 'Per <h-state> root hydration with SSR hash mismatch fallback.',
+      href: '/guide/template',
+      tags: ['hydration', 'ssr', 'hash', 'boundary'],
+    },
+    {
+      title: 'Abort Previous',
+      description: 'Starting a new transition cancels the previous in-flight stream.',
+      href: '/features/streaming',
+      tags: ['abort', 'cancel', 'concurrency', 'previous'],
+    },
+    {
+      title: 'Pending State',
+      description: 'data-pending attribute on anchors during transition, removed on first frame.',
+      href: '/features/actions',
+      tags: ['pending', 'data-pending', 'loading', 'spinner'],
+    },
+    {
+      title: 'Boot Auto-Run',
+      description: 'SSR renders initial state, then client auto-runs transition after hydration.',
+      href: '/guide/transition',
+      tags: ['boot', 'auto', 'ssr', 'hydration', 'initial'],
+    },
   ],
   ko: [
-    { title: 'Surface', description: '순수 HTML 문자열로 <h-state> 앵커를 선언하는 페이지 셸.', href: '/guide/surface', tags: ['surface', 'layout', 'html', 'anchor', 'h-state', 'shell', '서피스', '레이아웃'] },
-    { title: 'Template', description: '각 <h-state> 앵커 안에서 렌더링되는 TSX 프로젝션 컴포넌트.', href: '/guide/template', tags: ['template', 'tsx', 'projection', 'component', 'render', '템플릿', '컴포넌트'] },
-    { title: 'Transition', description: '상태 프레임을 점진적으로 yield하는 서버 측 async generator.', href: '/guide/transition', tags: ['transition', 'stream', 'frame', 'ndjson', 'generator', 'server', '트랜지션', '스트림'] },
-    { title: 'Action', description: 'transition 호출을 위한 data-action 속성 기반 선언적 트리거.', href: '/guide/action', tags: ['action', 'data-action', 'click', 'submit', 'form', 'pending', '액션'] },
-    { title: '스트리밍 데모', description: 'Full/Partial 프레임, removed 키, error 프레임을 실시간으로 확인.', href: '/features/streaming', tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo', '스트리밍'] },
-    { title: '액션 플레이그라운드', description: '버튼 액션, 폼 제출, 스코프드 pending, 다중 액션 체험.', href: '/features/actions', tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo', '액션', '폼'] },
-    { title: 'Full 프레임', description: '전체 UI 상태를 선언. 모든 activeStates를 교체. 첫 프레임은 반드시 full.', href: '/features/streaming', tags: ['full', 'frame', 'replace', 'state', '프레임'] },
-    { title: 'Partial 프레임', description: '"changed"와 "removed" 배열을 통해 기존 상태에 변경사항을 병합.', href: '/features/streaming', tags: ['partial', 'frame', 'changed', 'removed', 'merge', '프레임'] },
-    { title: 'Hydration', description: '<h-state> 루트별 하이드레이션과 SSR 해시 불일치 폴백.', href: '/guide/template', tags: ['hydration', 'ssr', 'hash', 'boundary', '하이드레이션'] },
-    { title: 'Abort Previous', description: '새 transition을 시작하면 진행 중인 이전 스트림을 취소.', href: '/features/streaming', tags: ['abort', 'cancel', 'concurrency', 'previous', '취소'] },
-    { title: 'Pending 상태', description: 'transition 중 앵커에 data-pending 속성 부여, 첫 프레임에 제거.', href: '/features/actions', tags: ['pending', 'data-pending', 'loading', 'spinner', '로딩'] },
-    { title: 'Boot Auto-Run', description: 'SSR이 초기 상태를 렌더링한 후 클라이언트가 hydration 후 자동으로 transition 실행.', href: '/guide/transition', tags: ['boot', 'auto', 'ssr', 'hydration', 'initial', '부트'] },
+    {
+      title: 'Surface',
+      description: '순수 HTML 문자열로 <h-state> 앵커를 선언하는 페이지 셸.',
+      href: '/guide/surface',
+      tags: ['surface', 'layout', 'html', 'anchor', 'h-state', 'shell', '서피스', '레이아웃'],
+    },
+    {
+      title: 'Template',
+      description: '각 <h-state> 앵커 안에서 렌더링되는 TSX 프로젝션 컴포넌트.',
+      href: '/guide/template',
+      tags: ['template', 'tsx', 'projection', 'component', 'render', '템플릿', '컴포넌트'],
+    },
+    {
+      title: 'Transition',
+      description: '상태 프레임을 점진적으로 yield하는 서버 측 async generator.',
+      href: '/guide/transition',
+      tags: [
+        'transition',
+        'stream',
+        'frame',
+        'ndjson',
+        'generator',
+        'server',
+        '트랜지션',
+        '스트림',
+      ],
+    },
+    {
+      title: 'Action',
+      description: 'transition 호출을 위한 data-action 속성 기반 선언적 트리거.',
+      href: '/guide/action',
+      tags: ['action', 'data-action', 'click', 'submit', 'form', 'pending', '액션'],
+    },
+    {
+      title: '스트리밍 데모',
+      description: 'Full/Partial 프레임, removed 키, error 프레임을 실시간으로 확인.',
+      href: '/features/streaming',
+      tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo', '스트리밍'],
+    },
+    {
+      title: '액션 플레이그라운드',
+      description: '버튼 액션, 폼 제출, 스코프드 pending, 다중 액션 체험.',
+      href: '/features/actions',
+      tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo', '액션', '폼'],
+    },
+    {
+      title: 'Full 프레임',
+      description: '전체 UI 상태를 선언. 모든 activeStates를 교체. 첫 프레임은 반드시 full.',
+      href: '/features/streaming',
+      tags: ['full', 'frame', 'replace', 'state', '프레임'],
+    },
+    {
+      title: 'Partial 프레임',
+      description: '"changed"와 "removed" 배열을 통해 기존 상태에 변경사항을 병합.',
+      href: '/features/streaming',
+      tags: ['partial', 'frame', 'changed', 'removed', 'merge', '프레임'],
+    },
+    {
+      title: 'Hydration',
+      description: '<h-state> 루트별 하이드레이션과 SSR 해시 불일치 폴백.',
+      href: '/guide/template',
+      tags: ['hydration', 'ssr', 'hash', 'boundary', '하이드레이션'],
+    },
+    {
+      title: 'Abort Previous',
+      description: '새 transition을 시작하면 진행 중인 이전 스트림을 취소.',
+      href: '/features/streaming',
+      tags: ['abort', 'cancel', 'concurrency', 'previous', '취소'],
+    },
+    {
+      title: 'Pending 상태',
+      description: 'transition 중 앵커에 data-pending 속성 부여, 첫 프레임에 제거.',
+      href: '/features/actions',
+      tags: ['pending', 'data-pending', 'loading', 'spinner', '로딩'],
+    },
+    {
+      title: 'Boot Auto-Run',
+      description:
+        'SSR이 초기 상태를 렌더링한 후 클라이언트가 hydration 후 자동으로 transition 실행.',
+      href: '/guide/transition',
+      tags: ['boot', 'auto', 'ssr', 'hydration', 'initial', '부트'],
+    },
   ],
 };
 
@@ -3325,12 +3486,19 @@ export function searchContent(lang: Lang, query?: string) {
     },
     'search:input': {
       query: query ?? '',
-      placeholder: lang === 'ko' ? '예: 스트리밍, 액션, 하이드레이션...' : 'e.g. streaming, action, hydration...',
-      label: lang === 'ko' ? 'StateSurface 기능과 개념 검색' : 'Search StateSurface features and concepts',
+      placeholder:
+        lang === 'ko'
+          ? '예: 스트리밍, 액션, 하이드레이션...'
+          : 'e.g. streaming, action, hydration...',
+      label:
+        lang === 'ko'
+          ? 'StateSurface 기능과 개념 검색'
+          : 'Search StateSurface features and concepts',
       buttonLabel: lang === 'ko' ? '검색' : 'Search',
-      hint: lang === 'ko'
-        ? 'Form data-action이 검색 transition을 트리거합니다. 결과는 NDJSON 프레임으로 스트리밍됩니다.'
-        : 'Form data-action triggers a search transition. Results stream as NDJSON frames.',
+      hint:
+        lang === 'ko'
+          ? 'Form data-action이 검색 transition을 트리거합니다. 결과는 NDJSON 프레임으로 스트리밍됩니다.'
+          : 'Form data-action triggers a search transition. Results stream as NDJSON frames.',
     },
   };
 }

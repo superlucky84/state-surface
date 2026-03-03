@@ -25,7 +25,9 @@ async function* streamDemo(
           description: ko ? '에러 데모 진행 중...' : 'Error demo in progress...',
         },
         'demo:timeline': {
-          frames: [{ type: 'state', label: ko ? 'Full 프레임 전송됨' : 'Full frame sent', ts: Date.now() }],
+          frames: [
+            { type: 'state', label: ko ? 'Full 프레임 전송됨' : 'Full frame sent', ts: Date.now() },
+          ],
         },
         'demo:output': { activeKeys: ['demo:controls', 'demo:timeline', 'demo:output'] },
       },
@@ -37,7 +39,10 @@ async function* streamDemo(
       type: 'error',
       message: 'Intentional error to demonstrate error frame handling',
       template: 'system:error',
-      data: { message: 'This is a demonstration error frame. In real apps, transitions can yield error frames when something goes wrong.' },
+      data: {
+        message:
+          'This is a demonstration error frame. In real apps, transitions can yield error frames when something goes wrong.',
+      },
     };
     return;
   }
@@ -52,11 +57,17 @@ async function* streamDemo(
       'page:header': base['page:header'],
       'demo:controls': {
         ...base['demo:controls'],
-        description: ko ? '스트리밍 진행 중... Full 프레임 전송됨.' : 'Streaming in progress... Full frame sent.',
+        description: ko
+          ? '스트리밍 진행 중... Full 프레임 전송됨.'
+          : 'Streaming in progress... Full frame sent.',
       },
       'demo:timeline': {
         frames: [
-          { type: 'full', label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots', ts },
+          {
+            type: 'full',
+            label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots',
+            ts,
+          },
         ],
       },
       'demo:output': {
@@ -75,13 +86,25 @@ async function* streamDemo(
     states: {
       'demo:timeline': {
         frames: [
-          { type: 'full', label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots', ts },
-          { type: 'partial-changed', label: ko ? 'Partial 프레임: timeline + output 변경' : 'Partial frame: changed timeline + output', ts: Date.now() },
+          {
+            type: 'full',
+            label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots',
+            ts,
+          },
+          {
+            type: 'partial-changed',
+            label: ko
+              ? 'Partial 프레임: timeline + output 변경'
+              : 'Partial frame: changed timeline + output',
+            ts: Date.now(),
+          },
         ],
       },
       'demo:output': {
         activeKeys: ['demo:controls', 'demo:timeline', 'demo:output'],
-        detail: ko ? 'Partial 프레임이 timeline과 output을 갱신. controls는 그대로.' : 'Timeline and output updated by partial frame. Controls unchanged.',
+        detail: ko
+          ? 'Partial 프레임이 timeline과 output을 갱신. controls는 그대로.'
+          : 'Timeline and output updated by partial frame. Controls unchanged.',
       },
     },
     changed: ['demo:timeline', 'demo:output'],
@@ -96,7 +119,15 @@ async function* streamDemo(
     accumulate: true,
     states: {
       'demo:timeline': {
-        frames: [{ type: 'accumulate', label: ko ? 'Accumulate: timeline에 항목 추가 (배열 concat)' : 'Accumulate: appended to timeline (array concat)', ts: accTs }],
+        frames: [
+          {
+            type: 'accumulate',
+            label: ko
+              ? 'Accumulate: timeline에 항목 추가 (배열 concat)'
+              : 'Accumulate: appended to timeline (array concat)',
+            ts: accTs,
+          },
+        ],
       },
     },
   };
@@ -110,10 +141,30 @@ async function* streamDemo(
     states: {
       'demo:timeline': {
         frames: [
-          { type: 'full', label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots', ts },
-          { type: 'partial-changed', label: ko ? 'Partial 프레임: timeline + output 변경' : 'Partial frame: changed timeline + output', ts: ts + 600 },
-          { type: 'accumulate', label: ko ? 'Accumulate: timeline에 항목 추가 (배열 concat)' : 'Accumulate: appended to timeline (array concat)', ts: accTs },
-          { type: 'partial-removed', label: ko ? 'Partial 프레임: output 슬롯 제거' : 'Partial frame: removed output slot', ts: Date.now() },
+          {
+            type: 'full',
+            label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots',
+            ts,
+          },
+          {
+            type: 'partial-changed',
+            label: ko
+              ? 'Partial 프레임: timeline + output 변경'
+              : 'Partial frame: changed timeline + output',
+            ts: ts + 600,
+          },
+          {
+            type: 'accumulate',
+            label: ko
+              ? 'Accumulate: timeline에 항목 추가 (배열 concat)'
+              : 'Accumulate: appended to timeline (array concat)',
+            ts: accTs,
+          },
+          {
+            type: 'partial-removed',
+            label: ko ? 'Partial 프레임: output 슬롯 제거' : 'Partial frame: removed output slot',
+            ts: Date.now(),
+          },
         ],
       },
     },
@@ -136,16 +187,38 @@ async function* streamDemo(
       },
       'demo:timeline': {
         frames: [
-          { type: 'full', label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots', ts },
-          { type: 'partial-changed', label: ko ? 'Partial: timeline + output 변경' : 'Partial: changed timeline + output', ts: ts + 600 },
-          { type: 'accumulate', label: ko ? 'Accumulate: timeline에 항목 추가' : 'Accumulate: appended to timeline', ts: accTs },
-          { type: 'partial-removed', label: ko ? 'Partial: output 슬롯 제거' : 'Partial: removed output slot', ts: ts + 1800 },
-          { type: 'full', label: ko ? 'Full 프레임: 모든 슬롯 복원' : 'Full frame: restored all slots', ts: Date.now() },
+          {
+            type: 'full',
+            label: ko ? 'Full 프레임: 3개 슬롯 생성' : 'Full frame: established 3 slots',
+            ts,
+          },
+          {
+            type: 'partial-changed',
+            label: ko ? 'Partial: timeline + output 변경' : 'Partial: changed timeline + output',
+            ts: ts + 600,
+          },
+          {
+            type: 'accumulate',
+            label: ko ? 'Accumulate: timeline에 항목 추가' : 'Accumulate: appended to timeline',
+            ts: accTs,
+          },
+          {
+            type: 'partial-removed',
+            label: ko ? 'Partial: output 슬롯 제거' : 'Partial: removed output slot',
+            ts: ts + 1800,
+          },
+          {
+            type: 'full',
+            label: ko ? 'Full 프레임: 모든 슬롯 복원' : 'Full frame: restored all slots',
+            ts: Date.now(),
+          },
         ],
       },
       'demo:output': {
         activeKeys: ['demo:controls', 'demo:timeline', 'demo:output'],
-        detail: ko ? 'Full 프레임이 모든 슬롯을 복원. 제거된 output이 돌아왔습니다.' : 'Full frame restored all slots. Removed output is back.',
+        detail: ko
+          ? 'Full 프레임이 모든 슬롯을 복원. 제거된 output이 돌아왔습니다.'
+          : 'Full frame restored all slots. Removed output is back.',
       },
     },
   };

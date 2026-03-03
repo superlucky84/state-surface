@@ -2,7 +2,9 @@ import { registerTemplate } from '../../shared/templateRegistry.js';
 import type { TemplateModule } from '../../shared/templateRegistry.js';
 
 export function registerTemplates() {
-  const entries = Object.entries(import.meta.glob('/routes/**/templates/**/*.tsx', { eager: true }));
+  const entries = Object.entries(
+    import.meta.glob('/routes/**/templates/**/*.tsx', { eager: true })
+  );
   for (const [, mod] of entries) {
     const template = extractTemplate(mod);
     registerTemplate(template.name, template.template);

@@ -3,7 +3,6 @@ import type { StateFrame } from 'state-surface';
 import { isValidLang } from '../../../shared/i18n.js';
 import type { Lang } from '../../../shared/i18n.js';
 
-
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -57,9 +56,7 @@ function makeBotResponse(userText: string, lang: Lang): string {
     : 'Try asking about: surface, template, transition, action, streaming, hydration, abort, ndjson, or accumulate!';
 }
 
-async function* chat(
-  params: Record<string, unknown>
-): AsyncGenerator<StateFrame, void, unknown> {
+async function* chat(params: Record<string, unknown>): AsyncGenerator<StateFrame, void, unknown> {
   const userText = String(params.message ?? '').trim();
   const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
 

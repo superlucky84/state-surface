@@ -20,7 +20,9 @@ export type LithentBridgeOptions = {
  * The bridge wraps each template in a DataProxy component so external data
  * updates are forwarded through Lithent's VDOM diff.
  */
-export function createLithentBridge(options?: LithentBridgeOptions): Pick<
+export function createLithentBridge(
+  options?: LithentBridgeOptions
+): Pick<
   StateSurfaceOptions,
   'renderTemplate' | 'hydrateTemplate' | 'updateTemplate' | 'unmountTemplate'
 > {

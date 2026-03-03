@@ -24,9 +24,7 @@ export type StateFrame = StateFrameState | StateFrameError | StateFrameDone;
 
 // ── Validation ──
 
-export type ValidationResult =
-  | { valid: true }
-  | { valid: false; reason: string };
+export type ValidationResult = { valid: true } | { valid: false; reason: string };
 
 export function validateStateFrame(frame: unknown): ValidationResult {
   if (typeof frame !== 'object' || frame === null) {

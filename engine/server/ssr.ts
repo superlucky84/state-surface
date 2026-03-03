@@ -97,27 +97,30 @@ function canonicalize(html: string): string {
   result = result.replace(/<!--[\s\S]*?-->/g, '');
 
   // Sort attributes on tags
-  result = result.replace(/<(\w[\w-]*)((?:\s+[^>]*?)?)>/g, (_match, tag: string, attrStr: string) => {
-    if (!attrStr.trim()) return `<${tag}>`;
+  result = result.replace(
+    /<(\w[\w-]*)((?:\s+[^>]*?)?)>/g,
+    (_match, tag: string, attrStr: string) => {
+      if (!attrStr.trim()) return `<${tag}>`;
 
-    const attrs: Array<[string, string]> = [];
-    const attrRegex = /\s+([\w-]+)(?:="([^"]*)")?/g;
-    let m: RegExpExecArray | null;
+      const attrs: Array<[string, string]> = [];
+      const attrRegex = /\s+([\w-]+)(?:="([^"]*)")?/g;
+      let m: RegExpExecArray | null;
 
-    while ((m = attrRegex.exec(attrStr)) !== null) {
-      const [, key, value] = m;
-      // Exclude dynamic attributes
-      if (!DYNAMIC_ATTRS.has(key)) {
-        attrs.push([key, value !== undefined ? `${key}="${value}"` : key]);
+      while ((m = attrRegex.exec(attrStr)) !== null) {
+        const [, key, value] = m;
+        // Exclude dynamic attributes
+        if (!DYNAMIC_ATTRS.has(key)) {
+          attrs.push([key, value !== undefined ? `${key}="${value}"` : key]);
+        }
       }
+
+      // Sort by attribute name
+      attrs.sort((a, b) => a[0].localeCompare(b[0]));
+      const sorted = attrs.map(([, full]) => full).join(' ');
+
+      return `<${tag}${sorted ? ' ' + sorted : ''}>`;
     }
-
-    // Sort by attribute name
-    attrs.sort((a, b) => a[0].localeCompare(b[0]));
-    const sorted = attrs.map(([, full]) => full).join(' ');
-
-    return `<${tag}${sorted ? ' ' + sorted : ''}>`;
-  });
+  );
 
   // Collapse whitespace runs, trim
   result = result.replace(/\s+/g, ' ').trim();

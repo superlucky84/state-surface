@@ -4,9 +4,7 @@ import { isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 import { viewTransitionContent } from '../../../../shared/content.js';
 
-async function* vtDemo(
-  params: Record<string, unknown>
-): AsyncGenerator<StateFrame, void, unknown> {
+async function* vtDemo(params: Record<string, unknown>): AsyncGenerator<StateFrame, void, unknown> {
   const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
   const base = viewTransitionContent(lang);
   const cardId = params.card as string | undefined;

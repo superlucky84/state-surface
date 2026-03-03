@@ -7,10 +7,7 @@ import { checkTemplates } from './templateRegistry.js';
  * Throws if any names are missing (fail-fast in development).
  * In production, logs a warning and returns the missing list.
  */
-export function verifyTemplates(
-  requiredNames: string[],
-  options?: { strict?: boolean }
-): string[] {
+export function verifyTemplates(requiredNames: string[], options?: { strict?: boolean }): string[] {
   const missing = checkTemplates(requiredNames);
   if (missing.length === 0) return [];
 

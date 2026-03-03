@@ -113,8 +113,6 @@ describe('getInitialStates', () => {
       transition: 'test-partial',
     };
 
-    await expect(getInitialStates(route, mockReq())).rejects.toThrow(
-      'full first frame'
-    );
+    await expect(getInitialStates(route, mockReq())).rejects.toThrow('full first frame');
   });
 });

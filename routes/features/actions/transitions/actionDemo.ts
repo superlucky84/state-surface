@@ -52,11 +52,18 @@ async function* actionDemo(
         lastParams: params,
         processing: false,
         lang,
-        result: actionType === 'form'
-          ? (lang === 'ko' ? `폼 수신: "${message}"` : `Form received: "${message}"`)
-          : actionType === 'scoped'
-            ? (lang === 'ko' ? '로그만 pending 표시됨 (스코프드)' : 'Only the log was marked pending (scoped)')
-            : (lang === 'ko' ? `버튼 액션 "${actionType}" 처리 완료` : `Button action "${actionType}" processed`),
+        result:
+          actionType === 'form'
+            ? lang === 'ko'
+              ? `폼 수신: "${message}"`
+              : `Form received: "${message}"`
+            : actionType === 'scoped'
+              ? lang === 'ko'
+                ? '로그만 pending 표시됨 (스코프드)'
+                : 'Only the log was marked pending (scoped)'
+              : lang === 'ko'
+                ? `버튼 액션 "${actionType}" 처리 완료`
+                : `Button action "${actionType}" processed`,
       },
       'actions:log': {
         entries: [
