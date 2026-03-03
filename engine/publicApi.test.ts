@@ -18,6 +18,8 @@ describe('public API split', () => {
 
     expect(serverApi).toHaveProperty('createApp');
     expect(serverApi).toHaveProperty('defineTransition');
+    expect(serverApi).toHaveProperty('resolveAsset');
+    expect(serverApi).toHaveProperty('resolveAssetCss');
   });
 
   it('exposes client-only APIs on state-surface/client', async () => {

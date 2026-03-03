@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
 import { validateStateFrame, type StateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
@@ -15,18 +15,11 @@ import type { TransitionHooks } from './hooks.js';
 export interface StateSurfaceServerOptions {
   port?: number;
   basePath?: string;
+  appDir?: string;
   securityHeaders?: boolean;
   bodyLimit?: string;
   transitionTimeout?: number;
   hooks?: TransitionHooks;
-}
-
-function resolveRootDir(): string {
-  try {
-    return fileURLToPath(new URL('../..', import.meta.url));
-  } catch {
-    return process.cwd();
-  }
 }
 
 function extractRouteModule(mod: any): RouteModule {
@@ -113,6 +106,7 @@ function nextFrameWithAbort(
 export async function createApp(options?: StateSurfaceServerOptions) {
   const port = options?.port ?? (Number(process.env.PORT) || 3000);
   const basePath = options?.basePath ?? process.env.BASE_PATH ?? '';
+  const rootDir = options?.appDir ?? process.cwd();
   setBasePath(basePath);
 
   const app = express();
@@ -126,7 +120,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   }
 
   // Auto-register transitions and templates
-  await bootstrapServer();
+  await bootstrapServer({ rootDir });
 
   // Auto-discover and register route modules
   // Try glob first (works in Vite SSR bundle), fall back to filesystem scan
@@ -139,7 +133,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
       registeredPatterns.push(urlPattern);
     }
   } else {
-    const routesDir = path.join(resolveRootDir(), 'routes');
+    const routesDir = path.join(rootDir, 'routes');
     const scannedRoutes = await scanRoutes(routesDir);
     for (const route of scannedRoutes) {
       const mod = await import(pathToFileURL(route.filePath).href);
@@ -267,7 +261,6 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   // Use cwd() because resolveRootDir() is relative to source layout (engine/server/),
   // which doesn't match the bundled dist/server.js location.
   async function startProd() {
-    const rootDir = process.cwd();
     loadManifest(rootDir);
     app.use(express.static(path.join(rootDir, 'dist/client')));
 

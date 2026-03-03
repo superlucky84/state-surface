@@ -3,10 +3,20 @@
   "version": "0.1.0",
   "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
+  "types": "./engine/index.ts",
   "exports": {
     ".": "./engine/index.ts",
     "./server": "./engine/server.ts",
     "./client": "./engine/client.ts"
+  },
+  "files": [
+    "engine/**/*.ts",
+    "!engine/**/*.test.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "keywords": [

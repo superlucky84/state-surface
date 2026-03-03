@@ -46,15 +46,16 @@ pnpm build
 ```
 
 For breaking releases, follow release notes and migration guidance.
+See [`MIGRATION.md`](./MIGRATION.md) for structured migration steps.
 
 ## Core Concepts
 
-| Concept | What | File location |
-|---------|------|---------------|
-| **Surface** | Page shell with `<h-state>` anchors (HTML string) | `routes/*.ts` layout |
-| **Template** | Projection component inside each anchor (TSX) | `routes/**/templates/*.tsx` |
+| Concept        | What                                              | File location                |
+| -------------- | ------------------------------------------------- | ---------------------------- |
+| **Surface**    | Page shell with `<h-state>` anchors (HTML string) | `routes/*.ts` layout         |
+| **Template**   | Projection component inside each anchor (TSX)     | `routes/**/templates/*.tsx`  |
 | **Transition** | Server-side async generator yielding state frames | `routes/**/transitions/*.ts` |
-| **Action** | Declarative trigger binding via HTML attributes | `data-action` in templates |
+| **Action**     | Declarative trigger binding via HTML attributes   | `data-action` in templates   |
 
 ### Surface
 
@@ -66,16 +67,20 @@ import type { RouteModule } from 'state-surface';
 import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
 
 export default {
-  layout: stateScript => baseSurface(joinSurface(
-    '<main class="max-w-6xl mx-auto p-6">',
-    '  <h1 class="text-2xl font-bold mb-6">Stock Dashboard</h1>',
-    '  <div class="grid grid-cols-3 gap-4 mb-8">',
-           stateSlots('stock:price', 'stock:news', 'stock:chart'),
-    '  </div>',
-    '  <h2 class="text-lg font-semibold mb-3">Market Analysis</h2>',
-           stateSlots('stock:analysis'),
-    '</main>',
-  ), stateScript),
+  layout: stateScript =>
+    baseSurface(
+      joinSurface(
+        '<main class="max-w-6xl mx-auto p-6">',
+        '  <h1 class="text-2xl font-bold mb-6">Stock Dashboard</h1>',
+        '  <div class="grid grid-cols-3 gap-4 mb-8">',
+        stateSlots('stock:price', 'stock:news', 'stock:chart'),
+        '  </div>',
+        '  <h2 class="text-lg font-semibold mb-3">Market Analysis</h2>',
+        stateSlots('stock:analysis'),
+        '</main>'
+      ),
+      stateScript
+    ),
 } satisfies RouteModule;
 ```
 
@@ -92,7 +97,8 @@ const StockPrice = ({ symbol, price, change }: Props) => (
     <h3 class="font-bold">{symbol}</h3>
     <p class="text-2xl">${price}</p>
     <span class={change >= 0 ? 'text-green-600' : 'text-red-600'}>
-      {change >= 0 ? '+' : ''}{change}%
+      {change >= 0 ? '+' : ''}
+      {change}%
     </span>
   </div>
 );
@@ -203,29 +209,29 @@ Public APIs are split into three entry points:
 
 ```typescript
 import {
-  defineTemplate,       // Register a template component for an anchor name
-  prefixPath,           // Prepend BASE_PATH to a URL
-  getBasePath,          // Get the current BASE_PATH value
+  defineTemplate, // Register a template component for an anchor name
+  prefixPath, // Prepend BASE_PATH to a URL
+  getBasePath, // Get the current BASE_PATH value
 } from 'state-surface';
 
 import {
-  createApp,            // Create server app instance
-  defineTransition,     // Register a transition handler
+  createApp, // Create server app instance
+  defineTransition, // Register a transition handler
 } from 'state-surface/server';
 
 import {
-  createStateSurface,   // Bootstrap client runtime
+  createStateSurface, // Bootstrap client runtime
 } from 'state-surface/client';
 
 import type {
-  RouteModule,          // Route module contract (layout, transition, initial, boot)
-  BootConfig,           // Boot transition config
-  StateFrame,           // NDJSON state frame type
-  TemplateModule,       // Template module shape
+  RouteModule, // Route module contract (layout, transition, initial, boot)
+  BootConfig, // Boot transition config
+  StateFrame, // NDJSON state frame type
+  TemplateModule, // Template module shape
 } from 'state-surface';
 
 import type {
-  TransitionHandler,    // Transition async generator type
+  TransitionHandler, // Transition async generator type
   StateSurfaceServerOptions,
   TransitionHooks,
 } from 'state-surface/server';

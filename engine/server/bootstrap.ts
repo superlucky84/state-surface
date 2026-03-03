@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { registerTemplate } from '../shared/templateRegistry.js';
 import type { TemplateModule } from '../shared/templateRegistry.js';
 import { registerTransition } from './transition.js';
@@ -24,11 +24,7 @@ export async function bootstrapServer(options: BootstrapOptions = {}) {
 }
 
 function resolveRootDir(): string {
-  try {
-    return fileURLToPath(new URL('../..', import.meta.url));
-  } catch {
-    return process.cwd();
-  }
+  return process.cwd();
 }
 
 async function registerTransitionsFromDir(dir: string) {

@@ -36,7 +36,6 @@ coverage/
 
 # Misc
 *.log
-*.tgz
 
 # Context artifacts
 .ctxbin/

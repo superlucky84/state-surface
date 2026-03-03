@@ -1,0 +1,21 @@
+{
+  "name": "create-state-surface",
+  "version": "0.1.0",
+  "description": "Scaffold a new StateSurface project",
+  "type": "module",
+  "bin": {
+    "create-state-surface": "./bin/create-state-surface.js"
+  },
+  "files": [
+    "bin",
+    "template",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
