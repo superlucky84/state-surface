@@ -205,6 +205,15 @@ pnpm up state-surface             # Upgrade framework runtime (in generated app)
 BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ```
 
+## Environment Variables
+
+- `PORT` (default: `3000`): server listen port for both `pnpm dev` and `pnpm start`.
+- `BASE_PATH` (default: empty): mount app under a sub-path (example: `/demo`).
+- `NODE_ENV`:
+  - `development`: Vite middleware mode for local development.
+  - `test`: app instance for test harnesses (no dev middleware startup).
+  - `production`: static assets from `dist/client` + production route handling.
+
 ## API Reference
 
 Public APIs are split into three entry points:
