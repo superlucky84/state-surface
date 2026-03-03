@@ -1,12 +1,23 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from './index.js';
+import type { StateFrame } from '../shared/protocol.js';
+import { decodeFrames } from '../shared/ndjson.js';
+import type { TransitionHandler, TransitionRegistry } from './transition.js';
 
 let app: any;
 let appWithHooks: any;
 let appWithShortTimeout: any;
 let appWithSmallBodyLimit: any;
+let transitionRegistries: TransitionRegistry[] = [];
 const afterHook = vi.fn();
+
+function registerOnAllApps(name: string, handler: TransitionHandler) {
+  for (const registry of transitionRegistries) {
+    registry.registerTransition(name, handler);
+  }
+}
+
 beforeAll(async () => {
   ({ app } = await createApp());
   ({ app: appWithHooks } = await createApp({
@@ -21,17 +32,23 @@ beforeAll(async () => {
   }));
   ({ app: appWithShortTimeout } = await createApp({ transitionTimeout: 20 }));
   ({ app: appWithSmallBodyLimit } = await createApp({ bodyLimit: '16b' }));
+
+  transitionRegistries = [
+    app.locals.transitionRegistry,
+    appWithHooks.locals.transitionRegistry,
+    appWithShortTimeout.locals.transitionRegistry,
+    appWithSmallBodyLimit.locals.transitionRegistry,
+  ];
 });
-import { registerTransition } from './transition.js';
-import type { StateFrame } from '../shared/protocol.js';
-import { decodeFrames } from '../shared/ndjson.js';
 
 describe('POST /transition/:name', () => {
   beforeEach(() => {
     afterHook.mockClear();
+    for (const registry of transitionRegistries) {
+      registry.clearRegistry();
+    }
 
-    // Register a test transition
-    registerTransition('test:article', async function* (params) {
+    registerOnAllApps('test:article', async function* (params) {
       yield {
         type: 'state',
         states: {
@@ -73,7 +90,6 @@ describe('POST /transition/:name', () => {
     const frames = decodeFrames(res.text);
     expect(frames).toHaveLength(3);
 
-    // First frame must be full
     expect(frames[0].type).toBe('state');
     if (frames[0].type === 'state') {
       expect(frames[0].full).not.toBe(false);
@@ -81,7 +97,6 @@ describe('POST /transition/:name', () => {
       expect(frames[0].states).toHaveProperty('loading');
     }
 
-    // Second frame is partial
     expect(frames[1].type).toBe('state');
     if (frames[1].type === 'state') {
       expect(frames[1].full).toBe(false);
@@ -89,13 +104,11 @@ describe('POST /transition/:name', () => {
       expect(frames[1].removed).toContain('loading');
     }
 
-    // Last frame is done
     expect(frames[2].type).toBe('done');
   });
 
   it('sends error frame for invalid frames from handler', async () => {
-    registerTransition('test:bad', async function* () {
-      // This partial frame is invalid (no changed/removed)
+    registerOnAllApps('test:bad', async function* () {
       yield {
         type: 'state',
         full: false,
@@ -110,7 +123,7 @@ describe('POST /transition/:name', () => {
   });
 
   it('sends error frame when transition generator throws', async () => {
-    registerTransition('test:throws', async function* () {
+    registerOnAllApps('test:throws', async function* () {
       yield {
         type: 'state',
         states: { a: { ok: true } },
@@ -131,7 +144,7 @@ describe('POST /transition/:name', () => {
   });
 
   it('emits timeout error frame when transition exceeds configured timeout', async () => {
-    registerTransition('test:timeout', async function* () {
+    registerOnAllApps('test:timeout', async function* () {
       await new Promise(resolve => setTimeout(resolve, 100));
       yield { type: 'done' } satisfies StateFrame;
     });
@@ -156,7 +169,7 @@ describe('POST /transition/:name', () => {
   });
 
   it('keeps default body when hooks are not registered', async () => {
-    registerTransition('test:no-hooks', async function* (params) {
+    registerOnAllApps('test:no-hooks', async function* (params) {
       yield {
         type: 'state',
         states: { payload: params },
@@ -175,7 +188,7 @@ describe('POST /transition/:name', () => {
   });
 
   it('applies onBeforeTransition body transform when hooks are registered', async () => {
-    registerTransition('test:with-hooks', async function* (params) {
+    registerOnAllApps('test:with-hooks', async function* (params) {
       yield {
         type: 'state',
         states: { payload: params },
@@ -197,5 +210,17 @@ describe('POST /transition/:name', () => {
 
     expect(afterHook).toHaveBeenCalledWith('test:article');
     expect(afterHook).toHaveBeenCalledTimes(1);
+  });
+
+  it('isolates transition registries per app instance', async () => {
+    transitionRegistries[0].registerTransition('test:isolated', async function* () {
+      yield { type: 'done' } satisfies StateFrame;
+    });
+
+    const ok = await request(app).post('/transition/test:isolated').send({});
+    expect(ok.status).toBe(200);
+
+    const missing = await request(appWithHooks).post('/transition/test:isolated').send({});
+    expect(missing.status).toBe(404);
   });
 });

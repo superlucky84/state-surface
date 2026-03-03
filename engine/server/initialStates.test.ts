@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { RouteModule } from '../shared/routeModule.js';
 import { getInitialStates } from './initialStates.js';
-import { registerTransition } from './transition.js';
+import { registerTransition, clearRegistry } from './transition.js';
 import type { StateFrame } from '../shared/protocol.js';
 
 // Minimal Express request mock
@@ -11,6 +11,8 @@ function mockReq(params: Record<string, string> = {}): any {
 
 describe('getInitialStates', () => {
   beforeEach(() => {
+    clearRegistry();
+
     // Register a test transition that yields a full first frame
     registerTransition('test-full', async function* () {
       yield {

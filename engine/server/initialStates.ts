@@ -1,6 +1,10 @@
 import type { Request } from 'express';
 import type { RouteModule } from '../shared/routeModule.js';
-import { getTransition } from './transition.js';
+import { getTransition, type TransitionHandler } from './transition.js';
+
+type InitialStatesOptions = {
+  getTransition?: (name: string) => TransitionHandler | undefined;
+};
 
 /**
  * Resolve the initial states for SSR rendering.
@@ -13,7 +17,8 @@ import { getTransition } from './transition.js';
  */
 export async function getInitialStates(
   route: RouteModule,
-  req: Request
+  req: Request,
+  options: InitialStatesOptions = {}
 ): Promise<Record<string, any>> {
   if (route.initial) {
     return await route.initial(req);
@@ -24,7 +29,8 @@ export async function getInitialStates(
   }
 
   const params = route.params?.(req) ?? {};
-  const handler = getTransition(route.transition);
+  const resolveTransition = options.getTransition ?? getTransition;
+  const handler = resolveTransition(route.transition);
 
   if (!handler) {
     throw new Error(`SSR: transition "${route.transition}" not found in registry`);

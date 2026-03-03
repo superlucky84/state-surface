@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { getTransition } from './transition.js';
+import { createTransitionRegistry } from './transition.js';
 import { validateStateFrame, type StateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
 import { bootstrapServer } from './bootstrap.js';
@@ -11,6 +11,8 @@ import { setBasePath, prefixPath } from '../shared/basePath.js';
 import { loadManifest } from './assets.js';
 import type { RouteModule } from '../shared/routeModule.js';
 import type { TransitionHooks } from './hooks.js';
+import { createTemplateRegistry } from '../shared/templateRegistry.js';
+import { createSSRRenderer } from './ssrRenderer.js';
 
 export interface StateSurfaceServerOptions {
   port?: number;
@@ -109,7 +111,11 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   const rootDir = options?.appDir ?? process.cwd();
   setBasePath(basePath);
 
+  const transitionRegistry = createTransitionRegistry();
+  const templateRegistry = createTemplateRegistry();
   const app = express();
+  app.locals.transitionRegistry = transitionRegistry;
+  app.locals.templateRegistry = templateRegistry;
   app.use(express.json({ limit: options?.bodyLimit ?? '100kb' }));
   if (options?.securityHeaders !== false) {
     app.use((_req, res, next) => {
@@ -120,7 +126,8 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   }
 
   // Auto-register transitions and templates
-  await bootstrapServer({ rootDir });
+  await bootstrapServer({ rootDir, transitionRegistry, templateRegistry });
+  const renderer = createSSRRenderer({ getTemplate: templateRegistry.getTemplate });
 
   // Auto-discover and register route modules
   // Try glob first (works in Vite SSR bundle), fall back to filesystem scan
@@ -129,7 +136,13 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   if (globRoutes) {
     for (const { urlPattern, mod } of globRoutes) {
       const routeModule = extractRouteModule(mod);
-      app.get(prefixPath(urlPattern), createRouteHandler(routeModule));
+      app.get(
+        prefixPath(urlPattern),
+        createRouteHandler(routeModule, {
+          renderer,
+          getTransition: transitionRegistry.getTransition,
+        })
+      );
       registeredPatterns.push(urlPattern);
     }
   } else {
@@ -138,14 +151,20 @@ export async function createApp(options?: StateSurfaceServerOptions) {
     for (const route of scannedRoutes) {
       const mod = await import(pathToFileURL(route.filePath).href);
       const routeModule = extractRouteModule(mod);
-      app.get(prefixPath(route.urlPattern), createRouteHandler(routeModule));
+      app.get(
+        prefixPath(route.urlPattern),
+        createRouteHandler(routeModule, {
+          renderer,
+          getTransition: transitionRegistry.getTransition,
+        })
+      );
       registeredPatterns.push(route.urlPattern);
     }
   }
 
   // POST /transition/:name — NDJSON streaming endpoint
   app.post(prefixPath('/transition/:name'), async (req, res) => {
-    const handler = getTransition(req.params.name);
+    const handler = transitionRegistry.getTransition(req.params.name);
 
     if (!handler) {
       res.status(404).json({ error: `Transition "${req.params.name}" not found` });

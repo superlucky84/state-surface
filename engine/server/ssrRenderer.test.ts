@@ -51,5 +51,17 @@ describe('ssrRenderer', () => {
       const html = renderTemplateToString('shared:widget', { title: 'Shared' });
       expect(html).toContain('Shared');
     });
+
+    it('can render from an injected registry resolver', () => {
+      const renderer = createSSRRenderer({
+        getTemplate(name) {
+          if (name === 'custom:slot') return SimpleTemplate;
+          return undefined;
+        },
+      });
+
+      const html = renderer('custom:slot', { title: 'Injected' });
+      expect(html).toContain('Injected');
+    });
   });
 });

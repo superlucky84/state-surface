@@ -4,17 +4,25 @@ import { getInitialStates } from './initialStates.js';
 import { fillHState, buildStateScript, buildBootScript, buildBasePathScript } from './ssr.js';
 import { createSSRRenderer } from './ssrRenderer.js';
 import { getBasePath } from '../shared/basePath.js';
+import type { TransitionHandler } from './transition.js';
+
+type RouteHandlerOptions = {
+  renderer?: (name: string, data: any) => string;
+  getTransition?: (name: string) => TransitionHandler | undefined;
+};
 
 /**
  * Create an Express GET handler for a route module.
  * Performs per-route SSR: initial states → layout → fillHState → respond.
  */
-export function createRouteHandler(routeModule: RouteModule) {
-  const renderer = createSSRRenderer();
+export function createRouteHandler(routeModule: RouteModule, options: RouteHandlerOptions = {}) {
+  const renderer = options.renderer ?? createSSRRenderer();
 
   return async (req: Request, res: Response) => {
     try {
-      const initialStates = await getInitialStates(routeModule, req);
+      const initialStates = await getInitialStates(routeModule, req, {
+        getTransition: options.getTransition,
+      });
 
       const hasStates = Object.keys(initialStates).length > 0;
       const stateScript = hasStates ? buildStateScript(initialStates) : '';

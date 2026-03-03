@@ -6,6 +6,7 @@ import {
   checkTemplates,
   getAllTemplateNames,
   clearRegistry,
+  createTemplateRegistry,
 } from './templateRegistry.js';
 
 // Minimal stub that satisfies TagFunction shape
@@ -62,5 +63,18 @@ describe('templateRegistry', () => {
     registerTemplate('a', stubComponent);
     registerTemplate('a', stubComponent2);
     expect(getTemplate('a')).toBe(stubComponent2);
+  });
+
+  it('createTemplateRegistry returns isolated registries', () => {
+    const a = createTemplateRegistry();
+    const b = createTemplateRegistry();
+
+    a.registerTemplate('only:a', stubComponent);
+    b.registerTemplate('only:b', stubComponent2);
+
+    expect(a.hasTemplate('only:a')).toBe(true);
+    expect(a.hasTemplate('only:b')).toBe(false);
+    expect(b.hasTemplate('only:b')).toBe(true);
+    expect(b.hasTemplate('only:a')).toBe(false);
   });
 });

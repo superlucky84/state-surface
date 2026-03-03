@@ -1,6 +1,11 @@
 import { h } from 'lithent';
 import { renderToString } from 'lithent/ssr';
+import type { TagFunction } from 'lithent';
 import { getTemplate, hasTemplate } from '../shared/templateRegistry.js';
+
+type SSRRendererOptions = {
+  getTemplate?: (name: string) => TagFunction | undefined;
+};
 
 /**
  * Render a registered template to HTML string for SSR.
@@ -8,8 +13,12 @@ import { getTemplate, hasTemplate } from '../shared/templateRegistry.js';
  *
  * Returns undefined if the template is not registered.
  */
-export function renderTemplateToString(name: string, data: any): string | undefined {
-  const component = getTemplate(name);
+export function renderTemplateToString(
+  name: string,
+  data: any,
+  getTemplateFromRegistry: (name: string) => TagFunction | undefined = getTemplate
+): string | undefined {
+  const component = getTemplateFromRegistry(name);
   if (!component) return undefined;
 
   const wdom = h(component, data ?? {});
@@ -20,10 +29,13 @@ export function renderTemplateToString(name: string, data: any): string | undefi
  * Create a renderTemplate callback for fillHState.
  * Falls back to an error comment when template is missing or rendering fails.
  */
-export function createSSRRenderer(): (name: string, data: any) => string {
+export function createSSRRenderer(
+  options: SSRRendererOptions = {}
+): (name: string, data: any) => string {
+  const getTemplateFromRegistry = options.getTemplate ?? getTemplate;
   return (name: string, data: any): string => {
     try {
-      const html = renderTemplateToString(name, data);
+      const html = renderTemplateToString(name, data, getTemplateFromRegistry);
       if (html !== undefined) return html;
       return `<!-- template "${name}" not found -->`;
     } catch (err) {

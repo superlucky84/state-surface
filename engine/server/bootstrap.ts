@@ -1,9 +1,15 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { registerTemplate } from '../shared/templateRegistry.js';
-import type { TemplateModule } from '../shared/templateRegistry.js';
-import { registerTransition } from './transition.js';
-import type { TransitionModule } from './transition.js';
+import {
+  registerTemplate,
+  type TemplateModule,
+  type TemplateRegistry,
+} from '../shared/templateRegistry.js';
+import {
+  registerTransition,
+  type TransitionModule,
+  type TransitionRegistry,
+} from './transition.js';
 import { listFiles, isModuleFile, hasSegment } from './fsUtils.js';
 
 type BootstrapOptions = {
@@ -11,6 +17,8 @@ type BootstrapOptions = {
   routesDir?: string;
   transitionsDir?: string;
   templatesDir?: string;
+  templateRegistry?: Pick<TemplateRegistry, 'registerTemplate'>;
+  transitionRegistry?: Pick<TransitionRegistry, 'registerTransition'>;
 };
 
 export async function bootstrapServer(options: BootstrapOptions = {}) {
@@ -18,16 +26,21 @@ export async function bootstrapServer(options: BootstrapOptions = {}) {
   const routesDir = options.routesDir ?? path.join(rootDir, 'routes');
   const transitionsDir = options.transitionsDir ?? routesDir;
   const templatesDir = options.templatesDir ?? routesDir;
+  const transitionRegistry = options.transitionRegistry ?? { registerTransition };
+  const templateRegistry = options.templateRegistry ?? { registerTemplate };
 
-  await registerTransitionsFromDir(transitionsDir);
-  await registerTemplatesFromDir(templatesDir);
+  await registerTransitionsFromDir(transitionsDir, transitionRegistry);
+  await registerTemplatesFromDir(templatesDir, templateRegistry);
 }
 
 function resolveRootDir(): string {
   return process.cwd();
 }
 
-async function registerTransitionsFromDir(dir: string) {
+async function registerTransitionsFromDir(
+  dir: string,
+  transitionRegistry: Pick<TransitionRegistry, 'registerTransition'>
+) {
   const modules = await loadModules(
     dir,
     'transitions',
@@ -35,11 +48,14 @@ async function registerTransitionsFromDir(dir: string) {
   );
   for (const mod of modules) {
     const transition = extractTransition(mod);
-    registerTransition(transition.name, transition.handler);
+    transitionRegistry.registerTransition(transition.name, transition.handler);
   }
 }
 
-async function registerTemplatesFromDir(dir: string) {
+async function registerTemplatesFromDir(
+  dir: string,
+  templateRegistry: Pick<TemplateRegistry, 'registerTemplate'>
+) {
   const modules = await loadModules(
     dir,
     'templates',
@@ -47,7 +63,7 @@ async function registerTemplatesFromDir(dir: string) {
   );
   for (const mod of modules) {
     const template = extractTemplate(mod);
-    registerTemplate(template.name, template.template);
+    templateRegistry.registerTemplate(template.name, template.template);
   }
 }
 

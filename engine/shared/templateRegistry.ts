@@ -13,18 +13,52 @@ export function defineTemplate(name: string, template: TagFunction): TemplateMod
 
 // ── Template Registry ──
 
-const registry = new Map<string, TagFunction>();
+export type TemplateRegistry = {
+  registerTemplate: (name: string, component: TagFunction) => void;
+  getTemplate: (name: string) => TagFunction | undefined;
+  hasTemplate: (name: string) => boolean;
+  checkTemplates: (names: string[]) => string[];
+  getAllTemplateNames: () => string[];
+  clearRegistry: () => void;
+};
+
+export function createTemplateRegistry(): TemplateRegistry {
+  const registry = new Map<string, TagFunction>();
+
+  return {
+    registerTemplate(name: string, component: TagFunction) {
+      registry.set(name, component);
+    },
+    getTemplate(name: string) {
+      return registry.get(name);
+    },
+    hasTemplate(name: string) {
+      return registry.has(name);
+    },
+    checkTemplates(names: string[]) {
+      return names.filter(name => !registry.has(name));
+    },
+    getAllTemplateNames() {
+      return [...registry.keys()];
+    },
+    clearRegistry() {
+      registry.clear();
+    },
+  };
+}
+
+const defaultRegistry = createTemplateRegistry();
 
 export function registerTemplate(name: string, component: TagFunction) {
-  registry.set(name, component);
+  defaultRegistry.registerTemplate(name, component);
 }
 
 export function getTemplate(name: string): TagFunction | undefined {
-  return registry.get(name);
+  return defaultRegistry.getTemplate(name);
 }
 
 export function hasTemplate(name: string): boolean {
-  return registry.has(name);
+  return defaultRegistry.hasTemplate(name);
 }
 
 /**
@@ -32,13 +66,13 @@ export function hasTemplate(name: string): boolean {
  * Returns the list of missing names (empty if all present).
  */
 export function checkTemplates(names: string[]): string[] {
-  return names.filter(name => !registry.has(name));
+  return defaultRegistry.checkTemplates(names);
 }
 
 export function getAllTemplateNames(): string[] {
-  return [...registry.keys()];
+  return defaultRegistry.getAllTemplateNames();
 }
 
 export function clearRegistry() {
-  registry.clear();
+  defaultRegistry.clearRegistry();
 }
