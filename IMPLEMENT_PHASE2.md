@@ -343,16 +343,16 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Entry**: Phase 2-3 완료 (README 존재).
 **Exit**: 기여에 필요한 문서 + 템플릿 완비.
 
-- [ ] `CONTRIBUTING.md` — 개발환경 셋업, PR 규칙, 커밋 컨벤션, 테스트 가이드.
-- [ ] `.github/ISSUE_TEMPLATE/bug_report.md`
-- [ ] `.github/ISSUE_TEMPLATE/feature_request.md`
-- [ ] `.github/pull_request_template.md`
-- [ ] `CODE_OF_CONDUCT.md` (Contributor Covenant 등).
-- [ ] `CHANGELOG.md` 초기 작성 (Keep a Changelog 형식).
+- [x] `CONTRIBUTING.md` — 개발환경 셋업, PR 규칙, 커밋 컨벤션, 테스트 가이드.
+- [x] `.github/ISSUE_TEMPLATE/bug_report.md`
+- [x] `.github/ISSUE_TEMPLATE/feature_request.md`
+- [x] `.github/pull_request_template.md`
+- [x] `CODE_OF_CONDUCT.md` (Contributor Covenant 등).
+- [x] `CHANGELOG.md` 초기 작성 (Keep a Changelog 형식).
 
 ### Baseline 테스트
 
-- [ ] GitHub에서 새 이슈 생성 시 템플릿 선택지가 표시됨.
+- [x] GitHub에서 새 이슈 생성 시 템플릿 선택지가 표시됨.
 
 ---
 
@@ -612,7 +612,7 @@ Phase 전체를 관통하는 통합 검증.
 | ~~10~~ | ~~**2-6 코어 패키지 + CLI**~~             | ~~**Critical**~~ | ~~§6.4~~    | ✅ 완료 (코어 publish 경계 + CLI 스캐폴딩) |
 | ~~11~~ | ~~2-10 CI~~                               | ~~High~~         | ~~—~~       | ✅ 완료                                    |
 | ~~12~~ | ~~2-4 문서 정리~~                         | ~~Medium~~       | ~~—~~       | ✅ 완료                                    |
-| 13     | 2-11 커뮤니티                             | Medium           | —           | 기여 촉진                                  |
+| ~~13~~ | ~~2-11 커뮤니티~~                         | ~~Medium~~       | ~~—~~       | ✅ 완료                                    |
 | 14     | **2-13 싱글턴→인스턴스 + Test Hardening** | Medium           | §8          | 테스트 품질                                |
 | 15     | **2-14 Integration Test**                 | Medium           | —           | 최종 검증                                  |
 | 16     | 2-15 로깅                                 | Low              | —           | 선택                                       |
@@ -628,7 +628,7 @@ Phase 전체를 관통하는 통합 검증.
         ├── 2-9 에러/보안
         └── 2-13 싱글턴→인스턴스
 
-2-10 CI, 2-11 커뮤니티, 2-4 문서 정리 — 독립 (병행 가능)
+2-10 CI, 2-4 문서 정리, 2-11 커뮤니티 — 독립 (완료)
 2-14 Integration Test — 모든 Phase 완료 후
 2-15 로깅 — 선택, 독립
 ```
@@ -653,8 +653,8 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-4, 2-5, 2-6, 2-7, 2-8, 2-9, 2-10, 2-12 완료.
-- **Next**: Phase 2-11 (커뮤니티 인프라).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-4, 2-5, 2-6, 2-7, 2-8, 2-9, 2-10, 2-11, 2-12 완료.
+- **Next**: Phase 2-13 (싱글턴→인스턴스 + Test Hardening).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
 - **Blockers**: 없음.
 - **Latest commit**: not committed yet.
