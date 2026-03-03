@@ -657,4 +657,4 @@ Phase 전체를 관통하는 통합 검증.
 - **Next**: Phase 2-13 (싱글턴→인스턴스 + Test Hardening).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
 - **Blockers**: 없음.
-- **Latest commit**: not committed yet.
+- **Latest commit**: 8168aa7 (`docs: mark quickstart four-step smoke as verified`).
