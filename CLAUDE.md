@@ -15,12 +15,12 @@ StateSurface is a **state-layout mapping runtime** — a production-ready framew
 ## Document Reading Order
 
 When context is needed, read in this order:
+
 1. `DESIGN.md` — frozen core ideas, full architecture, frame model, runtime pseudocode
 2. `PROTOCOL.md` — NDJSON frame contract (valid/invalid examples, precedence rules)
 3. `DESIGN_PHASE2.md` — production framework architecture (hooks, plugins, build, security)
 4. `IMPLEMENT.md` — Phase 1 implementation checklist (frozen)
 5. `IMPLEMENT_PHASE2.md` — Phase 2 execution checklist (open-source release)
-6. `BOOTSTRAP.md` — minimum folder layout and file creation order for first runnable skeleton
 
 ## Tech Stack
 
@@ -36,7 +36,7 @@ When context is needed, read in this order:
 
 ```bash
 pnpm install
-pnpm dev                          # start dev server via tsx watch engine/server/index.ts
+pnpm dev                          # start dev server via tsx watch server.ts
 pnpm build                        # production build (Vite)
 pnpm test                         # run all tests with Vitest
 pnpm test path/to/file.test.ts    # run a single test file
@@ -128,19 +128,21 @@ User action → POST /transition/:name → server generator yields StateFrames
 
 ### Four User-Facing Concepts
 
-| Concept | What | Where |
-|---------|------|-------|
-| **Surface** | Page shell with `<h-state>` anchors (string HTML) | `routes/*.ts` layout, `layouts/` |
-| **Template** | Projection component inside each anchor (TSX) | `routes/**/templates/*.tsx` |
-| **Transition** | Server-side state generator (async generator) | `routes/**/transitions/*.ts` |
-| **Action** | Declarative trigger binding (HTML attributes) | `data-action` + `data-params` in templates |
+| Concept        | What                                              | Where                                      |
+| -------------- | ------------------------------------------------- | ------------------------------------------ |
+| **Surface**    | Page shell with `<h-state>` anchors (string HTML) | `routes/*.ts` layout, `layouts/`           |
+| **Template**   | Projection component inside each anchor (TSX)     | `routes/**/templates/*.tsx`                |
+| **Transition** | Server-side state generator (async generator)     | `routes/**/transitions/*.ts`               |
+| **Action**     | Declarative trigger binding (HTML attributes)     | `data-action` + `data-params` in templates |
 
 ### Action System (Declarative Binding)
 
 Templates trigger transitions via HTML attributes — no imperative JS required:
 
 ```tsx
-<button data-action="search" data-params='{"query":"test"}'>Search</button>
+<button data-action="search" data-params='{"query":"test"}'>
+  Search
+</button>
 ```
 
 - `data-action` — transition name to invoke
@@ -189,15 +191,15 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 
 ### Showcase Site Pages
 
-| Route | Slots | Features |
-|-------|-------|-----------------------|
-| `/` | `page:hero`, `page:concepts`, `page:features` | `initial` SSR only, surface composition |
-| `/guide/:slug` | `guide:content`, `guide:toc` | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |
-| `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | Full/partial frames, `removed`, error frame |
-| `/features/actions` | `actions:playground`, `actions:log` | `data-action`, form submit, scoped pending |
-| `/features/view-transition` | `vt:description`, `vt:gallery` | View Transition API, `view-transition-name` morphing |
-| `/search` | `search:input`, `search:results` | Form `data-action`, pending state |
-| `/chat` | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate |
+| Route                       | Slots                                                        | Features                                                       |
+| --------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `/`                         | `page:hero`, `page:concepts`, `page:features`                | `initial` SSR only, surface composition                        |
+| `/guide/:slug`              | `guide:content`, `guide:toc`                                 | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |
+| `/features/streaming`       | `demo:controls`, `demo:timeline`, `demo:output`              | Full/partial frames, `removed`, error frame                    |
+| `/features/actions`         | `actions:playground`, `actions:log`                          | `data-action`, form submit, scoped pending                     |
+| `/features/view-transition` | `vt:description`, `vt:gallery`                               | View Transition API, `view-transition-name` morphing           |
+| `/search`                   | `search:input`, `search:results`                             | Form `data-action`, pending state                              |
+| `/chat`                     | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate             |
 
 All pages share `page:header` and `system:error` via `baseSurface`.
 
@@ -218,6 +220,7 @@ Working SSR blog app demonstrating: Vite as Express middleware (dev), `renderToS
 ### Lithent
 
 Used as a DOM diff/patch engine only — no component API exposed to users. Key imports:
+
 - `render`, `h` from `lithent`
 - `renderToString`, `hydration` from `lithent/ssr`
 - `mount`, `cacheUpdate` from `lithent/helper` (used in chat for performance)

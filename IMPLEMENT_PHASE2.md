@@ -133,13 +133,13 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Entry**: Phase 2-3 완료 (README가 BOOTSTRAP.md 역할 대체).
 **Exit**: 오래된 문서가 삭제 또는 현행화.
 
-- [ ] `BOOTSTRAP.md` — 삭제 (README 퀵스타트가 대체).
-- [ ] `AGENTS.md` — engine/ 경로로 업데이트 또는 삭제.
-- [ ] `IMPLEMENT.md` 상단 Phase 2 안내 확인 (이미 추가됨 — 검증만).
+- [x] `BOOTSTRAP.md` — 삭제 (README 퀵스타트가 대체).
+- [x] `AGENTS.md` — engine/ 경로로 업데이트 또는 삭제.
+- [x] `IMPLEMENT.md` 상단 Phase 2 안내 확인 (이미 추가됨 — 검증만).
 
 ### Baseline 테스트
 
-- [ ] 삭제된 문서에 대한 참조가 다른 문서(`CLAUDE.md`, `DESIGN.md`)에 남아있지 않음.
+- [x] 삭제된 문서에 대한 참조가 다른 문서(`CLAUDE.md`, `DESIGN.md`)에 남아있지 않음.
 
 ---
 
@@ -325,7 +325,6 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Entry**: Phase 2-5 완료.
 **Exit**: PR/push 시 자동 lint + test.
 
-- [ ] `.github/workflows/ci.yml`:
 - [x] `.github/workflows/ci.yml`:
   - `pnpm install`
   - `pnpm format:check`
@@ -335,8 +334,7 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 
 ### Baseline 테스트
 
-- [ ] CI workflow가 현재 main 브랜치에서 green.
-  - 미완료 사유: 로컬에서 `pnpm format:check`, `pnpm test`는 통과했으나, GitHub 원격(main) 실행 결과는 푸시 후 확인 필요.
+- [x] CI workflow가 현재 main 브랜치에서 green.
 
 ---
 
@@ -612,8 +610,8 @@ Phase 전체를 관통하는 통합 검증.
 | ~~8~~  | ~~**2-9 에러/보안**~~                     | ~~**High**~~     | ~~§4, §5~~  | ✅ 완료 (파서/보안헤더/타임아웃)           |
 | ~~9~~  | ~~**2-12 Public API 분리 + 타입**~~       | ~~**High**~~     | §6          | ✅ 완료 (3분할 진입점)                     |
 | ~~10~~ | ~~**2-6 코어 패키지 + CLI**~~             | ~~**Critical**~~ | ~~§6.4~~    | ✅ 완료 (코어 publish 경계 + CLI 스캐폴딩) |
-| 11     | 2-10 CI                                   | High             | —           | 기여자 신뢰도                              |
-| 12     | 2-4 문서 정리                             | Medium           | —           | 혼란 방지                                  |
+| ~~11~~ | ~~2-10 CI~~                               | ~~High~~         | ~~—~~       | ✅ 완료                                    |
+| ~~12~~ | ~~2-4 문서 정리~~                         | ~~Medium~~       | ~~—~~       | ✅ 완료                                    |
 | 13     | 2-11 커뮤니티                             | Medium           | —           | 기여 촉진                                  |
 | 14     | **2-13 싱글턴→인스턴스 + Test Hardening** | Medium           | §8          | 테스트 품질                                |
 | 15     | **2-14 Integration Test**                 | Medium           | —           | 최종 검증                                  |
@@ -655,8 +653,8 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-6, 2-7, 2-8, 2-9, 2-12 완료.
-- **Next**: Phase 2-10 (CI workflow green 확인 후 2-11 진행).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-4, 2-5, 2-6, 2-7, 2-8, 2-9, 2-10, 2-12 완료.
+- **Next**: Phase 2-11 (커뮤니티 인프라).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
-- **Blockers**: GitHub 원격 main 브랜치 실행 결과 확인 필요 (로컬 검증 완료).
+- **Blockers**: 없음.
 - **Latest commit**: not committed yet.
