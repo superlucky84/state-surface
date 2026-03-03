@@ -32,11 +32,15 @@ export function createRouteHandler(routeModule: RouteModule) {
       const shell = routeModule.layout(stateScript + bootScript + basePathScript);
       const html = hasStates ? fillHState(shell, initialStates, renderer) : shell;
 
-      res.send(html);
+      res.status(200).type('text/html; charset=utf-8').send(html);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'SSR error';
       console.error(`[SSR] ${req.path}: ${message}`);
-      res.status(500).send(`SSR Error: ${message}`);
+      if (process.env.NODE_ENV === 'production') {
+        res.status(500).type('text/html; charset=utf-8').send('Internal Server Error');
+      } else {
+        res.status(500).type('text/html; charset=utf-8').send(`SSR Error: ${message}`);
+      }
     }
   };
 }

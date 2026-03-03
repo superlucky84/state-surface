@@ -2,7 +2,8 @@ import type { StateFrame } from '../shared/protocol.js';
 
 // A transition is an async generator that yields StateFrames
 export type TransitionHandler = (
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  options?: { signal?: AbortSignal }
 ) => AsyncGenerator<StateFrame, void, unknown>;
 
 export type TransitionModule = {

@@ -6,7 +6,7 @@ import { StateSurface } from './stateSurface.js';
 import type { StateSurfacePlugin } from './stateSurface.js';
 import type { TraceEvent } from './stateSurface.js';
 
-function createMockSurface() {
+function createMockSurface(options: { transitionTimeout?: number } = {}) {
   const rendered: Array<{ name: string; data: any }> = [];
   const hydrated: Array<{ name: string; data: any }> = [];
   const updated: Array<{ name: string; data: any }> = [];
@@ -29,6 +29,7 @@ function createMockSurface() {
     },
     trace: event => traces.push(event),
     frameBudgetMs: 1000, // high budget so flushQueue drains all in tests
+    transitionTimeout: options.transitionTimeout,
   });
 
   return { surface, rendered, hydrated, updated, unmounted, traces };
@@ -620,6 +621,48 @@ describe('StateSurface', () => {
       expect(ends[0].error?.message).toBe('HTTP 500');
 
       fetchSpy.mockRestore();
+    });
+  });
+
+  describe('transition timeout', () => {
+    it('aborts slow transition and reports timeout error', async () => {
+      vi.useFakeTimers();
+      setupDOM(['a']);
+
+      const { surface, traces } = createMockSurface({ transitionTimeout: 20 });
+      surface.discoverAnchors();
+      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+        const signal = init?.signal as AbortSignal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              const err = new Error('Aborted');
+              err.name = 'AbortError';
+              reject(err);
+            },
+            { once: true }
+          );
+        }) as Promise<Response>;
+      });
+
+      const transitionPromise = surface.transition('slow', {}, { pendingTargets: ['a'] });
+      expect(a.hasAttribute('data-pending')).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(30);
+      await transitionPromise;
+
+      expect(a.hasAttribute('data-pending')).toBe(false);
+      expect(
+        traces.some(
+          trace => trace.kind === 'error' && trace.detail === 'Transition timeout after 20ms'
+        )
+      ).toBe(true);
+
+      fetchSpy.mockRestore();
+      vi.useRealTimers();
     });
   });
 });

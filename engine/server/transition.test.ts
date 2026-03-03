@@ -4,6 +4,8 @@ import { createApp } from './index.js';
 
 let app: any;
 let appWithHooks: any;
+let appWithShortTimeout: any;
+let appWithSmallBodyLimit: any;
 const afterHook = vi.fn();
 beforeAll(async () => {
   ({ app } = await createApp());
@@ -17,6 +19,8 @@ beforeAll(async () => {
       },
     },
   }));
+  ({ app: appWithShortTimeout } = await createApp({ transitionTimeout: 20 }));
+  ({ app: appWithSmallBodyLimit } = await createApp({ bodyLimit: '16b' }));
 });
 import { registerTransition } from './transition.js';
 import type { StateFrame } from '../shared/protocol.js';
@@ -51,6 +55,13 @@ describe('POST /transition/:name', () => {
   it('returns 404 for unknown transition', async () => {
     const res = await request(app).post('/transition/unknown').send({});
     expect(res.status).toBe(404);
+  });
+
+  it('applies default security headers on transition responses', async () => {
+    const res = await request(app).post('/transition/test:article').send({ articleId: 1 });
+
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
   });
 
   it('streams valid NDJSON for known transition', async () => {
@@ -96,6 +107,52 @@ describe('POST /transition/:name', () => {
     const frames = decodeFrames(res.text);
 
     expect(frames.some(f => f.type === 'error')).toBe(true);
+  });
+
+  it('sends error frame when transition generator throws', async () => {
+    registerTransition('test:throws', async function* () {
+      yield {
+        type: 'state',
+        states: { a: { ok: true } },
+      } satisfies StateFrame;
+
+      throw new Error('transition exploded');
+    });
+
+    const res = await request(app).post('/transition/test:throws').send({});
+    const frames = decodeFrames(res.text);
+
+    expect(frames).toHaveLength(2);
+    expect(frames[0].type).toBe('state');
+    expect(frames[1].type).toBe('error');
+    if (frames[1].type === 'error') {
+      expect(frames[1].message).toContain('transition exploded');
+    }
+  });
+
+  it('emits timeout error frame when transition exceeds configured timeout', async () => {
+    registerTransition('test:timeout', async function* () {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      yield { type: 'done' } satisfies StateFrame;
+    });
+
+    const res = await request(appWithShortTimeout).post('/transition/test:timeout').send({});
+    const frames = decodeFrames(res.text);
+
+    expect(frames.some(frame => frame.type === 'error')).toBe(true);
+    expect(frames.some(frame => frame.type === 'done')).toBe(false);
+    const timeoutFrame = frames.find(frame => frame.type === 'error');
+    if (timeoutFrame?.type === 'error') {
+      expect(timeoutFrame.message).toContain('Transition timeout');
+    }
+  });
+
+  it('respects bodyLimit option for transition requests', async () => {
+    const res = await request(appWithSmallBodyLimit)
+      .post('/transition/test:article')
+      .send({ payload: 'x'.repeat(128) });
+
+    expect(res.status).toBe(413);
   });
 
   it('keeps default body when hooks are not registered', async () => {

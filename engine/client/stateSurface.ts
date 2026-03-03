@@ -21,6 +21,7 @@ export interface StateSurfaceOptions {
   plugins?: StateSurfacePlugin[];
   maxQueue?: number;
   frameBudgetMs?: number;
+  transitionTimeout?: number;
   trace?: (event: TraceEvent) => void;
   basePath?: string;
 }
@@ -51,6 +52,7 @@ export class StateSurface {
   private abortController: AbortController | null = null;
   private maxQueue: number;
   private frameBudgetMs: number;
+  private transitionTimeout: number;
 
   private renderTemplate: TemplateRenderer;
   private hydrateTemplate: TemplateHydrator;
@@ -69,6 +71,7 @@ export class StateSurface {
     this.plugins = options.plugins ?? [];
     this.maxQueue = options.maxQueue ?? 20;
     this.frameBudgetMs = options.frameBudgetMs ?? 33;
+    this.transitionTimeout = options.transitionTimeout ?? 30_000;
     this.trace = options.trace;
     this.basePath = options.basePath ?? '';
   }
@@ -124,6 +127,11 @@ export class StateSurface {
     const transitionController = this.abortController;
     const { signal } = transitionController;
     let transitionError: Error | undefined;
+    let timedOut = false;
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      transitionController.abort();
+    }, this.transitionTimeout);
     this.notifyTransitionStart(name);
     this.markPending(options.pendingTargets);
     let firstFrameHandled = false;
@@ -147,15 +155,28 @@ export class StateSurface {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const parser = createNdjsonParser(frame => {
-        if (!firstFrameHandled) {
-          firstFrameHandled = true;
-          if (this.abortController === transitionController) {
-            this.clearPending();
+      const parser = createNdjsonParser(
+        frame => {
+          if (!firstFrameHandled) {
+            firstFrameHandled = true;
+            if (this.abortController === transitionController) {
+              this.clearPending();
+            }
           }
+          this.onFrame(frame, signal);
+        },
+        event => {
+          this.trace?.({
+            kind: 'error',
+            detail: {
+              source: 'ndjson',
+              stage: event.stage,
+              line: event.line,
+              message: event.error.message,
+            },
+          });
         }
-        this.onFrame(frame, signal);
-      });
+      );
 
       while (true) {
         const { done, value } = await reader.read();
@@ -175,10 +196,17 @@ export class StateSurface {
         if (this.abortController === transitionController) {
           this.clearPending();
         }
+      } else if (timedOut) {
+        transitionError = new Error(`Transition timeout after ${this.transitionTimeout}ms`);
+        this.trace?.({ kind: 'error', detail: transitionError.message });
+        if (this.abortController === transitionController) {
+          this.clearPending();
+        }
       } else if (this.abortController === transitionController) {
         this.clearPending();
       }
     } finally {
+      clearTimeout(timeoutTimer);
       this.notifyTransitionEnd(name, transitionError);
     }
   }

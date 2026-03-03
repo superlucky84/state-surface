@@ -269,30 +269,30 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 **Exit**: 알려진 에러 처리 갭 해소, 보안 헤더 적용, 스트림 타임아웃 동작.
 
 ### 에러 처리 (`DESIGN_PHASE2.md` §4)
-- [ ] `engine/shared/ndjson.ts` — 3개 `JSON.parse` 호출에 try/catch 추가. 파싱 실패 시 해당 청크 스킵 + trace.
-- [ ] `engine/server/routeHandler.ts` — `NODE_ENV=production`에서 SSR 에러 내부 메시지 미노출 (generic "Internal Server Error" 응답).
-- [ ] transition 제너레이터 예외 시 에러 프레임 + 스트림 정상 종료 재확인.
+- [x] `engine/shared/ndjson.ts` — 3개 `JSON.parse` 호출에 try/catch 추가. 파싱 실패 시 해당 청크 스킵 + trace.
+- [x] `engine/server/routeHandler.ts` — `NODE_ENV=production`에서 SSR 에러 내부 메시지 미노출 (generic "Internal Server Error" 응답).
+- [x] transition 제너레이터 예외 시 에러 프레임 + 스트림 정상 종료 재확인.
 
 ### 트랜지션 스트림 타임아웃 (`DESIGN_PHASE2.md` §4.3)
-- [ ] 서버측: `createApp` 옵션의 `transitionTimeout`(기본 30초) 적용.
+- [x] 서버측: `createApp` 옵션의 `transitionTimeout`(기본 30초) 적용.
   - AbortController로 타임아웃 시 에러 프레임 전송 + 스트림 종료.
-- [ ] `TransitionHandler` 타입에 `options?: { signal?: AbortSignal }` 파라미터 추가.
-- [ ] 클라이언트측: `stateSurface.ts`의 fetch에 timeout 설정 (`transitionTimeout` 옵션).
+- [x] `TransitionHandler` 타입에 `options?: { signal?: AbortSignal }` 파라미터 추가.
+- [x] 클라이언트측: `stateSurface.ts`의 fetch에 timeout 설정 (`transitionTimeout` 옵션).
 
 ### 보안 (`DESIGN_PHASE2.md` §5)
-- [ ] 기본 보안 헤더 미들웨어 추가 (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`).
+- [x] 기본 보안 헤더 미들웨어 추가 (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`).
   - `createApp({ securityHeaders: false })`로 비활성화 가능.
-- [ ] SSR 응답에 `Content-Type: text/html; charset=utf-8` 명시 (`engine/server/routeHandler.ts`).
-- [ ] `express.json({ limit })` — `createApp({ bodyLimit })` 옵션 반영 (기본 `100kb`).
+- [x] SSR 응답에 `Content-Type: text/html; charset=utf-8` 명시 (`engine/server/routeHandler.ts`).
+- [x] `express.json({ limit })` — `createApp({ bodyLimit })` 옵션 반영 (기본 `100kb`).
 - [ ] (선택) CORS 설정 옵션 제공.
 - [ ] (선택) CSP 헤더 기본 정책 또는 문서화.
 
 ### Baseline 테스트
-- [ ] 잘못된 JSON 청크가 포함된 NDJSON 스트림을 파싱해도 uncaught 예외 없음 (단위 테스트).
-- [ ] `NODE_ENV=production` SSR 에러 응답에 스택 트레이스 미포함 (단위 테스트).
-- [ ] 응답 헤더에 `X-Content-Type-Options: nosniff` 포함 (단위 테스트).
-- [ ] SSR 응답 Content-Type이 `text/html; charset=utf-8` (단위 테스트).
-- [ ] 30초 초과 트랜지션이 타임아웃 에러 프레임으로 종료됨 (단위 테스트).
+- [x] 잘못된 JSON 청크가 포함된 NDJSON 스트림을 파싱해도 uncaught 예외 없음 (단위 테스트).
+- [x] `NODE_ENV=production` SSR 에러 응답에 스택 트레이스 미포함 (단위 테스트).
+- [x] 응답 헤더에 `X-Content-Type-Options: nosniff` 포함 (단위 테스트).
+- [x] SSR 응답 Content-Type이 `text/html; charset=utf-8` (단위 테스트).
+- [x] 30초 초과 트랜지션이 타임아웃 에러 프레임으로 종료됨 (단위 테스트).
 
 ---
 
@@ -560,7 +560,7 @@ Phase 전체를 관통하는 통합 검증.
 | 5 | **2-5 package.json** | Critical | — | 배포 기본 설정 |
 | 6 | **2-7 createApp + 프로덕션 빌드** | **Critical** | §3, §7 | 이후 모든 변경의 기반 |
 | ~~7~~ | ~~**2-8 서버 훅 + 클라이언트 플러그인**~~ | ~~**Critical**~~ | §1, §2 | ✅ 완료 (i18n·Prism 분리) |
-| 8 | **2-9 에러/보안** | **High** | §4, §5 | 안정성·타임아웃 |
+| ~~8~~ | ~~**2-9 에러/보안**~~ | ~~**High**~~ | ~~§4, §5~~ | ✅ 완료 (파서/보안헤더/타임아웃) |
 | ~~9~~ | ~~**2-12 Public API 분리 + 타입**~~ | ~~**High**~~ | §6 | ✅ 완료 (3분할 진입점) |
 | 10 | **2-6 코어 패키지 + CLI** | **Critical** | §6.4 | 생성/업데이트 경로 분리 |
 | 11 | 2-10 CI | High | — | 기여자 신뢰도 |
@@ -606,8 +606,8 @@ Phase 전체를 관통하는 통합 검증.
 
 ## Handoff Status
 
-- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7, 2-8, 2-12 완료.
-- **Next**: Phase 2-9 (에러 처리 및 보안 강화).
+- **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-5, 2-7, 2-8, 2-9, 2-12 완료.
+- **Next**: Phase 2-6 (state-surface 코어 패키지 분리 + create-state-surface CLI).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-05 (업데이트 경로).
 - **Blockers**: 없음.
 - **Latest commit**: not committed yet.

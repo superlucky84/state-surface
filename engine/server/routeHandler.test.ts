@@ -3,8 +3,10 @@ import request from 'supertest';
 import { createApp } from './index.js';
 
 let app: any;
+let appWithoutSecurityHeaders: any;
 beforeAll(async () => {
   ({ app } = await createApp());
+  ({ app: appWithoutSecurityHeaders } = await createApp({ securityHeaders: false }));
 });
 
 describe('multi-route SSR', () => {
@@ -112,5 +114,24 @@ describe('empty anchors', () => {
 
     // search:results has no initial state
     expect(res.text).toMatch(/<h-state name="search:results"[^>]*><\/h-state>/);
+  });
+});
+
+describe('response headers', () => {
+  it('GET / sends HTML content type and default security headers', async () => {
+    const res = await request(app).get('/');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html; charset=utf-8');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
+  });
+
+  it('allows disabling default security headers', async () => {
+    const res = await request(appWithoutSecurityHeaders).get('/');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['x-content-type-options']).toBeUndefined();
+    expect(res.headers['x-frame-options']).toBeUndefined();
   });
 });

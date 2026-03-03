@@ -11,6 +11,7 @@ export interface CreateStateSurfaceOptions {
   plugins?: StateSurfacePlugin[];
   debug?: boolean;
   trace?: (event: TraceEvent) => void;
+  transitionTimeout?: number;
 }
 
 type BootConfig = {
@@ -50,6 +51,7 @@ export function createStateSurface(options: CreateStateSurfaceOptions = {}): Sta
     basePath,
     trace,
     plugins: options.plugins ?? [],
+    transitionTimeout: options.transitionTimeout,
   });
 
   for (const plugin of options.plugins ?? []) {

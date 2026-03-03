@@ -1,5 +1,13 @@
 import type { StateFrame } from './protocol.js';
 
+export type NdjsonParseError = {
+  stage: 'decode' | 'stream' | 'flush';
+  line: string;
+  error: Error;
+};
+
+export type NdjsonParseErrorHandler = (event: NdjsonParseError) => void;
+
 // ── Encode ──
 
 export function encodeFrame(frame: StateFrame): string {
@@ -16,18 +24,44 @@ export function encodeFrames(frames: StateFrame[]): string {
  * Parse a complete NDJSON string into frames.
  * Each non-empty line is parsed as one JSON frame.
  */
-export function decodeFrames(ndjson: string): StateFrame[] {
-  return ndjson
-    .split('\n')
-    .filter(line => line.trim().length > 0)
-    .map(line => JSON.parse(line) as StateFrame);
+function parseLine(
+  line: string,
+  stage: NdjsonParseError['stage'],
+  onParseError?: NdjsonParseErrorHandler
+): StateFrame | null {
+  try {
+    return JSON.parse(line) as StateFrame;
+  } catch (err) {
+    onParseError?.({
+      stage,
+      line,
+      error: err instanceof Error ? err : new Error(String(err)),
+    });
+    return null;
+  }
+}
+
+export function decodeFrames(ndjson: string, onParseError?: NdjsonParseErrorHandler): StateFrame[] {
+  const frames: StateFrame[] = [];
+  for (const line of ndjson.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    const frame = parseLine(trimmed, 'decode', onParseError);
+    if (frame) {
+      frames.push(frame);
+    }
+  }
+  return frames;
 }
 
 /**
  * Incremental NDJSON parser for streaming chunks.
  * Handles chunks that split across line boundaries.
  */
-export function createNdjsonParser(onFrame: (frame: StateFrame) => void) {
+export function createNdjsonParser(
+  onFrame: (frame: StateFrame) => void,
+  onParseError?: NdjsonParseErrorHandler
+) {
   let buffer = '';
 
   return {
@@ -41,7 +75,10 @@ export function createNdjsonParser(onFrame: (frame: StateFrame) => void) {
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.length > 0) {
-          onFrame(JSON.parse(trimmed) as StateFrame);
+          const frame = parseLine(trimmed, 'stream', onParseError);
+          if (frame) {
+            onFrame(frame);
+          }
         }
       }
     },
@@ -49,7 +86,10 @@ export function createNdjsonParser(onFrame: (frame: StateFrame) => void) {
     flush() {
       const trimmed = buffer.trim();
       if (trimmed.length > 0) {
-        onFrame(JSON.parse(trimmed) as StateFrame);
+        const frame = parseLine(trimmed, 'flush', onParseError);
+        if (frame) {
+          onFrame(frame);
+        }
       }
       buffer = '';
     },

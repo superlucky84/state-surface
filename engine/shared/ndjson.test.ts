@@ -11,10 +11,7 @@ describe('encodeFrame', () => {
 
 describe('encodeFrames', () => {
   it('encodes multiple frames as NDJSON', () => {
-    const frames: StateFrame[] = [
-      { type: 'state', states: { a: { x: 1 } } },
-      { type: 'done' },
-    ];
+    const frames: StateFrame[] = [{ type: 'state', states: { a: { x: 1 } } }, { type: 'done' }];
     const result = encodeFrames(frames);
     const lines = result.trim().split('\n');
     expect(lines).toHaveLength(2);
@@ -25,8 +22,7 @@ describe('encodeFrames', () => {
 
 describe('decodeFrames', () => {
   it('decodes NDJSON string to frames', () => {
-    const ndjson =
-      '{"type":"state","states":{"a":{"x":1}}}\n{"type":"done"}\n';
+    const ndjson = '{"type":"state","states":{"a":{"x":1}}}\n{"type":"done"}\n';
     const frames = decodeFrames(ndjson);
     expect(frames).toHaveLength(2);
     expect(frames[0].type).toBe('state');
@@ -36,6 +32,18 @@ describe('decodeFrames', () => {
   it('handles trailing newline and empty lines', () => {
     const ndjson = '{"type":"done"}\n\n\n';
     expect(decodeFrames(ndjson)).toHaveLength(1);
+  });
+
+  it('skips malformed lines and continues parsing', () => {
+    const ndjson = '{"type":"state","states":{"a":1}}\n{"type":"broken"\n{"type":"done"}\n';
+    const parseErrors: string[] = [];
+
+    const frames = decodeFrames(ndjson, event => parseErrors.push(event.line));
+
+    expect(frames).toHaveLength(2);
+    expect(frames[0].type).toBe('state');
+    expect(frames[1].type).toBe('done');
+    expect(parseErrors).toHaveLength(1);
   });
 });
 
@@ -140,5 +148,25 @@ describe('createNdjsonParser (streaming)', () => {
     const parser = createNdjsonParser(frame => received.push(frame));
     parser.flush();
     expect(received).toHaveLength(0);
+  });
+
+  it('skips malformed streaming frames and reports parse errors', () => {
+    const received: StateFrame[] = [];
+    const parseErrors: Array<{ stage: string; line: string }> = [];
+    const parser = createNdjsonParser(
+      frame => received.push(frame),
+      event => parseErrors.push({ stage: event.stage, line: event.line })
+    );
+
+    parser.push('{"type":"state","states":{"a":1}}\n');
+    parser.push('{"type":"oops"\n');
+    parser.push('{"type":"done"}\n');
+    parser.flush();
+
+    expect(received).toHaveLength(2);
+    expect(received[0].type).toBe('state');
+    expect(received[1].type).toBe('done');
+    expect(parseErrors).toHaveLength(1);
+    expect(parseErrors[0].stage).toBe('stream');
   });
 });

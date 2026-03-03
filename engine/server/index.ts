@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getTransition } from './transition.js';
-import { validateStateFrame } from '../shared/protocol.js';
+import { validateStateFrame, type StateFrame } from '../shared/protocol.js';
 import { encodeFrame } from '../shared/ndjson.js';
 import { bootstrapServer } from './bootstrap.js';
 import { scanRoutes, fileToUrlPattern } from './routeScanner.js';
@@ -76,6 +76,40 @@ function loadRoutesFromGlob(): RouteEntry[] | null {
   }
 }
 
+const DEFAULT_TRANSITION_TIMEOUT = 30_000;
+
+function resolveTransitionTimeout(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_TRANSITION_TIMEOUT;
+  }
+  return value;
+}
+
+function nextFrameWithAbort(
+  iterator: AsyncIterator<StateFrame, void, unknown>,
+  signal: AbortSignal
+): Promise<IteratorResult<StateFrame, void> | 'aborted'> {
+  if (signal.aborted) {
+    return Promise.resolve('aborted');
+  }
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => resolve('aborted');
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    iterator
+      .next()
+      .then(result => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      })
+      .catch(err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      });
+  });
+}
+
 export async function createApp(options?: StateSurfaceServerOptions) {
   const port = options?.port ?? (Number(process.env.PORT) || 3000);
   const basePath = options?.basePath ?? process.env.BASE_PATH ?? '';
@@ -83,6 +117,13 @@ export async function createApp(options?: StateSurfaceServerOptions) {
 
   const app = express();
   app.use(express.json({ limit: options?.bodyLimit ?? '100kb' }));
+  if (options?.securityHeaders !== false) {
+    app.use((_req, res, next) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      next();
+    });
+  }
 
   // Auto-register transitions and templates
   await bootstrapServer();
@@ -120,6 +161,11 @@ export async function createApp(options?: StateSurfaceServerOptions) {
     res.setHeader('Content-Type', 'application/x-ndjson');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Transfer-Encoding', 'chunked');
+    const transitionTimeout = resolveTransitionTimeout(options?.transitionTimeout);
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), transitionTimeout);
+    let generator: AsyncGenerator<StateFrame, void, unknown> | null = null;
+    let timedOut = false;
 
     try {
       const defaultBody =
@@ -132,9 +178,25 @@ export async function createApp(options?: StateSurfaceServerOptions) {
             res,
           })) ?? defaultBody)
         : defaultBody;
-      const gen = handler(body);
+      generator = handler(body, { signal: timeoutController.signal });
+      const iterator = generator[Symbol.asyncIterator]();
 
-      for await (const frame of gen) {
+      while (true) {
+        const next = await nextFrameWithAbort(iterator, timeoutController.signal);
+        if (next === 'aborted') {
+          timedOut = true;
+          res.write(
+            encodeFrame({
+              type: 'error',
+              message: `Transition timeout after ${transitionTimeout}ms`,
+            })
+          );
+          break;
+        }
+        if (next.done) {
+          break;
+        }
+        const frame = next.value;
         // Validate before streaming
         const result = validateStateFrame(frame);
         if (!result.valid) {
@@ -148,12 +210,22 @@ export async function createApp(options?: StateSurfaceServerOptions) {
 
         res.write(encodeFrame(frame));
 
-        if (frame.type === 'done') break;
+        if (frame.type === 'done') {
+          break;
+        }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown server error';
-      res.write(encodeFrame({ type: 'error', message }));
+      if (!timedOut) {
+        const message = err instanceof Error ? err.message : 'Unknown server error';
+        res.write(encodeFrame({ type: 'error', message }));
+      }
     } finally {
+      clearTimeout(timeoutId);
+      if (generator) {
+        void generator.return(undefined as never).catch(() => {
+          // Ignore cleanup errors from user generators.
+        });
+      }
       try {
         await options?.hooks?.onAfterTransition?.({
           name: req.params.name,
