@@ -71,7 +71,10 @@ const Header = ({ title, nav, lang }: HeaderProps) => {
           <a class={navLinkClass(nav === 'actions')} href={prefixPath('/features/actions')}>
             Actions
           </a>
-          <a class={navLinkClass(nav === 'view-transition')} href={prefixPath('/features/view-transition')}>
+          <a
+            class={navLinkClass(nav === 'view-transition')}
+            href={prefixPath('/features/view-transition')}
+          >
             Transition
           </a>
           <a class={navLinkClass(nav === 'search')} href={prefixPath('/search')}>

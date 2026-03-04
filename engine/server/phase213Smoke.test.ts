@@ -18,6 +18,22 @@ beforeAll(async () => {
 });
 
 describe('phase 2-13 smoke coverage', () => {
+  it('guide page renders a mobile-friendly toc layout', async () => {
+    const guide = await request(app).get('/guide/quickstart');
+    expect(guide.status).toBe(200);
+    expect(guide.text).toContain('flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6');
+    expect(guide.text).toContain('w-full md:w-56 md:shrink-0');
+    expect(guide.text).toContain('space-y-2 md:sticky md:top-6 md:space-y-1');
+    expect(guide.text).toContain('data-guide-nav-scroll');
+    expect(guide.text).toContain('data-guide-active="true"');
+    expect(guide.text).toContain(
+      '-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0'
+    );
+    expect(guide.text).toContain(
+      'inline-flex w-auto whitespace-nowrap rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white md:block md:w-full'
+    );
+  });
+
   it('search/actions/chat pages expose declarative data-action bindings', async () => {
     const search = await request(app).get('/search');
     expect(search.status).toBe(200);

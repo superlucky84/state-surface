@@ -282,6 +282,43 @@ export function prismPlugin(): StateSurfacePlugin {
 - `runTransition()` 시작 시 → `plugin.onTransitionStart()` 호출
 - `runTransition()` 완료 시 → `plugin.onTransitionEnd()` 호출
 
+### 2.6 플러그인 사용 가이드 강화 (Guide + Example)
+
+플러그인 시스템은 엔진의 공식 확장 포인트다.  
+문서/예제가 약하면 사용자가 `mount`와 플러그인 사이에서 과도한 설계 결정을 해야 하므로, showcase에 플러그인 사용 기준을 명시한다.
+
+#### 목표
+
+1. **플러그인 유지 전략**을 문서로 명확화한다 (템플릿 순수성 유지 + DOM UX 보정은 플러그인).
+2. 가이드 페이지에서 “언제 플러그인/언제 CSS-only/언제 템플릿 수정”을 빠르게 판단할 수 있게 한다.
+3. 예제 페이지에서 플러그인 적용 전/후 UX를 직접 비교 가능하게 한다.
+
+#### 정책 (showcase 기준)
+
+- 서버 상태 결정/비즈니스 로직은 Transition/Template 경계에서 처리하고, 플러그인은 **DOM 레벨 보정 효과**만 다룬다.
+- 플러그인은 슬롯 범위와 훅(`onMount`, `onUpdate`)을 명시적으로 제한한다.
+- `mount`는 허용하되, 동일 목적을 플러그인으로 표현 가능한 경우 플러그인을 우선한다.
+
+#### 산출물
+
+1. Guide 확장
+   - `guide/template`(또는 동급 가이드)에 “Plugin Patterns” 섹션 추가:
+     - 플러그인 사용 기준
+     - anti-pattern (`onUpdate`에서 비즈니스 상태 결정 금지)
+     - `prismPlugin`, `guideTocPlugin` 예시
+2. Example 페이지
+   - `/features/plugins`(또는 동급 라우트) 신설:
+     - 코드 하이라이팅(Prism) 예시
+     - 모바일 TOC active auto-scroll 예시
+3. 템플릿 동기화
+   - `create-state-surface/template`에도 동일 가이드/예제 구조를 반영해 생성물 onboarding을 일치시킨다.
+
+#### 검증
+
+- en/ko 가이드 구조/섹션 parity 유지.
+- `/features/plugins` SSR 200 + 전환 시 플러그인 동작 확인.
+- `templateParity.test.ts`로 기준 앱 vs 생성 템플릿 동기화 검증.
+
 ---
 
 ## 3. 프로덕션 서버 빌드
@@ -691,6 +728,7 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 | 7 | §6 Public API 분리 | 2-12 (확장) | **Medium** — DX |
 | 8 | §6.4 패키지 분리/배포 | 2-6 (확장) | **Critical** — 재스캐폴딩 없는 업데이트 경로 |
 | 9 | §8 싱글턴 → 인스턴스 | 2-13 (확장) | **Medium** — 테스트 품질 |
+| 10 | §2.6 플러그인 가이드/예제 | 2-13.5 (신규) | **Medium** — 도입/온보딩 품질 |
 
 ### 구현 의존성 그래프
 
@@ -704,6 +742,7 @@ IMPLEMENT_PHASE2.md의 기존 Phase와 매핑:
 
 §2 클라이언트 플러그인
   └── Prism.js 분리 (플러그인으로 이동)
+        └── §2.6 플러그인 가이드/예제 (사용 기준 + showcase)
 
 §4 에러 처리 (독립 — 언제든 적용 가능)
 

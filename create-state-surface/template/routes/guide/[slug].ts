@@ -16,8 +16,8 @@ function parseSlug(req: { params: Record<string, string> }): string {
 export default {
   layout: stateScript => {
     const body = joinSurface(
-      '<main class="mx-auto flex w-full max-w-5xl gap-8 pb-8 pt-4 md:pt-6">',
-      '<div class="hidden w-56 shrink-0 md:block">',
+      '<main class="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6">',
+      '<div class="w-full md:w-56 md:shrink-0">',
       stateSlots('guide:toc'),
       '</div>',
       '<div class="min-w-0 flex-1">',
