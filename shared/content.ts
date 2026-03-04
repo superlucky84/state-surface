@@ -627,6 +627,55 @@ function StockPrice({ symbol }: { symbol: string }) {
           ],
         },
         {
+          id: 'plugins',
+          heading: 'Plugin Patterns',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Plugins handle DOM post-processing only — they run after each slot render to apply effects that pure templates cannot express (syntax highlighting, scroll correction, focus management). State logic stays in Transitions; layout logic stays in Templates. Plugins fill the narrow gap between "render done" and "user sees it".',
+            },
+            {
+              type: 'warning',
+              text: 'Anti-pattern: never make state decisions, network calls, or trigger transitions inside onUpdate. Plugins observe the DOM — they do not drive it. Side-effects in hooks cause infinite render loops and break the unidirectional data flow.',
+            },
+            {
+              type: 'code',
+              label: '✓ prismPlugin',
+              lang: 'ts',
+              text: `export function prismPlugin(): StateSurfacePlugin {
+  return {
+    name: 'prism',
+    onMount(_slot, el) { highlight(el); },
+    onUpdate(_slot, el) { highlight(el); },
+  };
+}`,
+            },
+            {
+              type: 'code',
+              label: '✓ guideTocPlugin',
+              lang: 'ts',
+              text: `export function guideTocPlugin(): StateSurfacePlugin {
+  return {
+    name: 'guide-toc',
+    onMount(slot, el) {
+      if (slot !== 'guide:toc') return;
+      scrollActiveCategory(el);
+    },
+    onUpdate(slot, el) {
+      if (slot !== 'guide:toc') return;
+      scrollActiveCategory(el);
+    },
+  };
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'Decision guide — CSS-only: use when a pure CSS selector can handle it (e.g., animation presets via data-animate). Template modification: use when render logic itself needs to change. Plugin: use only when you need to touch the DOM after render (e.g., third-party library integration, scroll position, focus management).',
+            },
+          ],
+        },
+        {
           id: 'next',
           heading: 'Next: try it live',
           blocks: [
@@ -2128,6 +2177,55 @@ function StockPrice({ symbol }: { symbol: string }) {
                   fix: 'items.map(item => <li key={item.id}>{item.name}</li>) 처럼 안정적인 고유 key를 사용하세요.',
                 },
               ],
+            },
+          ],
+        },
+        {
+          id: 'plugins',
+          heading: '플러그인 패턴',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: '플러그인은 DOM 후처리만 담당합니다 — 각 슬롯 렌더 후 실행되어 순수 템플릿으로 표현할 수 없는 효과를 적용합니다(구문 하이라이팅, 스크롤 보정, 포커스 관리). 상태 로직은 Transition에, 레이아웃 로직은 Template에 남겨두세요. 플러그인은 "렌더 완료"와 "사용자가 보는 시점" 사이의 좁은 틈을 채웁니다.',
+            },
+            {
+              type: 'warning',
+              text: '안티패턴: onUpdate 내에서 상태 결정, 네트워크 호출, transition 트리거를 절대 하지 마세요. 플러그인은 DOM을 관찰합니다 — 구동하지 않습니다. 훅 내 사이드이펙트는 무한 렌더 루프를 일으키고 단방향 데이터 흐름을 깨뜨립니다.',
+            },
+            {
+              type: 'code',
+              label: '✓ prismPlugin',
+              lang: 'ts',
+              text: `export function prismPlugin(): StateSurfacePlugin {
+  return {
+    name: 'prism',
+    onMount(_slot, el) { highlight(el); },
+    onUpdate(_slot, el) { highlight(el); },
+  };
+}`,
+            },
+            {
+              type: 'code',
+              label: '✓ guideTocPlugin',
+              lang: 'ts',
+              text: `export function guideTocPlugin(): StateSurfacePlugin {
+  return {
+    name: 'guide-toc',
+    onMount(slot, el) {
+      if (slot !== 'guide:toc') return;
+      scrollActiveCategory(el);
+    },
+    onUpdate(slot, el) {
+      if (slot !== 'guide:toc') return;
+      scrollActiveCategory(el);
+    },
+  };
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '판단 기준 — CSS-only: 순수 CSS 셀렉터로 처리 가능할 때(예: data-animate 애니메이션 프리셋). Template 수정: 렌더 로직 자체를 변경해야 할 때. Plugin: 렌더 후 DOM 터치가 필요할 때만 사용(예: 서드파티 라이브러리 통합, 스크롤 위치, 포커스 관리).',
             },
           ],
         },

@@ -11,9 +11,7 @@ async function* switchLang(
   params: Record<string, unknown>
 ): AsyncGenerator<StateFrame, void, unknown> {
   const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
-  const page = VALID_PAGES.includes(params.page as PageKey)
-    ? (params.page as PageKey)
-    : 'home';
+  const page = VALID_PAGES.includes(params.page as PageKey) ? (params.page as PageKey) : 'home';
 
   const states = pageContent(page, lang, params);
 

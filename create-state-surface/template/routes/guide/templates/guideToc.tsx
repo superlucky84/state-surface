@@ -19,7 +19,9 @@ const LABELS: Record<string, string> = {
 
 const GuideToc = ({ slug, items, sections }: TocProps) => (
   <nav class="space-y-2 md:sticky md:top-6 md:space-y-1">
-    <p class="hidden text-xs font-semibold uppercase tracking-wide text-slate-500 md:block">Guides</p>
+    <p class="hidden text-xs font-semibold uppercase tracking-wide text-slate-500 md:block">
+      Guides
+    </p>
     <div
       data-guide-nav-scroll
       class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0"

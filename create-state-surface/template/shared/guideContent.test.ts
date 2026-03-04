@@ -31,6 +31,7 @@ const REQUIRED_SECTION_IDS = [
   'next',
 ];
 const SURFACE_EXTRA_SECTION_IDS = ['mixed'];
+const TEMPLATE_EXTRA_SECTION_IDS = ['plugins'];
 const TRANSITION_EXTRA_SECTION_IDS = ['animation'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [
   'preview',
@@ -58,6 +59,11 @@ describe('guide content schema (concept guides)', () => {
           }
           if (slug === 'surface') {
             for (const extra of SURFACE_EXTRA_SECTION_IDS) {
+              expect(ids).toContain(extra);
+            }
+          }
+          if (slug === 'template') {
+            for (const extra of TEMPLATE_EXTRA_SECTION_IDS) {
               expect(ids).toContain(extra);
             }
           }
@@ -276,9 +282,11 @@ describe('guide SSR rendering', () => {
       const extraCount =
         slug === 'surface'
           ? SURFACE_EXTRA_SECTION_IDS.length
-          : slug === 'transition'
-            ? TRANSITION_EXTRA_SECTION_IDS.length
-            : 0;
+          : slug === 'template'
+            ? TEMPLATE_EXTRA_SECTION_IDS.length
+            : slug === 'transition'
+              ? TRANSITION_EXTRA_SECTION_IDS.length
+              : 0;
       const expectedCount = baseCount + extraCount;
       expect(content.sections.length).toBe(expectedCount);
       expect(content.demoHref).toBeTruthy();
