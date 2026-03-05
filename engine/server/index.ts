@@ -173,6 +173,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
       registeredPatterns.push(route.urlPattern);
     }
   }
+  app.locals.registeredRoutePatterns = registeredPatterns;
 
   // POST /transition/:name — NDJSON streaming endpoint
   app.post(prefixPath('/transition/:name'), async (req, res) => {
@@ -281,11 +282,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
       res.status(404).send('Not Found');
     });
 
-    app.listen(port, () => {
-      logger.info(`StateSurface dev server running at http://localhost:${port}`);
-      logger.debug(`  Routes: ${registeredPatterns.join(', ')}`);
-      logger.debug(`  Debug overlay: http://localhost:${port}/?debug=1`);
-    });
+    logger.debug('StateSurface dev middleware enabled');
   }
 
   // Production mode: serve static files from dist/client

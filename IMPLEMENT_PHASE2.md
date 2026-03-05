@@ -635,20 +635,20 @@ Phase 전체를 관통하는 통합 검증.
 
 ### 엔진 아키텍처
 
-- [ ] `createApp()` 팩토리로 서버 초기화 (top-level side effect 없음).
-- [ ] `createStateSurface()` 팩토리로 클라이언트 초기화 (앱 코드 분리).
-- [ ] 서버 훅 시스템 동작 (`TransitionHooks`).
-- [ ] 클라이언트 플러그인 시스템 동작 (`StateSurfacePlugin`).
-- [ ] i18n/Prism.js 코드가 엔진에서 완전 제거, 사용자 공간으로 이동.
-- [ ] Public API 3분할: `state-surface`, `state-surface/server`, `state-surface/client`.
+- [x] `createApp()` 팩토리로 서버 초기화 (top-level side effect 없음).
+- [x] `createStateSurface()` 팩토리로 클라이언트 초기화 (앱 코드 분리).
+- [x] 서버 훅 시스템 동작 (`TransitionHooks`).
+- [x] 클라이언트 플러그인 시스템 동작 (`StateSurfacePlugin`).
+- [x] i18n/Prism.js 코드가 엔진에서 완전 제거, 사용자 공간으로 이동.
+- [x] Public API 3분할: `state-surface`, `state-surface/server`, `state-surface/client`.
 
 ### 프로덕션 빌드
 
-- [ ] `pnpm build` — Vite SSR 빌드 (클라이언트 + 서버).
-- [ ] `pnpm start` — 프로덕션 서버 실행.
-- [ ] Graceful shutdown 동작.
-- [ ] 보안 헤더 기본 적용.
-- [ ] 트랜지션 스트림 타임아웃 동작.
+- [x] `pnpm build` — Vite SSR 빌드 (클라이언트 + 서버).
+- [x] `pnpm start` — 프로덕션 서버 실행.
+- [x] Graceful shutdown 동작.
+- [x] 보안 헤더 기본 적용.
+- [x] 트랜지션 스트림 타임아웃 동작.
 
 ### 배포
 
@@ -660,14 +660,23 @@ Phase 전체를 관통하는 통합 검증.
 
 ### 품질
 
-- [ ] 사용자 코드 import가 `'state-surface'`/`'state-surface/server'`/`'state-surface/client'` 사용.
-- [ ] README에 퀵스타트, 아키텍처, 핵심 개념 문서화.
+- [x] 사용자 코드 import가 `'state-surface'`/`'state-surface/server'`/`'state-surface/client'` 사용.
+- [x] README에 퀵스타트, 아키텍처, 핵심 개념 문서화.
 - [x] 플러그인 사용 가이드 문서화 완료 (`guide/template` Plugin Patterns 섹션).
-- [ ] 오픈소스 라이선스 적용 (LICENSE 파일 존재).
+- [x] 오픈소스 라이선스 적용 (LICENSE 파일 존재).
 - [ ] GitHub Actions CI green.
 - [x] Phase 2-13 스모크 항목 전부 pass.
 - [x] Phase 2-14 통합 테스트 전부 pass.
 - [x] Open Decisions 전부 resolved.
+
+### 릴리스 정리 검증 (2026-03-06)
+
+- [x] `createApp` dev 경로를 미들웨어 구성만 수행하도록 정리(엔트리 `app.listen` 중복 제거).
+- [x] `installGracefulShutdown` 공용 유틸 추가 및 루트/템플릿 서버 엔트리 적용.
+- [x] `pnpm test` 통과 (`37 files, 549 tests`).
+- [x] `pnpm build && pnpm start` + `/search`, `/transition/search` 스모크 통과.
+- [x] 엔진 경계 검증: `engine/` 내 i18n/Prism 직접 의존 import 없음(`rg`).
+- [x] README/라이선스 존재 및 구조 확인.
 
 ---
 
@@ -679,8 +688,8 @@ Phase 전체를 관통하는 통합 검증.
 | ~~2~~  | ~~**2-1.5 가이드 UX**~~                   | ~~High~~         | —           | ✅ 완료                                    |
 | ~~3~~  | ~~**2-2 라이선스**~~                      | ~~Critical~~     | —           | ✅ 완료                                    |
 | ~~4~~  | ~~**2-3 README**~~                        | ~~Critical~~     | —           | ✅ 완료                                    |
-| 5      | **2-5 package.json**                      | Critical         | —           | 배포 기본 설정                             |
-| 6      | **2-7 createApp + 프로덕션 빌드**         | **Critical**     | §3, §7      | 이후 모든 변경의 기반                      |
+| ~~5~~  | ~~**2-5 package.json**~~                  | ~~Critical~~     | ~~—~~       | ✅ 완료                                    |
+| ~~6~~  | ~~**2-7 createApp + 프로덕션 빌드**~~     | ~~**Critical**~~ | ~~§3, §7~~  | ✅ 완료                                    |
 | ~~7~~  | ~~**2-8 서버 훅 + 클라이언트 플러그인**~~ | ~~**Critical**~~ | §1, §2      | ✅ 완료 (i18n·Prism 분리)                  |
 | ~~8~~  | ~~**2-9 에러/보안**~~                     | ~~**High**~~     | ~~§4, §5~~  | ✅ 완료 (파서/보안헤더/타임아웃)           |
 | ~~9~~  | ~~**2-12 Public API 분리 + 타입**~~       | ~~**High**~~     | §6          | ✅ 완료 (3분할 진입점)                     |
@@ -732,7 +741,7 @@ Phase 전체를 관통하는 통합 검증.
 ## Handoff Status
 
 - **Done**: Phase 2-1, 2-1.5, 2-2, 2-3, 2-4, 2-5, 2-6, 2-7, 2-8, 2-9, 2-10, 2-11, 2-12, 2-13, 2-13.5, 2-14, 2-15 완료.
-- **Next**: v0.1.0 릴리스 정리 (DoD 잔여 항목 처리).
+- **Next**: 배포/릴리스 실행 항목 정리 (`state-surface`/`create-state-surface` publish, CI green, 업데이트 경로 검증).
 - **Resolved**: DC-01 (MIT), DC-02 (Vite SSR), DC-03 (환경 변수만), DC-04 (E2E 생략), DC-05 (업데이트 경로), DC-06 (플러그인 우선 UX 확장).
 - **Blockers**: 없음.
 - **Latest commit**: not committed yet.
