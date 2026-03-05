@@ -13,6 +13,7 @@ import type { RouteModule } from '../shared/routeModule.js';
 import type { TransitionHooks } from './hooks.js';
 import { createTemplateRegistry } from '../shared/templateRegistry.js';
 import { createSSRRenderer } from './ssrRenderer.js';
+import { createLogger, type LogLevel } from './logger.js';
 
 export interface StateSurfaceServerOptions {
   port?: number;
@@ -22,6 +23,7 @@ export interface StateSurfaceServerOptions {
   bodyLimit?: string;
   transitionTimeout?: number;
   hooks?: TransitionHooks;
+  logLevel?: LogLevel;
 }
 
 function extractRouteModule(mod: any): RouteModule {
@@ -109,6 +111,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   const port = options?.port ?? (Number(process.env.PORT) || 3000);
   const basePath = options?.basePath ?? process.env.BASE_PATH ?? '';
   const rootDir = options?.appDir ?? process.cwd();
+  const logger = createLogger({ level: options?.logLevel });
   setBasePath(basePath);
 
   const transitionRegistry = createTransitionRegistry();
@@ -116,6 +119,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   const app = express();
   app.locals.transitionRegistry = transitionRegistry;
   app.locals.templateRegistry = templateRegistry;
+  app.locals.logger = logger;
   app.use(express.json({ limit: options?.bodyLimit ?? '100kb' }));
   if (options?.securityHeaders !== false) {
     app.use((_req, res, next) => {
@@ -124,6 +128,14 @@ export async function createApp(options?: StateSurfaceServerOptions) {
       next();
     });
   }
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+      logger.info(`[HTTP] ${req.method} ${req.originalUrl} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`);
+    });
+    next();
+  });
 
   // Auto-register transitions and templates
   await bootstrapServer({ rootDir, transitionRegistry, templateRegistry });
@@ -247,7 +259,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[TransitionHook] onAfterTransition failed: ${message}`);
+        logger.error(`[TransitionHook] onAfterTransition failed: ${message}`);
       }
       res.end();
     }
@@ -270,9 +282,9 @@ export async function createApp(options?: StateSurfaceServerOptions) {
     });
 
     app.listen(port, () => {
-      console.log(`StateSurface dev server running at http://localhost:${port}`);
-      console.log(`  Routes: ${registeredPatterns.join(', ')}`);
-      console.log(`  Debug overlay: http://localhost:${port}/?debug=1`);
+      logger.info(`StateSurface dev server running at http://localhost:${port}`);
+      logger.debug(`  Routes: ${registeredPatterns.join(', ')}`);
+      logger.debug(`  Debug overlay: http://localhost:${port}/?debug=1`);
     });
   }
 
