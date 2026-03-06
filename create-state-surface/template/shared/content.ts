@@ -861,7 +861,7 @@ function SearchResults({ query }: { query: string }) {
             {
               type: 'bullets',
               items: [
-                'type — every frame has a type field. type: \'state\' carries slot data. type: \'error\' renders an error template (e.g., system:error) with an optional message and data. type: \'done\' signals stream end — you never yield this manually; the engine sends it when your generator returns.',
+                "type — every frame has a type field. type: 'state' carries slot data. type: 'error' renders an error template (e.g., system:error) with an optional message and data. type: 'done' signals stream end — you never yield this manually; the engine sends it when your generator returns.",
                 'full (default: true) — replaces all activeStates. Slots not included in states are unmounted. The first frame in a stream must be full.',
                 'full: false (partial) — merges into existing activeStates. Must include at least one of changed or removed. changed lists which slots in states are new or updated; removed lists slots to unmount. A slot cannot appear in both.',
                 'accumulate: true — stacks delta data onto existing slot state instead of replacing it. Arrays concat, strings concat, objects shallow-merge, scalars replace. Use this for progressive streaming (e.g., chat tokens, live logs). Pair with a full frame beforehand to initialize the slot.',
@@ -2472,7 +2472,7 @@ function SearchResults({ query }: { query: string }) {
             {
               type: 'bullets',
               items: [
-                'type — 모든 프레임에는 type 필드가 있습니다. type: \'state\'는 슬롯 데이터를 전달합니다. type: \'error\'는 에러 템플릿(예: system:error)을 렌더하며 선택적 message와 data를 포함합니다. type: \'done\'은 스트림 종료 신호 — 직접 yield하지 않아도 제너레이터가 return하면 엔진이 전송합니다.',
+                "type — 모든 프레임에는 type 필드가 있습니다. type: 'state'는 슬롯 데이터를 전달합니다. type: 'error'는 에러 템플릿(예: system:error)을 렌더하며 선택적 message와 data를 포함합니다. type: 'done'은 스트림 종료 신호 — 직접 yield하지 않아도 제너레이터가 return하면 엔진이 전송합니다.",
                 'full (기본값: true) — 모든 activeStates를 교체합니다. states에 포함되지 않은 슬롯은 언마운트됩니다. 스트림의 첫 프레임은 반드시 full이어야 합니다.',
                 'full: false (partial) — 기존 activeStates에 병합됩니다. changed 또는 removed 중 하나 이상 포함해야 합니다. changed는 states에서 신규/업데이트된 슬롯, removed는 언마운트할 슬롯입니다. 한 슬롯이 양쪽에 동시에 나올 수 없습니다.',
                 'accumulate: true — 기존 슬롯 상태를 교체하지 않고 델타 데이터를 누적합니다. 배열은 concat, 문자열은 concat, 객체는 얕은 병합, 스칼라는 교체됩니다. 점진적 스트리밍에 사용합니다(예: 채팅 토큰, 라이브 로그). 슬롯 초기화를 위해 먼저 full 프레임을 보내세요.',
