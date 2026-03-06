@@ -898,7 +898,7 @@ function SearchResults({ query }: { query: string }) {
             {
               type: 'callout',
               kind: 'tip',
-              text: 'Rule of thumb: use a full frame at the start to set the baseline, partial frames for selective updates mid-stream, and accumulate frames for progressive content that grows over time.',
+              text: 'Rule of thumb: use a full frame at the start to set the baseline, partial frames for selective updates mid-stream, and accumulate frames for progressive content that grows over time. For a deep dive into accumulate patterns (chat, token streaming, load-more), see the Accumulate guide.',
             },
           ],
         },
@@ -1288,7 +1288,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'Accumulate frame adds data to what\'s already on screen instead of replacing it. The server sends "append this" — arrays get concatenated, strings get concatenated. Think chat messages arriving one by one, or a streaming AI response building up token by token.',
+              text: 'Accumulate is a specialized frame option within transitions. Instead of replacing what\'s on screen, the server sends "append this" — arrays get concatenated, strings get concatenated. Think chat messages arriving one by one, or a streaming AI response building up token by token. This guide covers accumulate-specific patterns in depth; for the full picture of frame options (full, partial, accumulate), see the Transition guide.',
             },
           ],
         },
@@ -2509,7 +2509,7 @@ function SearchResults({ query }: { query: string }) {
             {
               type: 'callout',
               kind: 'tip',
-              text: '경험칙: 시작에는 full 프레임으로 기준을 세우고, 중간에는 partial 프레임으로 선택적 업데이트, 시간에 따라 데이터가 쌓이는 콘텐츠에는 accumulate 프레임을 사용하세요.',
+              text: '경험칙: 시작에는 full 프레임으로 기준을 세우고, 중간에는 partial 프레임으로 선택적 업데이트, 시간에 따라 데이터가 쌓이는 콘텐츠에는 accumulate 프레임을 사용하세요. accumulate 패턴(채팅, 토큰 스트리밍, 더보기)을 자세히 알려면 Accumulate 가이드를 참고하세요.',
             },
           ],
         },
@@ -2892,7 +2892,7 @@ function ShippingForm() {
           blocks: [
             {
               type: 'paragraph',
-              text: 'accumulate 프레임은 화면에 있는 데이터를 교체하지 않고 추가합니다. 서버가 "이걸 덧붙여"라고 보내면 — 배열은 이어붙이고, 문자열은 이어붙입니다. 채팅 메시지가 하나씩 도착하거나, AI 응답이 토큰 단위로 쌓이는 것을 떠올리면 됩니다.',
+              text: 'accumulate는 transition 안에서 사용하는 특수한 프레임 옵션입니다. 화면에 있는 데이터를 교체하지 않고 "이걸 덧붙여"라고 보내면 — 배열은 이어붙이고, 문자열은 이어붙입니다. 채팅 메시지가 하나씩 도착하거나, AI 응답이 토큰 단위로 쌓이는 것을 떠올리면 됩니다. 이 가이드는 accumulate 전용 패턴을 깊이 다룹니다. 프레임 옵션(full, partial, accumulate) 전체 그림은 Transition 가이드를 참고하세요.',
             },
           ],
         },
