@@ -32,7 +32,7 @@ const REQUIRED_SECTION_IDS = [
 ];
 const SURFACE_EXTRA_SECTION_IDS = ['mixed'];
 const TEMPLATE_EXTRA_SECTION_IDS = ['plugins'];
-const TRANSITION_EXTRA_SECTION_IDS = ['animation'];
+const TRANSITION_EXTRA_SECTION_IDS = ['frames', 'animation'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [
   'preview',
   'prereqs',

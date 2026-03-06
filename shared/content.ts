@@ -575,6 +575,11 @@ function StockPrice({ symbol }: { symbol: string }) {
                 'Only changed nodes are patched inside <h-state name="page:content">.',
               ],
             },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'Depending on the frame options (full, partial, accumulate), your props may be replaced entirely, merged selectively, or accumulated incrementally. These options are controlled by transitions — see the Transition guide for details.',
+            },
           ],
         },
         {
@@ -842,6 +847,58 @@ function SearchResults({ query }: { query: string }) {
   if (loading) return <Skeleton />;
   return <ResultList items={items} badge={badge} />;
 }`,
+            },
+          ],
+        },
+        {
+          id: 'frames',
+          heading: 'Frame options',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Each state frame you yield has options that control how the client applies it. Understanding these is essential for designing multi-step transitions.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'type — every frame has a type field. type: \'state\' carries slot data. type: \'error\' renders an error template (e.g., system:error) with an optional message and data. type: \'done\' signals stream end — you never yield this manually; the engine sends it when your generator returns.',
+                'full (default: true) — replaces all activeStates. Slots not included in states are unmounted. The first frame in a stream must be full.',
+                'full: false (partial) — merges into existing activeStates. Must include at least one of changed or removed. changed lists which slots in states are new or updated; removed lists slots to unmount. A slot cannot appear in both.',
+                'accumulate: true — stacks delta data onto existing slot state instead of replacing it. Arrays concat, strings concat, objects shallow-merge, scalars replace. Use this for progressive streaming (e.g., chat tokens, live logs). Pair with a full frame beforehand to initialize the slot.',
+                'removed — only valid in partial frames (full: false). Listed slot names are deleted from activeStates and their DOM is cleared from the anchor.',
+              ],
+            },
+            {
+              type: 'code',
+              lang: 'ts',
+              label: 'Full → partial → accumulate in one transition',
+              text: `async function* liveSearch(params) {
+  // 1. Full frame — reset everything, show loading
+  yield {
+    type: 'state',
+    states: {
+      'search:input': { query: params.query },
+      'search:results': { loading: true },
+    },
+  };
+
+  const results = await db.search(params.query);
+
+  // 2. Partial frame — update only results, input stays
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['search:results'],
+    states: {
+      'search:results': { items: results, loading: false },
+    },
+  };
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'Rule of thumb: use a full frame at the start to set the baseline, partial frames for selective updates mid-stream, and accumulate frames for progressive content that grows over time.',
             },
           ],
         },
@@ -2129,6 +2186,11 @@ function StockPrice({ symbol }: { symbol: string }) {
                 '<h-state name="page:content"> 내부에서 변경된 노드만 패치됩니다.',
               ],
             },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: '프레임 옵션(full, partial, accumulate)에 따라 props가 전체 교체되거나, 선택적으로 병합되거나, 점진적으로 누적될 수 있습니다. 이 옵션들은 transition이 제어합니다 — 자세한 내용은 Transition 가이드를 참고하세요.',
+            },
           ],
         },
         {
@@ -2396,6 +2458,58 @@ function SearchResults({ query }: { query: string }) {
   if (loading) return <Skeleton />;
   return <ResultList items={items} badge={badge} />;
 }`,
+            },
+          ],
+        },
+        {
+          id: 'frames',
+          heading: '프레임 옵션',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'yield하는 각 상태 프레임에는 클라이언트가 어떻게 적용할지 제어하는 옵션이 있습니다. 다단계 transition을 설계하려면 이 옵션들을 이해해야 합니다.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'type — 모든 프레임에는 type 필드가 있습니다. type: \'state\'는 슬롯 데이터를 전달합니다. type: \'error\'는 에러 템플릿(예: system:error)을 렌더하며 선택적 message와 data를 포함합니다. type: \'done\'은 스트림 종료 신호 — 직접 yield하지 않아도 제너레이터가 return하면 엔진이 전송합니다.',
+                'full (기본값: true) — 모든 activeStates를 교체합니다. states에 포함되지 않은 슬롯은 언마운트됩니다. 스트림의 첫 프레임은 반드시 full이어야 합니다.',
+                'full: false (partial) — 기존 activeStates에 병합됩니다. changed 또는 removed 중 하나 이상 포함해야 합니다. changed는 states에서 신규/업데이트된 슬롯, removed는 언마운트할 슬롯입니다. 한 슬롯이 양쪽에 동시에 나올 수 없습니다.',
+                'accumulate: true — 기존 슬롯 상태를 교체하지 않고 델타 데이터를 누적합니다. 배열은 concat, 문자열은 concat, 객체는 얕은 병합, 스칼라는 교체됩니다. 점진적 스트리밍에 사용합니다(예: 채팅 토큰, 라이브 로그). 슬롯 초기화를 위해 먼저 full 프레임을 보내세요.',
+                'removed — partial 프레임(full: false)에서만 유효합니다. 나열된 슬롯 이름이 activeStates에서 삭제되고 DOM이 앵커에서 제거됩니다.',
+              ],
+            },
+            {
+              type: 'code',
+              lang: 'ts',
+              label: 'Full → partial → accumulate 하나의 transition에서',
+              text: `async function* liveSearch(params) {
+  // 1. Full 프레임 — 전체 리셋, 로딩 표시
+  yield {
+    type: 'state',
+    states: {
+      'search:input': { query: params.query },
+      'search:results': { loading: true },
+    },
+  };
+
+  const results = await db.search(params.query);
+
+  // 2. Partial 프레임 — results만 업데이트, input은 유지
+  yield {
+    type: 'state',
+    full: false,
+    changed: ['search:results'],
+    states: {
+      'search:results': { items: results, loading: false },
+    },
+  };
+}`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '경험칙: 시작에는 full 프레임으로 기준을 세우고, 중간에는 partial 프레임으로 선택적 업데이트, 시간에 따라 데이터가 쌓이는 콘텐츠에는 accumulate 프레임을 사용하세요.',
             },
           ],
         },
