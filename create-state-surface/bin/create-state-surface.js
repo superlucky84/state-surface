@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
+
+const REPO = 'superlucky84/state-surface';
+const BRANCH = 'main';
+const TARBALL_URL = `https://github.com/${REPO}/tarball/${BRANCH}`;
 
 function printHelp() {
   console.log(`create-state-surface
@@ -54,22 +58,39 @@ if (fs.existsSync(targetDir)) {
   fail(`Target directory already exists: ${targetDir}`);
 }
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const cliRoot = path.resolve(scriptDir, '..');
-const templateDir = path.join(cliRoot, 'template');
-if (!fs.existsSync(templateDir)) {
-  fail(`Template directory not found: ${templateDir}`);
+// Download and extract scaffold/ from GitHub tarball
+console.log('Downloading template from GitHub...');
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'create-state-surface-'));
+const tarball = path.join(tmpDir, 'repo.tar.gz');
+
+try {
+  // Download tarball
+  const res = await fetch(TARBALL_URL, { redirect: 'follow' });
+  if (!res.ok) {
+    fail(`Failed to download template: ${res.status} ${res.statusText}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(tarball, buffer);
+
+  // Extract scaffold/ directory only, stripping the repo prefix + "scaffold/"
+  fs.mkdirSync(targetDir, { recursive: true });
+  execSync(`tar xzf "${tarball}" -C "${targetDir}" --strip-components=2 '*/scaffold/'`, {
+    stdio: 'pipe',
+  });
+} catch (err) {
+  // Clean up on failure
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  if (err.message?.includes('create-state-surface')) throw err;
+  fail(`Failed to extract template: ${err.message}`);
+} finally {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
-fs.mkdirSync(path.dirname(targetDir), { recursive: true });
-fs.cpSync(templateDir, targetDir, {
-  recursive: true,
-  errorOnExist: true,
-});
-
+// Apply package.json template substitution
 const packageTemplatePath = path.join(targetDir, 'package.json.template');
 if (!fs.existsSync(packageTemplatePath)) {
-  fail('package.json.template is missing in template.');
+  fail('package.json.template is missing in scaffold.');
 }
 
 const rawPackageTemplate = fs.readFileSync(packageTemplatePath, 'utf8');
@@ -82,6 +103,7 @@ const packageJson = rawPackageTemplate
 fs.writeFileSync(path.join(targetDir, 'package.json'), packageJson);
 fs.rmSync(packageTemplatePath);
 
+// Rename dotfiles (npm strips leading-dot files from tarballs)
 for (const [from, to] of [
   ['gitignore', '.gitignore'],
   ['npmrc', '.npmrc'],

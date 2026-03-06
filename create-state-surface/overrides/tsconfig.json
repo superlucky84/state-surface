@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "lithent",
+    "types": ["node"]
+  },
+  "include": ["server.ts", "client", "shared", "routes", "layouts"],
+  "exclude": ["node_modules", "dist"]
+}

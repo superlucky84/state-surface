@@ -1,0 +1,41 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "description": "__PROJECT_DESCRIPTION__",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false",
+    "start": "NODE_ENV=production node dist/server.js",
+    "test": "vitest run",
+    "format": "prettier --write 'client/**/*.ts' 'client/**/*.tsx' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts'",
+    "format:check": "prettier --check 'client/**/*.ts' 'client/**/*.tsx' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts'"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "lithent": "^1.21.7",
+    "prismjs": "^1.30.0",
+    "state-surface": "__STATE_SURFACE_VERSION__"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.1",
+    "@types/prismjs": "^1.26.6",
+    "@types/supertest": "^6.0.3",
+    "happy-dom": "^20.5.0",
+    "prettier": "^3.8.1",
+    "supertest": "^7.2.2",
+    "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  }
+}
