@@ -22,7 +22,10 @@ const ChatMessage = ({ id, role, text }: Message) => (
 );
 
 const ChatMessages = ({ messages, welcomeText }: ChatMessagesProps) => (
-  <div class="flex flex-1 flex-col gap-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
+  <div
+    data-chat-scroll
+    class="flex flex-1 flex-col gap-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4"
+  >
     {!messages || messages.length === 0 ? (
       <p class="m-auto text-center text-sm text-slate-400">
         {welcomeText ?? 'Send a message to start the conversation.'}
