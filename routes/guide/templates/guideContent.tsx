@@ -175,7 +175,9 @@ const DiagramBlock = ({ text, label }: { text: string; label?: string }) => (
       </div>
     )}
     <div class="overflow-x-auto">
-      <pre class="whitespace-pre p-4 font-mono text-[0.6875rem] leading-relaxed text-slate-700">{text}</pre>
+      <pre class="whitespace-pre p-4 font-mono text-[0.6875rem] leading-relaxed text-slate-700">
+        {text}
+      </pre>
     </div>
   </div>
 );
