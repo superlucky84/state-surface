@@ -67,7 +67,7 @@ const CodeBlockInner = ({
         </button>
       </div>
       <div class="overflow-x-auto">
-        <pre class="code-with-lines p-4 font-mono text-xs leading-snug">
+        <pre class="code-with-lines p-4 font-mono text-[0.6875rem] leading-snug">
           <code class={langClass}>{text}</code>
         </pre>
       </div>
@@ -175,7 +175,7 @@ const DiagramBlock = ({ text, label }: { text: string; label?: string }) => (
       </div>
     )}
     <div class="overflow-x-auto">
-      <pre class="whitespace-pre p-4 font-mono text-xs leading-relaxed text-slate-700">{text}</pre>
+      <pre class="whitespace-pre p-4 font-mono text-[0.6875rem] leading-relaxed text-slate-700">{text}</pre>
     </div>
   </div>
 );
