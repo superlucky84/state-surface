@@ -178,10 +178,8 @@ engine/                  # Framework core (do not edit)
 
 routes/                  # Your route modules + templates + transitions
   index.ts               #   GET / — home page
-  search.ts              #   GET /search
-  chat.ts                #   GET /chat (streaming + abort)
   guide/[slug].ts        #   GET /guide/:slug (dynamic param)
-  features/              #   Feature showcase pages
+  examples/              #   Example/demo pages (streaming, actions, chat, etc.)
   _shared/               #   Cross-route templates, transitions, hooks
   <route>/templates/     #   Per-route TSX projection components
   <route>/transitions/   #   Per-route server-side state generators

@@ -56,9 +56,9 @@ describe('request logging middleware', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const { app } = await createApp({ logLevel: 'info' });
 
-    await request(app).get('/search').expect(200);
+    await request(app).get('/examples/search').expect(200);
 
     const lines = infoSpy.mock.calls.map(args => String(args[0]));
-    expect(lines.some(line => line.includes('[HTTP] GET /search 200'))).toBe(true);
+    expect(lines.some(line => line.includes('[HTTP] GET /examples/search 200'))).toBe(true);
   });
 });

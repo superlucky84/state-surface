@@ -132,7 +132,9 @@ export async function createApp(options?: StateSurfaceServerOptions) {
     const start = process.hrtime.bigint();
     res.on('finish', () => {
       const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
-      logger.info(`[HTTP] ${req.method} ${req.originalUrl} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`);
+      logger.info(
+        `[HTTP] ${req.method} ${req.originalUrl} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`
+      );
     });
     next();
   });

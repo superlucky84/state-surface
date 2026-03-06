@@ -1,7 +1,7 @@
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../shared/i18n.js';
-import type { Lang } from '../../../shared/i18n.js';
+import { isValidLang } from '../../../../shared/i18n.js';
+import type { Lang } from '../../../../shared/i18n.js';
 
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };

@@ -5,7 +5,15 @@ import type { Lang } from '../../../shared/i18n.js';
 import { pageContent } from '../../../shared/content.js';
 import type { PageKey } from '../../../shared/content.js';
 
-const VALID_PAGES: PageKey[] = ['home', 'guide', 'streaming', 'actions', 'search', 'chat'];
+const VALID_PAGES: PageKey[] = [
+  'home',
+  'guide',
+  'examples',
+  'streaming',
+  'actions',
+  'search',
+  'chat',
+];
 
 async function* switchLang(
   params: Record<string, unknown>

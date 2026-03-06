@@ -95,12 +95,13 @@ layouts/             # Shared surface composition helpers (string-based HTML bui
   surface.ts         # stateSlots, joinSurface, surfaceDocument, baseSurface
 routes/              # Route modules + page-specific templates/transitions (auto-loaded)
   index.ts           # GET / — home page (hero, concepts, features)
-  search.ts          # GET /search — feature/concept search
-  chat.ts            # GET /chat — chatbot (streaming + abort)
   guide/[slug].ts    # GET /guide/:slug — guides (quickstart + 5 concept guides)
-  features/streaming.ts  # GET /features/streaming — frame flow visualization
-  features/actions.ts    # GET /features/actions — action playground
-  features/view-transition.ts  # GET /features/view-transition — View Transition API morphing
+  examples/index.ts  # GET /examples — examples landing page
+  examples/streaming.ts        # GET /examples/streaming — frame flow visualization
+  examples/actions.ts          # GET /examples/actions — action playground
+  examples/view-transition.ts  # GET /examples/view-transition — View Transition API morphing
+  examples/search.ts           # GET /examples/search — feature/concept search
+  examples/chat.ts             # GET /examples/chat — chatbot (streaming + abort)
   _shared/templates/ # Cross-route templates (pageHeader, systemError)
   _shared/transitions/   # Cross-route transitions (switchLang)
   <route>/templates/ # Per-route TSX projection components
@@ -195,11 +196,12 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 | --------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
 | `/`                         | `page:hero`, `page:concepts`, `page:features`                | `initial` SSR only, surface composition                        |
 | `/guide/:slug`              | `guide:content`, `guide:toc`                                 | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |
-| `/features/streaming`       | `demo:controls`, `demo:timeline`, `demo:output`              | Full/partial frames, `removed`, error frame                    |
-| `/features/actions`         | `actions:playground`, `actions:log`                          | `data-action`, form submit, scoped pending                     |
-| `/features/view-transition` | `vt:description`, `vt:gallery`                               | View Transition API, `view-transition-name` morphing           |
-| `/search`                   | `search:input`, `search:results`                             | Form `data-action`, pending state                              |
-| `/chat`                     | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate             |
+| `/examples`                   | `examples:list`                                                | Examples landing page with links to all demos                  |
+| `/examples/streaming`         | `demo:controls`, `demo:timeline`, `demo:output`              | Full/partial frames, `removed`, error frame                    |
+| `/examples/actions`           | `actions:playground`, `actions:log`                          | `data-action`, form submit, scoped pending                     |
+| `/examples/view-transition`   | `vt:description`, `vt:gallery`                               | View Transition API, `view-transition-name` morphing           |
+| `/examples/search`            | `search:input`, `search:results`                             | Form `data-action`, pending state                              |
+| `/examples/chat`              | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate             |
 
 All pages share `page:header` and `system:error` via `baseSurface`.
 

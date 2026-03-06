@@ -35,17 +35,17 @@ describe('phase 2-13 smoke coverage', () => {
   });
 
   it('search/actions/chat pages expose declarative data-action bindings', async () => {
-    const search = await request(app).get('/search');
+    const search = await request(app).get('/examples/search');
     expect(search.status).toBe(200);
     expect(search.text).toContain('data-action="search"');
     expect(search.text).toContain('data-pending-targets="search:results"');
 
-    const actions = await request(app).get('/features/actions');
+    const actions = await request(app).get('/examples/actions');
     expect(actions.status).toBe(200);
     expect(actions.text).toContain('data-action="action-demo"');
     expect(actions.text).toContain('data-pending-targets="actions:log"');
 
-    const chat = await request(app).get('/chat');
+    const chat = await request(app).get('/examples/chat');
     expect(chat.status).toBe(200);
     expect(chat.text).toContain('data-action="chat"');
     expect(chat.text).toContain('data-pending-targets="chat:messages,chat:current,chat:typing"');
@@ -55,10 +55,10 @@ describe('phase 2-13 smoke coverage', () => {
     const routes = [
       '/',
       '/guide/surface',
-      '/features/streaming',
-      '/features/actions',
-      '/search',
-      '/chat',
+      '/examples/streaming',
+      '/examples/actions',
+      '/examples/search',
+      '/examples/chat',
     ];
 
     for (const route of routes) {
@@ -86,7 +86,7 @@ describe('phase 2-13 smoke coverage', () => {
     const cookiePair = (setCookieHeader ?? '').split(';')[0];
     expect(cookiePair).toBe('lang=ko');
 
-    const routes = ['/search', '/features/actions', '/chat'];
+    const routes = ['/examples/search', '/examples/actions', '/examples/chat'];
     for (const route of routes) {
       const res = await request(app).get(route).set('Cookie', cookiePair);
       expect(res.status).toBe(200);

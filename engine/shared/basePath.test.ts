@@ -48,7 +48,7 @@ describe('prefixPath — zero-cost default (basePath empty)', () => {
   it('returns url unchanged when basePath is empty', () => {
     expect(prefixPath('/')).toBe('/');
     expect(prefixPath('/guide/surface')).toBe('/guide/surface');
-    expect(prefixPath('/features/streaming')).toBe('/features/streaming');
+    expect(prefixPath('/examples/streaming')).toBe('/examples/streaming');
     expect(prefixPath('/transition/search')).toBe('/transition/search');
   });
 });

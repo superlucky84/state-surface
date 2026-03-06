@@ -1,7 +1,7 @@
 import type { RouteModule } from 'state-surface';
-import { chatSurface, joinSurface } from '../layouts/surface.js';
-import { getLang } from '../shared/i18n.js';
-import { chatContent } from '../shared/content.js';
+import { chatSurface, joinSurface } from '../../layouts/surface.js';
+import { getLang } from '../../shared/i18n.js';
+import { chatContent } from '../../shared/content.js';
 
 export default {
   layout: stateScript => {

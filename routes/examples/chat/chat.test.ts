@@ -7,9 +7,9 @@ beforeAll(async () => {
   ({ app } = await createApp());
 });
 
-describe('GET /chat — SSR initial render', () => {
+describe('GET /examples/chat — SSR initial render', () => {
   it('returns 200 with all chat surface anchors', async () => {
-    const res = await request(app).get('/chat');
+    const res = await request(app).get('/examples/chat');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('name="chat:messages"');
@@ -20,7 +20,7 @@ describe('GET /chat — SSR initial render', () => {
   });
 
   it('SSR fills initial state — welcome text and input placeholder', async () => {
-    const res = await request(app).get('/chat');
+    const res = await request(app).get('/examples/chat');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('Send a message to start the conversation');
@@ -28,8 +28,8 @@ describe('GET /chat — SSR initial render', () => {
     expect(res.text).not.toContain('name="history"');
   });
 
-  it('GET /chat with lang=ko renders Korean content', async () => {
-    const res = await request(app).get('/chat').set('Cookie', 'lang=ko');
+  it('GET /examples/chat with lang=ko renders Korean content', async () => {
+    const res = await request(app).get('/examples/chat').set('Cookie', 'lang=ko');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('메시지를 보내');

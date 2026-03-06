@@ -59,8 +59,8 @@ describe('demo SSR page', () => {
     expect(res.text).not.toContain('State-Layout Mapping Runtime');
   });
 
-  it('GET /search with lang=ko cookie renders Korean labels', async () => {
-    const res = await request(app).get('/search').set('Cookie', 'lang=ko');
+  it('GET /examples/search with lang=ko cookie renders Korean labels', async () => {
+    const res = await request(app).get('/examples/search').set('Cookie', 'lang=ko');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('검색');

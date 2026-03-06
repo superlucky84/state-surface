@@ -239,11 +239,13 @@ routes/
 ├── index.ts                      → GET /
 ├── guide/
 │   └── [slug].ts                 → GET /guide/:slug
-├── features/
-│   ├── streaming.ts              → GET /features/streaming
-│   └── actions.ts                → GET /features/actions
-├── search.ts                     → GET /search
-└── chat.ts                       → GET /chat
+└── examples/
+    ├── index.ts                  → GET /examples
+    ├── streaming.ts              → GET /examples/streaming
+    ├── actions.ts                → GET /examples/actions
+    ├── view-transition.ts        → GET /examples/view-transition
+    ├── search.ts                 → GET /examples/search
+    └── chat.ts                   → GET /examples/chat
 ```
 
 Routes also host per-page assets:
@@ -262,7 +264,10 @@ routes/
 │   │   └── guideToc.tsx
 │   └── transitions/
 │       └── guideLoad.ts
-├── features/
+├── examples/
+│   ├── index.ts
+│   ├── templates/
+│   │   └── examplesList.tsx
 │   ├── streaming.ts
 │   ├── streaming/
 │   │   ├── templates/
@@ -272,25 +277,28 @@ routes/
 │   │   └── transitions/
 │   │       └── streamDemo.ts
 │   ├── actions.ts
-│   └── actions/
+│   ├── actions/
+│   │   ├── templates/
+│   │   │   ├── actionsPlayground.tsx
+│   │   │   └── actionsLog.tsx
+│   │   └── transitions/
+│   │       └── actionDemo.ts
+│   ├── view-transition.ts
+│   ├── search.ts
+│   ├── search/
+│   │   ├── templates/
+│   │   │   ├── searchInput.tsx
+│   │   │   └── searchResults.tsx
+│   │   └── transitions/
+│   │       └── search.ts
+│   ├── chat.ts
+│   └── chat/
 │       ├── templates/
-│       │   ├── actionsPlayground.tsx
-│       │   └── actionsLog.tsx
+│       │   ├── chatMessages.tsx
+│       │   ├── chatInput.tsx
+│       │   └── chatTyping.tsx
 │       └── transitions/
-│           └── actionDemo.ts
-├── search/
-│   ├── templates/
-│   │   ├── searchInput.tsx
-│   │   └── searchResults.tsx
-│   └── transitions/
-│       └── search.ts
-├── chat/
-│   ├── templates/
-│   │   ├── chatMessages.tsx
-│   │   ├── chatInput.tsx
-│   │   └── chatTyping.tsx
-│   └── transitions/
-│       └── chat.ts
+│           └── chat.ts
 └── _shared/
     └── templates/
         ├── pageHeader.tsx
@@ -303,7 +311,7 @@ routes/
 |---|---|---|
 | `index.ts` | `/` (directory root) | `routes/index.ts` → `/` |
 | `[param].ts` | `/:param` (dynamic segment) | `routes/article/[id].ts` → `/article/:id` |
-| `name.ts` | `/name` (static segment) | `routes/search.ts` → `/search` |
+| `name.ts` | `/name` (static segment) | `routes/examples/search.ts` → `/examples/search` |
 | `dir/index.ts` | `/dir` (nested root) | `routes/admin/index.ts` → `/admin` |
 
 **Convention rationale:** `[param]` bracket syntax is chosen over `_param` (underscore prefix)
@@ -329,10 +337,11 @@ A route's surface is its page identity — slots must not leak across pages.
 ```
 GET /                    → page:hero, page:concepts, page:features
 GET /guide/:slug         → guide:content, guide:toc
-GET /features/streaming  → demo:controls, demo:timeline, demo:output
-GET /features/actions    → actions:playground, actions:log
-GET /search              → search:input, search:results
-GET /chat                → chat:messages, chat:input, chat:typing
+GET /examples            → examples:list
+GET /examples/streaming  → demo:controls, demo:timeline, demo:output
+GET /examples/actions    → actions:playground, actions:log
+GET /examples/search     → search:input, search:results
+GET /examples/chat       → chat:messages, chat:input, chat:typing
 ```
 
 All pages share `page:header` and `system:error` via `baseSurface`.
@@ -357,10 +366,11 @@ users learn by reading the content while experiencing the feature in action.
 |-------|---------|----------------------|
 | `/` | **StateSurface 소개** — 4 핵심 개념 카드, 각 기능 페이지 링크 | `initial` SSR only, surface 문자열 조합 |
 | `/guide/[slug]` | **개념별 가이드** — surface, template, transition, action 문서 동적 로드 | Dynamic `[param]`, boot auto-run, full→partial 스트리밍 |
-| `/features/streaming` | **스트리밍** — 프레임 흐름 실시간 시각화, 버튼으로 직접 프레임 발사 | Full/partial frames, `removed`, error frame |
-| `/features/actions` | **액션 플레이그라운드** — 버튼, 폼, scoped pending 직접 체험 | `data-action`, form submit, `data-pending-targets`, 다중 액션 |
-| `/search` | **기능/개념 검색** — StateSurface 기능 목록에서 검색 | Form `data-action`, pending 상태 |
-| `/chat` | **Q&A 챗봇** — StateSurface에 대해 질문하며 체험 | Abort previous, progressive streaming, cacheUpdate |
+| `/examples` | **예제 목록** — 모든 예제 페이지 링크가 있는 랜딩 페이지 | Examples landing page |
+| `/examples/streaming` | **스트리밍** — 프레임 흐름 실시간 시각화, 버튼으로 직접 프레임 발사 | Full/partial frames, `removed`, error frame |
+| `/examples/actions` | **액션 플레이그라운드** — 버튼, 폼, scoped pending 직접 체험 | `data-action`, form submit, `data-pending-targets`, 다중 액션 |
+| `/examples/search` | **기능/개념 검색** — StateSurface 기능 목록에서 검색 | Form `data-action`, pending 상태 |
+| `/examples/chat` | **Q&A 챗봇** — StateSurface에 대해 질문하며 체험 | Abort previous, progressive streaming, cacheUpdate |
 
 **Target slot structure:**
 
@@ -368,10 +378,11 @@ users learn by reading the content while experiencing the feature in action.
 |-------|--------------------|-----------------------------|
 | `/` | `page:hero`, `page:concepts`, `page:features` | `page:header`, `system:error` |
 | `/guide/[slug]` | `guide:content`, `guide:toc` | `page:header`, `system:error` |
-| `/features/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | `page:header`, `system:error` |
-| `/features/actions` | `actions:playground`, `actions:log` | `page:header`, `system:error` |
-| `/search` | `search:input`, `search:results` | `page:header`, `system:error` |
-| `/chat` | `chat:messages`, `chat:input`, `chat:typing` | `page:header`, `system:error` |
+| `/examples` | `examples:list` | `page:header`, `system:error` |
+| `/examples/streaming` | `demo:controls`, `demo:timeline`, `demo:output` | `page:header`, `system:error` |
+| `/examples/actions` | `actions:playground`, `actions:log` | `page:header`, `system:error` |
+| `/examples/search` | `search:input`, `search:results` | `page:header`, `system:error` |
+| `/examples/chat` | `chat:messages`, `chat:input`, `chat:typing` | `page:header`, `system:error` |
 
 **Feature coverage matrix:**
 
@@ -381,18 +392,18 @@ Surface composition ───── all pages
 Template (TSX) ────────── all pages
 Dynamic route [param] ─── /guide/[slug]
 Boot auto-run ─────────── /guide/[slug]
-Full frame ────────────── /guide/[slug], /features/streaming
-Partial changed ───────── /guide/[slug], /features/streaming
-Partial removed ───────── /features/streaming
-Error frame ───────────── /features/streaming
-data-action declarative ─ /features/actions, /search
-Form submission ───────── /features/actions, /search
-Pending state ─────────── /features/actions, /search
-Scoped pending ────────── /features/actions
-Multiple actions ──────── /features/actions
-Abort previous ────────── /chat
-Accumulate frame ──────── /chat (streaming text + message append)
-Progressive streaming ─── /chat
+Full frame ────────────── /guide/[slug], /examples/streaming
+Partial changed ───────── /guide/[slug], /examples/streaming
+Partial removed ───────── /examples/streaming
+Error frame ───────────── /examples/streaming
+data-action declarative ─ /examples/actions, /examples/search
+Form submission ───────── /examples/actions, /examples/search
+Pending state ─────────── /examples/actions, /examples/search
+Scoped pending ────────── /examples/actions
+Multiple actions ──────── /examples/actions
+Abort previous ────────── /examples/chat
+Accumulate frame ──────── /examples/chat (streaming text + message append)
+Progressive streaming ─── /examples/chat
 Debug overlay ─────────── all pages (?debug=1)
 i18n (ko/en) ─────────── all pages
 basePath ─────────────── all pages (sub-path mounting)

@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const TEMPLATE_FILES = [
-  'routes/chat/templates/chatMessages.tsx',
-  'routes/chat/templates/chatCurrent.tsx',
-  'routes/chat/templates/chatTyping.tsx',
-  'create-state-surface/template/routes/chat/templates/chatMessages.tsx',
-  'create-state-surface/template/routes/chat/templates/chatCurrent.tsx',
-  'create-state-surface/template/routes/chat/templates/chatTyping.tsx',
+  'routes/examples/chat/templates/chatMessages.tsx',
+  'routes/examples/chat/templates/chatCurrent.tsx',
+  'routes/examples/chat/templates/chatTyping.tsx',
+  'create-state-surface/template/routes/examples/chat/templates/chatMessages.tsx',
+  'create-state-surface/template/routes/examples/chat/templates/chatCurrent.tsx',
+  'create-state-surface/template/routes/examples/chat/templates/chatTyping.tsx',
 ];
 
 const FORBIDDEN_PATTERNS: RegExp[] = [

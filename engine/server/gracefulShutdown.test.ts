@@ -15,10 +15,10 @@ describe('installGracefulShutdown', () => {
   it('exits with code 0 when server closes after signal', () => {
     const mockProcess = new MockProcess();
     const close = vi.fn((cb: () => void) => cb());
-    const cleanup = installGracefulShutdown(
-      { close } as any,
-      { processLike: mockProcess as any, forceExitTimeoutMs: 100 }
-    );
+    const cleanup = installGracefulShutdown({ close } as any, {
+      processLike: mockProcess as any,
+      forceExitTimeoutMs: 100,
+    });
 
     mockProcess.emit('SIGTERM');
 
@@ -32,10 +32,10 @@ describe('installGracefulShutdown', () => {
     vi.useFakeTimers();
     const mockProcess = new MockProcess();
     const close = vi.fn();
-    const cleanup = installGracefulShutdown(
-      { close } as any,
-      { processLike: mockProcess as any, forceExitTimeoutMs: 25 }
-    );
+    const cleanup = installGracefulShutdown({ close } as any, {
+      processLike: mockProcess as any,
+      forceExitTimeoutMs: 25,
+    });
 
     mockProcess.emit('SIGINT');
     vi.advanceTimersByTime(25);

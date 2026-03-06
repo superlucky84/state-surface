@@ -24,8 +24,8 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('data-ssr-hash');
   });
 
-  it('GET /search returns SSR-rendered search page', async () => {
-    const res = await request(app).get('/search');
+  it('GET /examples/search returns SSR-rendered search page', async () => {
+    const res = await request(app).get('/examples/search');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
@@ -47,8 +47,8 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('id="__STATE__"');
   });
 
-  it('GET /features/streaming returns SSR-rendered streaming page', async () => {
-    const res = await request(app).get('/features/streaming');
+  it('GET /examples/streaming returns SSR-rendered streaming page', async () => {
+    const res = await request(app).get('/examples/streaming');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
@@ -58,8 +58,8 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('id="__STATE__"');
   });
 
-  it('GET /features/actions returns SSR-rendered actions page', async () => {
-    const res = await request(app).get('/features/actions');
+  it('GET /examples/actions returns SSR-rendered actions page', async () => {
+    const res = await request(app).get('/examples/actions');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!DOCTYPE html>');
@@ -89,8 +89,8 @@ describe('boot config injection', () => {
     expect(res.text).not.toContain('id="__BOOT__"');
   });
 
-  it('GET /search does not include __BOOT__ script', async () => {
-    const res = await request(app).get('/search');
+  it('GET /examples/search does not include __BOOT__ script', async () => {
+    const res = await request(app).get('/examples/search');
 
     expect(res.text).not.toContain('id="__BOOT__"');
   });
@@ -109,8 +109,8 @@ describe('empty anchors', () => {
     expect(res.text).not.toContain('name="search:results"');
   });
 
-  it('GET /search leaves search:results empty initially', async () => {
-    const res = await request(app).get('/search');
+  it('GET /examples/search leaves search:results empty initially', async () => {
+    const res = await request(app).get('/examples/search');
 
     // search:results has no initial state
     expect(res.text).toMatch(/<h-state name="search:results"[^>]*><\/h-state>/);

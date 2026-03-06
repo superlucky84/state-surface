@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { registerTemplate } from '../shared/templateRegistry.js';
 import { createLithentBridge } from './lithentBridge.js';
-import chatMessagesTemplate from '../../routes/chat/templates/chatMessages.js';
+import chatMessagesTemplate from '../../routes/examples/chat/templates/chatMessages.js';
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 

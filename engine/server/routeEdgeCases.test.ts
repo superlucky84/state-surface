@@ -57,21 +57,25 @@ describe('cross-route navigation links', () => {
     // Header template includes nav links
     expect(res.text).toContain('href="/"');
     expect(res.text).toContain('href="/guide/surface"');
-    expect(res.text).toContain('href="/features/streaming"');
-    expect(res.text).toContain('href="/features/actions"');
-    expect(res.text).toContain('href="/search"');
+    expect(res.text).toContain('href="/examples"');
   });
 
-  it('GET /search includes same navigation links', async () => {
-    const res = await request(app).get('/search');
+  it('GET /examples/search includes same navigation links', async () => {
+    const res = await request(app).get('/examples/search');
 
     expect(res.text).toContain('href="/"');
-    expect(res.text).toContain('href="/search"');
+    expect(res.text).toContain('href="/examples"');
   });
 });
 
 describe('all routes render valid HTML', () => {
-  const routes = ['/', '/search', '/guide/surface', '/features/streaming', '/features/actions'];
+  const routes = [
+    '/',
+    '/examples/search',
+    '/guide/surface',
+    '/examples/streaming',
+    '/examples/actions',
+  ];
 
   for (const route of routes) {
     it(`GET ${route} returns valid HTML document`, async () => {

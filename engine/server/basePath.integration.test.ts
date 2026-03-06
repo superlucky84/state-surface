@@ -15,7 +15,7 @@ beforeAll(async () => {
 
 describe('basePath integration', () => {
   it('serves SSR routes under BASE_PATH prefix', async () => {
-    const res = await request(app).get('/demo/search');
+    const res = await request(app).get('/demo/examples/search');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<h-state name="search:input"');

@@ -1,7 +1,7 @@
 import type { RouteModule } from 'state-surface';
-import { baseSurface, joinSurface } from '../layouts/surface.js';
-import { getLang } from '../shared/i18n.js';
-import { searchContent } from '../shared/content.js';
+import { baseSurface, joinSurface } from '../../layouts/surface.js';
+import { getLang } from '../../shared/i18n.js';
+import { searchContent } from '../../shared/content.js';
 
 export default {
   layout: stateScript => {

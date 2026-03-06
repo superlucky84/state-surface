@@ -36,10 +36,10 @@ describe('scanRoutes', () => {
     const patterns = routes.map(r => r.urlPattern);
 
     expect(patterns).toContain('/');
-    expect(patterns).toContain('/search');
+    expect(patterns).toContain('/examples/search');
     expect(patterns).toContain('/guide/:slug');
-    expect(patterns).toContain('/features/streaming');
-    expect(patterns).toContain('/features/actions');
+    expect(patterns).toContain('/examples/streaming');
+    expect(patterns).toContain('/examples/actions');
   });
 
   it('skips template files (.tsx)', async () => {

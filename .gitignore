@@ -13,6 +13,7 @@ out/
 .turbo/
 .next/
 .nuxt/
+.claude
 .svelte-kit/
 
 # Logs

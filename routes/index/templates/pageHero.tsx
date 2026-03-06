@@ -33,7 +33,7 @@ const Hero = ({
         {primaryLabel ?? 'Read the Guide'}
       </a>
       <a
-        href={secondaryHref ?? prefixPath('/features/streaming')}
+        href={secondaryHref ?? prefixPath('/examples/streaming')}
         class="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
       >
         {secondaryLabel ?? 'Try Streaming Demo'}

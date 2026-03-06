@@ -32,7 +32,7 @@ export function homeContent(lang: Lang) {
       primaryLabel: t({ ko: '10분 퀵스타트', en: '10-Min Quickstart' }, lang),
       primaryHref: prefixPath('/guide/quickstart'),
       secondaryLabel: t({ ko: '스트리밍 데모', en: 'Try Streaming Demo' }, lang),
-      secondaryHref: prefixPath('/features/streaming'),
+      secondaryHref: prefixPath('/examples/streaming'),
     },
     'page:concepts': {
       concepts: [
@@ -97,7 +97,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: prefixPath('/features/streaming'),
+          href: prefixPath('/examples/streaming'),
         },
         {
           title: t({ ko: '액션 플레이그라운드', en: 'Actions Playground' }, lang),
@@ -108,7 +108,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: prefixPath('/features/actions'),
+          href: prefixPath('/examples/actions'),
         },
         {
           title: t({ ko: '검색', en: 'Search' }, lang),
@@ -119,7 +119,7 @@ export function homeContent(lang: Lang) {
             },
             lang
           ),
-          href: prefixPath('/search'),
+          href: prefixPath('/examples/search'),
         },
       ],
     },
@@ -164,7 +164,7 @@ const GUIDE_DATA: I18nObj<Record<string, GuideEntry>> = {
   en: {
     surface: {
       title: 'Surface',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: 'Streaming Demo',
       sections: [
         {
@@ -414,7 +414,7 @@ function Dashboard() {
     },
     template: {
       title: 'Template',
-      demoHref: '/features/actions',
+      demoHref: '/examples/actions',
       demoLabel: 'Actions Playground',
       sections: [
         {
@@ -689,7 +689,7 @@ function StockPrice({ symbol }: { symbol: string }) {
     },
     transition: {
       title: 'Transition',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: 'Streaming Demo',
       sections: [
         {
@@ -761,7 +761,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'code',
               lang: 'typescript',
               label: '✓ StateSurface — 18 lines, 3-stage UX',
-              text: `// routes/search/transitions/search.ts — skeleton → cached → live
+              text: `// routes/examples/search/transitions/search.ts — skeleton → cached → live
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
@@ -980,7 +980,7 @@ h-state[data-animate="rotate"][data-just-updated] {
     },
     action: {
       title: 'Action',
-      demoHref: '/features/actions',
+      demoHref: '/examples/actions',
       demoLabel: 'Actions Playground',
       sections: [
         {
@@ -1222,7 +1222,7 @@ function ShippingForm() {
     },
     accumulate: {
       title: 'Accumulate Frame',
-      demoHref: '/chat',
+      demoHref: '/examples/chat',
       demoLabel: 'Chat Demo',
       sections: [
         {
@@ -1250,7 +1250,7 @@ function ShippingForm() {
             {
               type: 'callout',
               kind: 'info',
-              text: "The chat demo at /chat uses accumulate frames for streaming. Each token the server yields appends to the bot's response string — the template receives the fully concatenated text every time, with no local state.",
+              text: "The chat demo at /examples/chat uses accumulate frames for streaming. Each token the server yields appends to the bot's response string — the template receives the fully concatenated text every time, with no local state.",
             },
           ],
         },
@@ -1294,7 +1294,7 @@ function ShippingForm() {
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/chat/transitions/chat.ts',
+              label: 'routes/examples/chat/transitions/chat.ts',
               text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
@@ -1423,7 +1423,7 @@ export default defineTransition('chat', chat);`,
     },
     quickstart: {
       title: '10-Minute Quickstart',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: 'Streaming Demo',
       sections: [
         {
@@ -1705,8 +1705,8 @@ export default defineTransition('book-search', bookSearch);`,
                 'Template guide — prop types, stateless principle, hydration, auto-discovery.',
                 'Transition guide — full/partial/removed frame rules, NDJSON protocol.',
                 'Action guide — data-params, form serialization, data-pending-targets, abort-previous.',
-                'Streaming Demo (/features/streaming) — visualize the frame sequence live.',
-                'Actions Playground (/features/actions) — experiment with every action pattern.',
+                'Streaming Demo (/examples/streaming) — visualize the frame sequence live.',
+                'Actions Playground (/examples/actions) — experiment with every action pattern.',
               ],
             },
           ],
@@ -1717,7 +1717,7 @@ export default defineTransition('book-search', bookSearch);`,
   ko: {
     surface: {
       title: 'Surface',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: '스트리밍 데모',
       sections: [
         {
@@ -1968,7 +1968,7 @@ function Dashboard() {
     },
     template: {
       title: 'Template',
-      demoHref: '/features/actions',
+      demoHref: '/examples/actions',
       demoLabel: '액션 플레이그라운드',
       sections: [
         {
@@ -2243,7 +2243,7 @@ function StockPrice({ symbol }: { symbol: string }) {
     },
     transition: {
       title: 'Transition',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: '스트리밍 데모',
       sections: [
         {
@@ -2315,7 +2315,7 @@ function StockPrice({ symbol }: { symbol: string }) {
               type: 'code',
               lang: 'typescript',
               label: '✓ StateSurface — 18줄, 3단계 UX',
-              text: `// routes/search/transitions/search.ts — 스켈레톤 → 캐시 → 실시간
+              text: `// routes/examples/search/transitions/search.ts — 스켈레톤 → 캐시 → 실시간
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
@@ -2527,7 +2527,7 @@ h-state[data-animate="rotate"][data-just-updated] {
     },
     action: {
       title: 'Action',
-      demoHref: '/features/actions',
+      demoHref: '/examples/actions',
       demoLabel: '액션 플레이그라운드',
       sections: [
         {
@@ -2769,7 +2769,7 @@ function ShippingForm() {
     },
     accumulate: {
       title: 'Accumulate 프레임',
-      demoHref: '/chat',
+      demoHref: '/examples/chat',
       demoLabel: '채팅 데모',
       sections: [
         {
@@ -2797,7 +2797,7 @@ function ShippingForm() {
             {
               type: 'callout',
               kind: 'info',
-              text: '/chat 채팅 데모는 스트리밍에 accumulate 프레임을 사용합니다. 서버가 토큰을 yield할 때마다 봇 응답 문자열에 추가되고 — 템플릿은 매 렌더마다 완성된 연결 텍스트를 props로 받으며, 로컬 state가 없습니다.',
+              text: '/examples/chat 채팅 데모는 스트리밍에 accumulate 프레임을 사용합니다. 서버가 토큰을 yield할 때마다 봇 응답 문자열에 추가되고 — 템플릿은 매 렌더마다 완성된 연결 텍스트를 props로 받으며, 로컬 state가 없습니다.',
             },
           ],
         },
@@ -2841,7 +2841,7 @@ function ShippingForm() {
             {
               type: 'code',
               lang: 'typescript',
-              label: 'routes/chat/transitions/chat.ts',
+              label: 'routes/examples/chat/transitions/chat.ts',
               text: `import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 
@@ -2962,7 +2962,7 @@ export default defineTransition('chat', chat);`,
           blocks: [
             {
               type: 'paragraph',
-              text: '/chat 채팅 데모를 열어 accumulate를 직접 확인해보세요 — 서버가 yield하는 각 토큰이 봇 응답 문자열에 추가되며, 템플릿에 로컬 state가 없습니다.',
+              text: '/examples/chat 채팅 데모를 열어 accumulate를 직접 확인해보세요 — 서버가 yield하는 각 토큰이 봇 응답 문자열에 추가되며, 템플릿에 로컬 state가 없습니다.',
             },
           ],
         },
@@ -2970,7 +2970,7 @@ export default defineTransition('chat', chat);`,
     },
     quickstart: {
       title: '10분 퀵스타트',
-      demoHref: '/features/streaming',
+      demoHref: '/examples/streaming',
       demoLabel: '스트리밍 데모 보기',
       sections: [
         {
@@ -3252,8 +3252,8 @@ export default defineTransition('book-search', bookSearch);`,
                 'Template 가이드 — props 타입, 무상태 원칙, hydration, 자동 등록 메커니즘.',
                 'Transition 가이드 — full/partial/removed 프레임 규칙, NDJSON 프로토콜 심화.',
                 'Action 가이드 — data-params, 폼 직렬화, data-pending-targets, abort-previous.',
-                '스트리밍 데모 (/features/streaming) — 프레임 시퀀스를 브라우저에서 직접 시각화.',
-                '액션 플레이그라운드 (/features/actions) — 다양한 action 패턴 직접 실험.',
+                '스트리밍 데모 (/examples/streaming) — 프레임 시퀀스를 브라우저에서 직접 시각화.',
+                '액션 플레이그라운드 (/examples/actions) — 다양한 action 패턴 직접 실험.',
               ],
             },
           ],
@@ -3303,8 +3303,10 @@ export function streamingContent(lang: Lang) {
   return {
     'page:header': {
       title: lang === 'ko' ? '스트리밍 데모' : 'Streaming Demo',
-      nav: 'streaming',
+      nav: 'examples',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: lang === 'ko' ? 'Examples' : 'Examples',
     },
     'demo:controls': {
       description:
@@ -3325,8 +3327,10 @@ export function actionsContent(lang: Lang) {
   return {
     'page:header': {
       title: lang === 'ko' ? '액션 플레이그라운드' : 'Actions Playground',
-      nav: 'actions',
+      nav: 'examples',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: 'Examples',
     },
     'actions:playground': {
       lastAction: null,
@@ -3383,8 +3387,10 @@ export function viewTransitionContent(lang: Lang) {
   return {
     'page:header': {
       title: ko ? 'View Transition 데모' : 'View Transition Demo',
-      nav: 'view-transition',
+      nav: 'examples',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: 'Examples',
     },
     'vt:description': {
       title: ko ? 'View Transition Name 모핑' : 'View Transition Name Morphing',
@@ -3438,26 +3444,26 @@ const SEARCH_FEATURES: I18nObj<SearchableItem[]> = {
     {
       title: 'Streaming Demo',
       description: 'Full/partial frames, removed keys, and error frames in real time.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo'],
     },
     {
       title: 'Actions Playground',
       description: 'Button actions, form submissions, scoped pending, and multiple actions.',
-      href: '/features/actions',
+      href: '/examples/actions',
       tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo'],
     },
     {
       title: 'Full Frame',
       description:
         'Declares complete UI state. Replaces all activeStates. First frame must be full.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['full', 'frame', 'replace', 'state'],
     },
     {
       title: 'Partial Frame',
       description: 'Merges changes via "changed" and "removed" arrays into existing state.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['partial', 'frame', 'changed', 'removed', 'merge'],
     },
     {
@@ -3469,13 +3475,13 @@ const SEARCH_FEATURES: I18nObj<SearchableItem[]> = {
     {
       title: 'Abort Previous',
       description: 'Starting a new transition cancels the previous in-flight stream.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['abort', 'cancel', 'concurrency', 'previous'],
     },
     {
       title: 'Pending State',
       description: 'data-pending attribute on anchors during transition, removed on first frame.',
-      href: '/features/actions',
+      href: '/examples/actions',
       tags: ['pending', 'data-pending', 'loading', 'spinner'],
     },
     {
@@ -3522,25 +3528,25 @@ const SEARCH_FEATURES: I18nObj<SearchableItem[]> = {
     {
       title: '스트리밍 데모',
       description: 'Full/Partial 프레임, removed 키, error 프레임을 실시간으로 확인.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['streaming', 'full', 'partial', 'removed', 'error', 'frame', 'demo', '스트리밍'],
     },
     {
       title: '액션 플레이그라운드',
       description: '버튼 액션, 폼 제출, 스코프드 pending, 다중 액션 체험.',
-      href: '/features/actions',
+      href: '/examples/actions',
       tags: ['action', 'button', 'form', 'pending', 'scoped', 'playground', 'demo', '액션', '폼'],
     },
     {
       title: 'Full 프레임',
       description: '전체 UI 상태를 선언. 모든 activeStates를 교체. 첫 프레임은 반드시 full.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['full', 'frame', 'replace', 'state', '프레임'],
     },
     {
       title: 'Partial 프레임',
       description: '"changed"와 "removed" 배열을 통해 기존 상태에 변경사항을 병합.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['partial', 'frame', 'changed', 'removed', 'merge', '프레임'],
     },
     {
@@ -3552,13 +3558,13 @@ const SEARCH_FEATURES: I18nObj<SearchableItem[]> = {
     {
       title: 'Abort Previous',
       description: '새 transition을 시작하면 진행 중인 이전 스트림을 취소.',
-      href: '/features/streaming',
+      href: '/examples/streaming',
       tags: ['abort', 'cancel', 'concurrency', 'previous', '취소'],
     },
     {
       title: 'Pending 상태',
       description: 'transition 중 앵커에 data-pending 속성 부여, 첫 프레임에 제거.',
-      href: '/features/actions',
+      href: '/examples/actions',
       tags: ['pending', 'data-pending', 'loading', 'spinner', '로딩'],
     },
     {
@@ -3579,8 +3585,10 @@ export function searchContent(lang: Lang, query?: string) {
   return {
     'page:header': {
       title: lang === 'ko' ? '검색' : 'Search',
-      nav: 'search',
+      nav: 'examples',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: 'Examples',
     },
     'search:input': {
       query: query ?? '',
@@ -3627,8 +3635,10 @@ export function chatContent(lang: Lang) {
   return {
     'page:header': {
       title: lang === 'ko' ? '챗봇 데모' : 'Chatbot Demo',
-      nav: 'chat',
+      nav: 'examples',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: 'Examples',
     },
     'chat:messages': {
       messages: [],
@@ -3655,9 +3665,71 @@ export function chatContent(lang: Lang) {
   };
 }
 
+// ── Examples landing page ──
+
+export function examplesContent(lang: Lang) {
+  const ko = lang === 'ko';
+  return {
+    'page:header': {
+      title: ko ? '예제' : 'Examples',
+      nav: 'examples',
+      lang,
+    },
+    'examples:list': {
+      title: ko ? '예제 둘러보기' : 'Explore Examples',
+      description: ko
+        ? 'StateSurface의 주요 기능을 직접 체험해보세요.'
+        : 'Try out the key features of StateSurface hands-on.',
+      items: [
+        {
+          title: ko ? '스트리밍 데모' : 'Streaming Demo',
+          description: ko
+            ? 'Full/Partial 프레임, removed 키, 에러 프레임을 실시간으로 체험합니다.'
+            : 'Full/partial frames, removed keys, and error frames in real time.',
+          href: prefixPath('/examples/streaming'),
+          color: 'sky',
+        },
+        {
+          title: ko ? '액션 플레이그라운드' : 'Actions Playground',
+          description: ko
+            ? '버튼 액션, 폼 제출, 스코프드 pending 등 다양한 액션 패턴을 시연합니다.'
+            : 'Button actions, form submissions, scoped pending, and multiple action patterns.',
+          href: prefixPath('/examples/actions'),
+          color: 'violet',
+        },
+        {
+          title: 'View Transition',
+          description: ko
+            ? 'View Transition API로 카드↔상세 뷰 간 부드러운 모핑 전환을 체험합니다.'
+            : 'Smooth morphing between card and detail views via the View Transition API.',
+          href: prefixPath('/examples/view-transition'),
+          color: 'indigo',
+        },
+        {
+          title: ko ? '검색' : 'Search',
+          description: ko
+            ? '폼 data-action과 pending 상태를 활용한 검색 기능입니다.'
+            : 'Search functionality using form data-action and pending states.',
+          href: prefixPath('/examples/search'),
+          color: 'emerald',
+        },
+        {
+          title: ko ? '챗봇' : 'Chat',
+          description: ko
+            ? 'Abort previous, 프로그레시브 스트리밍, accumulate 프레임을 보여주는 챗봇입니다.'
+            : 'Chatbot showcasing abort previous, progressive streaming, and accumulate frames.',
+          href: prefixPath('/examples/chat'),
+          color: 'amber',
+        },
+      ],
+      lang,
+    },
+  };
+}
+
 // ── Switch-lang: page content lookup by route key ──
 
-export type PageKey = 'home' | 'guide' | 'streaming' | 'actions' | 'search' | 'chat';
+export type PageKey = 'home' | 'guide' | 'examples' | 'streaming' | 'actions' | 'search' | 'chat';
 
 export function pageContent(
   page: PageKey,
@@ -3690,6 +3762,8 @@ export function pageContent(
           : { slug, loading: false, title: slug },
       };
     }
+    case 'examples':
+      return examplesContent(lang);
     case 'streaming':
       return streamingContent(lang);
     case 'actions':

@@ -1,8 +1,8 @@
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../shared/i18n.js';
-import type { Lang } from '../../../shared/i18n.js';
-import { searchContent, searchResults } from '../../../shared/content.js';
+import { isValidLang } from '../../../../shared/i18n.js';
+import type { Lang } from '../../../../shared/i18n.js';
+import { searchContent, searchResults } from '../../../../shared/content.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
