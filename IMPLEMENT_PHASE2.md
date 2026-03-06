@@ -57,7 +57,7 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 ### Baseline 테스트
 
 - [x] `pnpm test` 전체 통과 (기존 347개 테스트 회귀 없음).
-- [ ] `pnpm dev` 실행 후 최소 1개 route SSR + 1개 transition NDJSON 응답 확인.
+- [x] `pnpm dev` 실행 후 최소 1개 route SSR + 1개 transition NDJSON 응답 확인.
 - [x] engine 내부 모듈 간 import는 상대경로 유지 (alias 미적용) 확인.
 
 ---
@@ -125,7 +125,7 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 ### Baseline 테스트
 
 - [x] README 내 코드 예시의 import 경로가 전부 `'state-surface'`.
-- [ ] README 내 명령어가 실제로 동작하는지 1회 수동 확인.
+- [x] README 내 명령어가 실제로 동작하는지 1회 수동 확인.
 
 ---
 
@@ -204,8 +204,8 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 ### Baseline 테스트
 
 - [x] `pnpm test` 전체 통과 (기존 테스트 회귀 없음).
-- [ ] `PORT=4000 pnpm dev` → 4000번 포트에서 서버 기동.
-- [ ] `BASE_PATH=/demo PORT=4000 pnpm dev` → 복합 설정 동작.
+- [x] `PORT=4000 pnpm dev` → 4000번 포트에서 서버 기동.
+- [x] `BASE_PATH=/demo PORT=4000 pnpm dev` → 복합 설정 동작.
 - [x] `pnpm build` 성공 (클라이언트 + SSR 서버 빌드).
 - [x] `pnpm start` 후 주요 route 200 응답.
 - [x] 정적 에셋(JS/CSS) 정상 로드.
@@ -273,7 +273,7 @@ CLI는 신규 생성 전용으로 사용하고, 기존 프로젝트 업데이트
 ### Baseline 테스트
 
 - [x] `pnpm test` 전체 통과.
-- [ ] `pnpm dev` → 훅 경유한 i18n 동작 확인 (ko/en 전환, 쿠키 설정).
+- [x] `pnpm dev` → 훅 경유한 i18n 동작 확인 (ko/en 전환, 쿠키 설정).
 - [x] 훅 미등록 시에도 트랜지션 정상 동작 (훅 optional 검증).
 - [ ] Prism.js 플러그인으로 가이드 코드 하이라이팅 정상 동작.
 - [x] 플러그인 미등록 시에도 StateSurface 코어 정상 동작.
