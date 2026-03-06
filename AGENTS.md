@@ -9,7 +9,7 @@ The runtime core lives in `engine/`:
 - `engine/shared/` for protocol, NDJSON parsing, and shared contracts.
 
 User/project code lives in `client/`, `layouts/`, `routes/`, and `shared/`.
-Scaffolding CLI lives in `create-state-surface/` with template sources under `create-state-surface/template/`.
+Scaffolding CLI lives in `create-state-surface/` (GitHub tarball에서 `scaffold/` 추출). `scaffold/`는 `pnpm build` 시 루트 파일 + `create-state-surface/overrides/`로 자동 생성.
 Primary docs are `DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`, and `PROTOCOL.md`.
 
 ## Build, Test, and Development Commands
@@ -28,7 +28,7 @@ This repo is TypeScript-first and ESM (`"type": "module"`). Formatting is enforc
 
 ## Testing Guidelines
 
-Tests are written with Vitest and colocated in `engine/`, `routes/`, and `shared/` (plus template tests under `create-state-surface/template/`). Run all tests with `pnpm test`, or filter locally with `pnpm test -- -t "keyword"`. There is no explicit coverage threshold configured; add or update tests for behavior, protocol, and API boundary changes.
+Tests are written with Vitest and colocated in `engine/`, `routes/`, and `shared/`. Run all tests with `pnpm test`, or filter locally with `pnpm test -- -t "keyword"`. There is no explicit coverage threshold configured; add or update tests for behavior, protocol, and API boundary changes.
 
 ## Commit & Pull Request Guidelines
 

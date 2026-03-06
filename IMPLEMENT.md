@@ -1041,21 +1041,21 @@ create-state-surface/   ← 현재 저장소 안 별도 패키지
   - [ ] `../lithent/createLithent` 코드 참고해 CLI 진입점 구현 방식 결정.
   - [ ] 옵션 정책 확정 (기본: full demo 포함, 선택 옵션 최소화).
   - [ ] 생성 후 안내 문구(`cd`, `pnpm install`, `pnpm dev`) 확정.
-- [ ] 템플릿 소스 구성:
-  - [ ] `create-state-surface/template/` 에 현재 프로젝트 구조 반영.
-  - [ ] 불필요한 로컬/실험 파일 제외 규칙 적용 (`.git`, `node_modules`, `dist` 등).
-  - [ ] `package.json.template` — 프로젝트명 치환 플레이스홀더 삽입.
+- [ ] 스캐폴드 소스 구성:
+  - [ ] `scripts/build-scaffold.mjs`가 루트 파일(`client/`, `shared/`, `routes/`, `layouts/`, `server.ts`, `.prettierrc`) + `create-state-surface/overrides/`로 `scaffold/` 자동 생성.
+  - [ ] 불필요한 파일 제외 (`engine/`, `.git`, `node_modules`, `dist` 등).
+  - [ ] `create-state-surface/overrides/package.json.template` — 프로젝트명 치환 플레이스홀더 삽입.
 - [ ] CLI 구현:
-  - [ ] `bin/create-state-surface.js` — 프로젝트명 입력 → 디렉토리 생성 → 파일 복사 → 치환.
+  - [ ] `bin/create-state-surface.js` — GitHub tarball 다운로드 → `scaffold/` 추출 → 프로젝트 디렉토리 생성 → 치환.
   - [ ] 프로젝트명/설명 치환 처리.
   - [ ] Git 초기화 (`git init`) 자동 실행.
   - [ ] 완료 후 안내 메시지 출력.
 - [ ] parity 보장:
-  - [ ] 생성 프로젝트에서 라우트 목록이 기준과 동일한지 검증.
+  - [ ] `scaffold/`는 루트 파일에서 자동 생성되므로 별도 패리티 테스트 불필요.
   - [ ] examples (chat/search/streaming/actions/view-transition) 및 guide 동작이 기준 사이트와 기능적으로 동일한지 검증.
   - [ ] ko/en 전환, pending, abort previous, NDJSON 스트리밍이 동일하게 동작하는지 검증.
 - [ ] 자동 검증 파이프라인:
-  - [ ] 템플릿 스캐폴딩 e2e 테스트 추가 (생성 → 설치 → 테스트/스모크).
+  - [ ] 스캐폴딩 e2e 테스트 추가 (생성 → 설치 → 테스트/스모크).
   - [ ] 생성 프로젝트에서 `pnpm test` 통과 검증.
   - [ ] 생성 프로젝트에서 `pnpm dev` 최소 스모크 검증(주요 route 200 + transition 응답).
 - [ ] 문서/배포:

@@ -308,13 +308,13 @@ export function prismPlugin(): StateSurfacePlugin {
      - anti-pattern (`onUpdate`에서 비즈니스 상태 결정 금지)
      - `prismPlugin`, `guideTocPlugin` 최소 코드 예시
      - CSS-only vs Template 수정 vs Plugin 판단 기준 callout
-2. 템플릿 동기화
-   - `create-state-surface/template`에도 동일 가이드 구조를 반영해 생성물 onboarding을 일치시킨다.
+2. 스캐폴드 동기화
+   - `pnpm build` 시 `scripts/build-scaffold.mjs`가 루트 파일 + `create-state-surface/overrides/`로 `scaffold/`를 자동 생성하므로 별도 동기화 불필요.
 
 #### 검증
 
 - en/ko 가이드 구조/섹션 parity 유지.
-- `templateParity.test.ts`로 기준 앱 vs 생성 템플릿 동기화 검증.
+- `scaffold/`는 루트 파일에서 자동 생성되므로 별도 패리티 테스트 불필요.
 
 ---
 
