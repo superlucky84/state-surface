@@ -1,7 +1,7 @@
 # StateSurface Protocol (v1)
 
 This file is the implementation-facing contract for NDJSON frame exchange.
-It mirrors decisions already locked in `DESIGN.md`.
+It tracks active decisions in `DESIGN.md` and legacy baseline decisions in `docs/completed/DESIGN.md`.
 
 ## Transport
 

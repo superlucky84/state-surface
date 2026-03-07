@@ -18,9 +18,11 @@ When context is needed, read in this order:
 
 1. `DESIGN.md` — frozen core ideas, full architecture, frame model, runtime pseudocode
 2. `PROTOCOL.md` — NDJSON frame contract (valid/invalid examples, precedence rules)
-3. `DESIGN_PHASE2.md` — production framework architecture (hooks, plugins, build, security)
-4. `IMPLEMENT.md` — Phase 1 implementation checklist (frozen)
-5. `IMPLEMENT_PHASE2.md` — Phase 2 execution checklist (open-source release)
+3. `NEXT_IDEA.md` — next-step architecture direction and expansion notes
+4. `docs/completed/DESIGN.md` — archived core design (Phase 1 baseline)
+5. `docs/completed/DESIGN_PHASE2.md` — archived production architecture decisions
+6. `docs/completed/IMPLEMENT.md` — archived Phase 1 implementation checklist
+7. `docs/completed/IMPLEMENT_PHASE2.md` — archived Phase 2 implementation checklist
 
 ## Tech Stack
 

@@ -28,7 +28,7 @@ pnpm test
 - `engine/`: framework runtime (`server/`, `client/`, `shared/`)
 - `routes/`, `layouts/`, `shared/`, `client/`: example/app code
 - `create-state-surface/`: scaffolding CLI and template project
-- `IMPLEMENT_PHASE2.md`: execution checklist and current phase status
+- `docs/completed/IMPLEMENT_PHASE2.md`: archived execution checklist and previous phase status
 
 ## Contribution Workflow
 
@@ -68,7 +68,8 @@ If your change affects public API, protocol, scaffolding output, or docs contrac
 
 - `README.md`
 - `PROTOCOL.md`
-- `DESIGN_PHASE2.md` / `IMPLEMENT_PHASE2.md`
+- `DESIGN.md` (active)
+- `docs/completed/DESIGN_PHASE2.md` / `docs/completed/IMPLEMENT_PHASE2.md` (archive)
 - `MIGRATION.md` and `CHANGELOG.md` (when release-facing)
 
 ## Reporting Bugs and Requesting Features
