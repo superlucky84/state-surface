@@ -913,7 +913,13 @@ describe('StateSurface', () => {
           type: 'state',
           full: false,
           states: {},
-          ui: { card: { classAdd: ['tone-warning'], classRemove: ['tone-default'], cssVars: { '--accent': '#f59e0b' } } },
+          ui: {
+            card: {
+              classAdd: ['tone-warning'],
+              classRemove: ['tone-default'],
+              cssVars: { '--accent': '#f59e0b' },
+            },
+          },
           uiChanged: ['card'],
         },
         new AbortController().signal
@@ -930,7 +936,11 @@ describe('StateSurface', () => {
       // Final state integrity
       expect(surface.activeStates).toEqual({ card: { title: 'A' }, sidebar: { items: [] } });
       expect(surface.activeUi).toEqual({
-        card: { classAdd: ['tone-warning'], classRemove: ['tone-default'], cssVars: { '--accent': '#f59e0b' } },
+        card: {
+          classAdd: ['tone-warning'],
+          classRemove: ['tone-default'],
+          cssVars: { '--accent': '#f59e0b' },
+        },
       });
     });
   });

@@ -361,7 +361,12 @@ export class StateSurface {
       const changedKeys = Object.keys(nextStates);
       this.sync(nextStates, nextUi, changedKeys, removedKeys);
     } else {
-      this.sync(nextStates, nextUi, frame.changed ?? Object.keys(frame.states), frame.removed ?? []);
+      this.sync(
+        nextStates,
+        nextUi,
+        frame.changed ?? Object.keys(frame.states),
+        frame.removed ?? []
+      );
     }
 
     const uiCount = Object.keys(nextUi).length;

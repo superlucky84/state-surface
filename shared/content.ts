@@ -1693,12 +1693,14 @@ yield {
               items: [
                 {
                   symptom: 'UI Patch classes not appearing on the <h-state> element.',
-                  cause: 'The ui field was included in the frame but uiChanged was missing on a partial frame.',
+                  cause:
+                    'The ui field was included in the frame but uiChanged was missing on a partial frame.',
                   fix: 'For partial frames (full: false), always include uiChanged: ["slotName"] alongside the ui field. Full frames do not need uiChanged.',
                 },
                 {
                   symptom: 'SSR renders without theme classes, then they flash in on hydration.',
-                  cause: 'The initial state function does not include ui data, so SSR has no patches to apply.',
+                  cause:
+                    'The initial state function does not include ui data, so SSR has no patches to apply.',
                   fix: 'Return ui patches from the initial() function or the first full frame of the boot transition. The SSR pipeline reads ui from the initial state.',
                 },
                 {
@@ -3552,7 +3554,8 @@ yield {
                   fix: 'Partial 프레임(full: false)에서는 반드시 ui 필드와 함께 uiChanged: ["slotName"]을 포함하세요. Full 프레임에서는 uiChanged가 필요 없습니다.',
                 },
                 {
-                  symptom: 'SSR에서 테마 클래스 없이 렌더링된 후 하이드레이션 시 깜빡이며 적용된다.',
+                  symptom:
+                    'SSR에서 테마 클래스 없이 렌더링된 후 하이드레이션 시 깜빡이며 적용된다.',
                   cause: 'initial 함수가 ui 데이터를 포함하지 않아 SSR에 적용할 패치가 없음.',
                   fix: 'initial() 함수 또는 boot transition의 첫 full 프레임에서 ui 패치를 반환하세요. SSR 파이프라인은 initial state에서 ui를 읽습니다.',
                 },
@@ -3887,7 +3890,15 @@ export function guideContent(slug: string, lang: Lang) {
 
 export function guideLoadingState(slug: string, lang: Lang) {
   const guide = guideContent(slug, lang);
-  const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'];
+  const items = [
+    'quickstart',
+    'surface',
+    'template',
+    'transition',
+    'action',
+    'accumulate',
+    'ui-patch',
+  ];
   const sections = guide?.sections.map(s => ({ id: s.id, heading: s.heading })) ?? [];
   return {
     'page:header': {
@@ -4387,7 +4398,15 @@ export function pageContent(
     case 'guide': {
       const slug = (params?.slug as string) ?? 'quickstart';
       const guide = guideContent(slug, lang);
-      const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'];
+      const items = [
+        'quickstart',
+        'surface',
+        'template',
+        'transition',
+        'action',
+        'accumulate',
+        'ui-patch',
+      ];
       return {
         'page:header': {
           title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
