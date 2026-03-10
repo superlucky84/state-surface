@@ -95,20 +95,20 @@ type StateFrameState = {
 
 ### 4.6 미결정 체크리스트
 
-- [ ] `UiPatch` 스키마 확정 (`classAdd`, `classRemove`, `cssVars`, `style` 허용 범위)
-- [ ] capability별 허용 정책 확정 (`strict`, `rich`, `unsafe`에서 각각 무엇을 허용할지)
-- [ ] `strict` 모드 CSS 변수 네이밍 규칙 확정 (예: `--ss-*` prefix 강제 여부)
-- [ ] 허용 style 속성 allowlist 확정 (`rich` 모드 최소 셋)
-- [ ] `full` 프레임에서 `ui` 처리 규칙 확정 (전체 교체 vs 병합)
-- [ ] `accumulate` 프레임에서 `ui` 허용 여부 확정 (금지 또는 별도 merge 규칙)
-- [ ] `removed`와 `uiChanged` 동시 사용 시 우선순위 규칙 확정
-- [ ] 적용 순서 확정 (template 렌더/업데이트 후 UI 패치 적용)
-- [ ] SSR 초기 상태에서 `ui`를 주입할지 여부 확정 (stateScript 확장 필요 여부 포함)
-- [ ] invalid `ui` 처리 정책 확정 (frame drop / slot skip / soft warning)
-- [ ] 보안/안정성 한도 확정 (slot별 크기 제한, 프레임당 스타일 변경 개수 제한)
-- [ ] observability 이벤트 확정 (`uiApplied`, `uiRejected`, capability violation trace 포맷)
-- [ ] 하위 호환/버전 전략 확정 (구형 클라이언트가 `ui` 필드를 받을 때 동작)
-- [ ] 테스트 매트릭스 확정 (validator, apply 순서, SSR, abort/coalesce, 보안 케이스)
+- [x] `UiPatch` 스키마 확정 → `classAdd: string[]`, `classRemove: string[]`, `cssVars: Record<string, string>`. `style` 직접 주입은 제외(안전성·예측 가능성 우선). 필요 시 `rich`/`unsafe` capability 도입 시 확장.
+- [x] capability별 허용 정책 확정 → 1차에서는 capability 모델 미도입. UiPatch 스키마(`classAdd`, `classRemove`, `cssVars`) 자체가 안전 가드레일. `style` 직접 주입 확장 시점에 capability 등급 도입.
+- [x] CSS 변수 네이밍 규칙 확정 → 1차에서는 prefix 강제 없음. CSS 변수는 슬롯 엘리먼트 스코프로 자연 제한됨. prefix 규칙은 capability 도입 시점에 재검토.
+- [x] 허용 style 속성 allowlist → 해당 없음. `style` 직접 주입 제외, capability 모델 보류로 불필요.
+- [x] `full` 프레임에서 `ui` 처리 규칙 확정 → 전체 교체. `states`와 동일하게 full 프레임이면 `ui`도 통째로 교체.
+- [x] `accumulate` 프레임에서 `ui` 허용 여부 → 금지. 스타일 변경은 별도 partial 프레임으로 전송.
+- [x] `removed`와 `uiChanged` 동시 사용 시 → `removed` 우선. 슬롯이 제거되면 해당 슬롯의 `uiChanged`는 무시.
+- [x] 적용 순서 확정 → 템플릿 렌더/업데이트 완료 후 UI 패치 적용. DOM 갱신 이후에 h-state 엘리먼트에 클래스/CSS 변수 설정.
+- [x] SSR 초기 상태에서 `ui` 주입 → 지원. 첫 full 프레임의 `ui`를 SSR에 반영: fillHState에서 h-state 태그에 class/style 속성 삽입, `__UI__` 스크립트 태그로 클라이언트 hydration 시 초기 ui 상태 복원. FOUC 방지.
+- [x] invalid `ui` 처리 정책 → slot skip + console.warn. 잘못된 ui 슬롯만 건너뛰고 나머지 정상 적용. 프레임 전체 drop 금지.
+- [x] 보안/안정성 한도 → 1차에서는 제한 없음. 서버 신뢰 모델 + 스키마 제한으로 충분. 필요 시 추후 추가.
+- [x] observability 이벤트 → 1차에서는 미도입. invalid ui 시 console.warn만 출력. 디버그 오버레이에 ui 패치 로그 추가로 충분.
+- [x] 하위 호환/버전 전략 → 무시(no-op). 구형 클라이언트는 `ui` 필드를 파싱하지 않으므로 자연스럽게 무시. 별도 버전 협상 불필요.
+- [x] 테스트 매트릭스 확정 → validator(ui 필드 검증, uiChanged↔ui 정합, accumulate+ui 거부), apply(classAdd/classRemove/cssVars 적용, ui=null 초기화, 렌더 후 패치 순서), SSR(fillHState ui 삽입, `__UI__` 스크립트), partial(스타일-only partial, removed 슬롯 ui 무시), full(ui 전체 교체), invalid(slot skip + warn). abort/coalesce는 기존 프레임 큐 테스트가 커버.
 
 ## 5) 완료 문서(Archive)
 
