@@ -15,7 +15,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   - Issue templates for bug report and feature request
   - Pull request template
 
-## [0.1.0] - TBD
+## [0.1.0] - 2026-03-10
 
 ### Added
 
