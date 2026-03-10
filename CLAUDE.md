@@ -16,7 +16,7 @@ StateSurface is a **state-layout mapping runtime** — a production-ready framew
 
 When context is needed, read in this order:
 
-1. `DESIGN.md` — frozen core ideas, full architecture, frame model, runtime pseudocode
+1. `docs/ui-protocol/DESIGN.md` — active UI protocol design (ui/uiChanged, capability model)
 2. `PROTOCOL.md` — NDJSON frame contract (valid/invalid examples, precedence rules)
 3. `NEXT_IDEA.md` — next-step architecture direction and expansion notes
 4. `docs/completed/DESIGN.md` — archived core design (Phase 1 baseline)

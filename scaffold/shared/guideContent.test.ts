@@ -9,7 +9,14 @@ beforeAll(async () => {
 import { guideContent, guideLoadedState } from './content.js';
 import type { Block } from './content.js';
 
-const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'] as const;
+const CONCEPT_SLUGS = [
+  'surface',
+  'template',
+  'transition',
+  'action',
+  'accumulate',
+  'ui-patch',
+] as const;
 const ALL_SLUGS = [
   'quickstart',
   'surface',

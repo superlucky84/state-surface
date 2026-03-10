@@ -10,7 +10,7 @@ The runtime core lives in `engine/`:
 
 User/project code lives in `client/`, `layouts/`, `routes/`, and `shared/`.
 Scaffolding CLI lives in `create-state-surface/` (GitHub tarball에서 `scaffold/` 추출). `scaffold/`는 `pnpm build` 시 루트 파일 + `create-state-surface/overrides/`로 자동 생성.
-Primary docs are active `DESIGN.md`, `NEXT_IDEA.md`, `PROTOCOL.md`, and archive docs in `docs/completed/` (`DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`).
+Primary docs are active `docs/ui-protocol/DESIGN.md`, `NEXT_IDEA.md`, `PROTOCOL.md`, and archive docs in `docs/completed/` (`DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`).
 
 ## Build, Test, and Development Commands
 

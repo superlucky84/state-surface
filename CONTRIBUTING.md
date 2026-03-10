@@ -68,7 +68,7 @@ If your change affects public API, protocol, scaffolding output, or docs contrac
 
 - `README.md`
 - `PROTOCOL.md`
-- `DESIGN.md` (active)
+- `docs/ui-protocol/DESIGN.md` (active)
 - `docs/completed/DESIGN_PHASE2.md` / `docs/completed/IMPLEMENT_PHASE2.md` (archive)
 - `MIGRATION.md` and `CHANGELOG.md` (when release-facing)
 

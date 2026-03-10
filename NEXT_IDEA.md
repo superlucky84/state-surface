@@ -299,7 +299,7 @@ Escape hatch: 제한된 flexible h-state 영역
 ### 8.6 상태/스타일 분리 상세 스펙 위치
 
 `h-state` UI 디자인 프로토콜의 상세 초안(`ui + uiChanged`)과 미결정 체크리스트는
-활성 설계 문서인 `DESIGN.md`의 "4) h-state UI 디자인 프로토콜 (Draft)" 섹션으로 이관했다.
+활성 설계 문서인 `docs/ui-protocol/DESIGN.md`의 "4) h-state UI 디자인 프로토콜 (Draft)" 섹션으로 이관했다.
 
 ---
 

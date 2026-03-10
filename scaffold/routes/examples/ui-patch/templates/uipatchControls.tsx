@@ -77,9 +77,7 @@ const UiPatchControls = ({ currentTheme, lang }: ControlsProps) => {
 
       {/* Clear UI */}
       <div class="space-y-2">
-        <h3 class="text-sm font-semibold text-slate-700">
-          {ko ? 'UI 초기화' : 'Clear UI'}
-        </h3>
+        <h3 class="text-sm font-semibold text-slate-700">{ko ? 'UI 초기화' : 'Clear UI'}</h3>
         <p class="text-xs text-slate-500">
           {ko
             ? 'UI 패치를 초기화하여 기본 외형으로 복원합니다.'
