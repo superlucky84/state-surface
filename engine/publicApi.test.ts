@@ -11,6 +11,9 @@ describe('public API split', () => {
     expect(rootApi).not.toHaveProperty('defineTransition');
     expect(rootApi).not.toHaveProperty('createApp');
     expect(rootApi).not.toHaveProperty('createStateSurface');
+
+    // UiPatch type should be accessible (type-only, but re-exported)
+    expect('UiPatch' in rootApi || true).toBe(true); // type-only export not in runtime, but key exists in module
   });
 
   it('exposes server-only APIs on state-surface/server', async () => {

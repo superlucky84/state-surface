@@ -1,12 +1,20 @@
 // ── Types ──
 
+export type UiPatch = {
+  classAdd?: string[];
+  classRemove?: string[];
+  cssVars?: Record<string, string>;
+};
+
 export type StateFrameState = {
   type: 'state';
   states: Record<string, any>;
+  ui?: Record<string, UiPatch | null>;
   full?: boolean;
   accumulate?: boolean;
   changed?: string[];
   removed?: string[];
+  uiChanged?: string[];
 };
 
 export type StateFrameError = {
@@ -60,20 +68,25 @@ function validateStateFrameState(f: Record<string, unknown>): ValidationResult {
 
   const accumulate = f.accumulate;
 
-  // Accumulate frame: removed is not allowed
+  // Accumulate frame: removed is not allowed, ui is not allowed
   if (accumulate === true) {
     if (f.removed !== undefined) {
       return { valid: false, reason: 'Accumulate frame must not include "removed"' };
+    }
+    if (f.ui !== undefined) {
+      return { valid: false, reason: 'Accumulate frame must not include "ui"' };
     }
     return { valid: true };
   }
 
   const states = f.states as Record<string, unknown>;
+  const ui = f.ui as Record<string, unknown> | undefined;
   const full = f.full;
   const changed = f.changed as string[] | undefined;
   const removed = f.removed as string[] | undefined;
+  const uiChanged = f.uiChanged as string[] | undefined;
 
-  // If full !== false, treat as full — ignore changed/removed
+  // If full !== false, treat as full — ignore changed/removed/uiChanged
   if (full !== false) {
     return { valid: true };
   }
@@ -87,14 +100,20 @@ function validateStateFrameState(f: Record<string, unknown>): ValidationResult {
     return { valid: false, reason: '"removed" must be an array when present' };
   }
 
+  if (uiChanged !== undefined && !Array.isArray(uiChanged)) {
+    return { valid: false, reason: '"uiChanged" must be an array when present' };
+  }
+
   const hasChanged = Array.isArray(changed) && changed.length > 0;
   const hasRemoved = Array.isArray(removed) && removed.length > 0;
+  const hasUiChanged = Array.isArray(uiChanged) && uiChanged.length > 0;
 
-  // At least one of changed or removed is required
-  if (!hasChanged && !hasRemoved) {
+  // At least one of changed, removed, or uiChanged is required
+  if (!hasChanged && !hasRemoved && !hasUiChanged) {
     return {
       valid: false,
-      reason: 'Partial frame (full:false) requires at least one of "changed" or "removed"',
+      reason:
+        'Partial frame (full:false) requires at least one of "changed", "removed", or "uiChanged"',
     };
   }
 
@@ -135,6 +154,20 @@ function validateStateFrameState(f: Record<string, unknown>): ValidationResult {
     }
   }
 
+  // uiChanged keys must exist in ui (skip keys that are in removed — those are silently ignored)
+  if (hasUiChanged) {
+    const removedSet = hasRemoved ? new Set(removed!) : new Set<string>();
+    for (const key of uiChanged!) {
+      if (removedSet.has(key)) continue; // removed slots ignore uiChanged silently
+      if (!ui || !(key in ui)) {
+        return {
+          valid: false,
+          reason: `"uiChanged" key "${key}" must exist in "ui"`,
+        };
+      }
+    }
+  }
+
   return { valid: true };
 }
 
@@ -159,6 +192,51 @@ function mergeAccumulateSlot(existing: any, incoming: any): any {
 }
 
 // ── Apply Logic ──
+
+export function applyUi(
+  activeUi: Record<string, UiPatch | null>,
+  frame: StateFrameState
+): Record<string, UiPatch | null> {
+  // Accumulate frames never carry ui
+  if (frame.accumulate === true) return activeUi;
+
+  if (frame.full !== false) {
+    // Full frame: replace entirely (no ui field → reset to empty)
+    return frame.ui ? { ...frame.ui } : {};
+  }
+
+  // Partial frame
+  const hasRemoved = frame.removed && frame.removed.length > 0;
+  const hasUi = !!frame.ui;
+
+  // No ui field and no removed → no change (backward compat)
+  if (!hasUi && !hasRemoved) return activeUi;
+
+  const next = { ...activeUi };
+
+  // Remove ui entries for removed slots first
+  if (hasRemoved) {
+    for (const key of frame.removed!) {
+      delete next[key];
+    }
+  }
+
+  // Merge uiChanged slots
+  if (hasUi && frame.uiChanged) {
+    const removedSet = hasRemoved ? new Set(frame.removed!) : new Set<string>();
+    for (const key of frame.uiChanged) {
+      if (removedSet.has(key)) continue; // removed wins
+      const patch = frame.ui![key];
+      if (patch === null) {
+        delete next[key]; // null → clear override
+      } else {
+        next[key] = patch;
+      }
+    }
+  }
+
+  return next;
+}
 
 export function applyFrame(
   activeStates: Record<string, any>,

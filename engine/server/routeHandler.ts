@@ -1,7 +1,13 @@
 import type { Request, Response } from 'express';
 import type { RouteModule } from '../shared/routeModule.js';
-import { getInitialStates } from './initialStates.js';
-import { fillHState, buildStateScript, buildBootScript, buildBasePathScript } from './ssr.js';
+import { getInitialResult } from './initialStates.js';
+import {
+  fillHState,
+  buildStateScript,
+  buildUiScript,
+  buildBootScript,
+  buildBasePathScript,
+} from './ssr.js';
 import { createSSRRenderer } from './ssrRenderer.js';
 import { getBasePath } from '../shared/basePath.js';
 import type { TransitionHandler } from './transition.js';
@@ -20,12 +26,13 @@ export function createRouteHandler(routeModule: RouteModule, options: RouteHandl
 
   return async (req: Request, res: Response) => {
     try {
-      const initialStates = await getInitialStates(routeModule, req, {
+      const { states: initialStates, ui: initialUi } = await getInitialResult(routeModule, req, {
         getTransition: options.getTransition,
       });
 
       const hasStates = Object.keys(initialStates).length > 0;
       const stateScript = hasStates ? buildStateScript(initialStates) : '';
+      const uiScript = buildUiScript(initialUi);
 
       let bootScript = '';
       if (routeModule.boot?.auto && routeModule.transition) {
@@ -37,8 +44,8 @@ export function createRouteHandler(routeModule: RouteModule, options: RouteHandl
       }
 
       const basePathScript = buildBasePathScript(getBasePath());
-      const shell = routeModule.layout(stateScript + bootScript + basePathScript);
-      const html = hasStates ? fillHState(shell, initialStates, renderer) : shell;
+      const shell = routeModule.layout(stateScript + uiScript + bootScript + basePathScript);
+      const html = hasStates ? fillHState(shell, initialStates, renderer, initialUi) : shell;
 
       res.status(200).type('text/html; charset=utf-8').send(html);
     } catch (err) {

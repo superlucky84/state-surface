@@ -230,4 +230,57 @@ describe('demo transitions', () => {
 
     expect(lines[2].type).toBe('done');
   });
+
+  it('ui-patch-demo streams full frame with ui field', async () => {
+    const res = await request(app)
+      .post('/transition/ui-patch-demo')
+      .send({ action: 'theme', theme: 'warning' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
+
+    // Frame 1: full with ui
+    expect(lines[0].type).toBe('state');
+    expect(lines[0].states).toHaveProperty('uipatch:preview');
+    expect(lines[0].ui).toHaveProperty('uipatch:preview');
+    expect(lines[0].ui['uipatch:preview'].classAdd).toContain('tone-warning');
+    expect(lines[0].ui['uipatch:preview'].cssVars).toHaveProperty('--card-accent');
+
+    // Frame 2: partial update
+    expect(lines[1].type).toBe('state');
+    expect(lines[1].full).toBe(false);
+
+    // Done
+    expect(lines[2].type).toBe('done');
+  });
+
+  it('ui-patch-demo style-only sends uiChanged without changed', async () => {
+    const res = await request(app)
+      .post('/transition/ui-patch-demo')
+      .send({ action: 'style-only', theme: 'success' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+
+    const lines = res.text
+      .trim()
+      .split('\n')
+      .map((l: string) => JSON.parse(l));
+
+    // Frame 1: full (no ui)
+    expect(lines[0].type).toBe('state');
+
+    // Frame 2: style-only partial with uiChanged
+    expect(lines[1].type).toBe('state');
+    expect(lines[1].full).toBe(false);
+    expect(lines[1].uiChanged).toContain('uipatch:preview');
+    expect(lines[1].ui['uipatch:preview'].classAdd).toContain('tone-success');
+
+    expect(lines[2].type).toBe('done');
+  });
 });

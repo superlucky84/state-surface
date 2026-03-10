@@ -3781,6 +3781,19 @@ export function chatContent(lang: Lang) {
 
 // ── Examples landing page ──
 
+export function uiPatchContent(lang: Lang) {
+  const ko = lang === 'ko';
+  return {
+    'page:header': {
+      title: ko ? 'UI Patch 데모' : 'UI Patch Demo',
+      nav: 'ui-patch',
+      lang,
+    },
+    'uipatch:controls': { currentTheme: 'reset', lang },
+    'uipatch:preview': { theme: 'reset', lang, updating: false },
+  };
+}
+
 export function examplesContent(lang: Lang) {
   const ko = lang === 'ko';
   return {
@@ -3835,6 +3848,14 @@ export function examplesContent(lang: Lang) {
           href: prefixPath('/examples/chat'),
           color: 'amber',
         },
+        {
+          title: 'UI Patch',
+          description: ko
+            ? 'classAdd/classRemove/cssVars로 템플릿 재렌더 없이 h-state 외형을 변경합니다.'
+            : 'Change h-state appearance with classAdd, classRemove, and cssVars without re-rendering.',
+          href: prefixPath('/examples/ui-patch'),
+          color: 'rose',
+        },
       ],
       lang,
     },
@@ -3843,7 +3864,15 @@ export function examplesContent(lang: Lang) {
 
 // ── Switch-lang: page content lookup by route key ──
 
-export type PageKey = 'home' | 'guide' | 'examples' | 'streaming' | 'actions' | 'search' | 'chat';
+export type PageKey =
+  | 'home'
+  | 'guide'
+  | 'examples'
+  | 'streaming'
+  | 'actions'
+  | 'search'
+  | 'chat'
+  | 'ui-patch';
 
 export function pageContent(
   page: PageKey,
@@ -3886,6 +3915,8 @@ export function pageContent(
       return { ...searchContent(lang), 'search:results': undefined };
     case 'chat':
       return chatContent(lang);
+    case 'ui-patch':
+      return uiPatchContent(lang);
     default:
       return homeContent(lang);
   }

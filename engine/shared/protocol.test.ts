@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { validateStateFrame, applyFrame } from './protocol.js';
-import type { StateFrameState } from './protocol.js';
+import { validateStateFrame, applyFrame, applyUi } from './protocol.js';
+import type { StateFrameState, UiPatch } from './protocol.js';
 
 describe('validateStateFrame', () => {
   // ── Valid frames ──
@@ -184,6 +184,131 @@ describe('validateStateFrame', () => {
     expect(result).toEqual({ valid: true });
   });
 
+  // ── ui / uiChanged frames ──
+
+  it('accepts full frame with ui', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      states: { 'card:summary': { title: 'Hello' } },
+      ui: { 'card:summary': { classAdd: ['highlight'] } },
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts partial with uiChanged only (no changed/removed)', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { 'card:summary': { classAdd: ['tone-warning'] } },
+      uiChanged: ['card:summary'],
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('rejects partial with no changed/removed/uiChanged', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: { a: { x: 1 } },
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects uiChanged key not in ui', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      ui: {},
+      uiChanged: ['card:summary'],
+    });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toContain('"uiChanged" key "card:summary" must exist in "ui"');
+    }
+  });
+
+  it('rejects accumulate frame with ui', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      accumulate: true,
+      states: { slot: { text: 'x' } },
+      ui: { slot: { classAdd: ['a'] } },
+    });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toContain('"ui"');
+    }
+  });
+
+  it('rejects uiChanged that is not an array', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { slot: { classAdd: ['a'] } },
+      uiChanged: 'slot' as any,
+    });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toContain('"uiChanged" must be an array');
+    }
+  });
+
+  it('ignores uiChanged key that is also in removed (no error)', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: {},
+      removed: ['card:summary'],
+      uiChanged: ['card:summary'],
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  // ── UiPatch field combinations (Phase 6) ──
+
+  it('accepts full frame with classAdd-only ui', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      states: { a: {} },
+      ui: { a: { classAdd: ['x'] } },
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts full frame with cssVars-only ui', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      states: { a: {} },
+      ui: { a: { cssVars: { '--c': '#f00' } } },
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts full frame with combined classAdd + classRemove + cssVars', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      states: { a: {} },
+      ui: { a: { classAdd: ['x'], classRemove: ['y'], cssVars: { '--c': '#f00' } } },
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('accepts partial with uiChanged empty array + ui empty object', () => {
+    // uiChanged is empty → not counted as "has uiChanged", needs changed/removed
+    const result = validateStateFrame({
+      type: 'state',
+      full: false,
+      states: { a: {} },
+      changed: ['a'],
+      ui: {},
+      uiChanged: [],
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
   it('rejects accumulate frame with removed', () => {
     const result = validateStateFrame({
       type: 'state',
@@ -358,5 +483,168 @@ describe('applyFrame', () => {
     };
     const result = applyFrame(active, frame);
     expect(result['chat:current'].text).toBe('');
+  });
+});
+
+describe('applyUi', () => {
+  const patch1: UiPatch = { classAdd: ['highlight'], cssVars: { '--accent': '#f00' } };
+  const patch2: UiPatch = { classAdd: ['active'], classRemove: ['inactive'] };
+
+  it('no ui field → activeUi unchanged', () => {
+    const activeUi = { slot: patch1 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: { slot: { x: 1 } },
+      changed: ['slot'],
+    };
+    expect(applyUi(activeUi, frame)).toEqual({ slot: patch1 });
+  });
+
+  it('full frame + ui → activeUi replaced entirely', () => {
+    const activeUi = { old: patch1 };
+    const frame: StateFrameState = {
+      type: 'state',
+      states: { slot: {} },
+      ui: { slot: patch2 },
+    };
+    expect(applyUi(activeUi, frame)).toEqual({ slot: patch2 });
+  });
+
+  it('full frame + no ui → activeUi reset to empty', () => {
+    const activeUi = { slot: patch1 };
+    const frame: StateFrameState = {
+      type: 'state',
+      states: { slot: {} },
+    };
+    expect(applyUi(activeUi, frame)).toEqual({});
+  });
+
+  it('partial + uiChanged → updates only specified slots', () => {
+    const activeUi = { a: patch1, b: patch2 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { a: { classAdd: ['new'] } },
+      uiChanged: ['a'],
+    };
+    const result = applyUi(activeUi, frame);
+    expect(result.a).toEqual({ classAdd: ['new'] });
+    expect(result.b).toEqual(patch2); // untouched
+  });
+
+  it('ui[slot] = null → removes slot key from activeUi', () => {
+    const activeUi = { slot: patch1 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { slot: null },
+      uiChanged: ['slot'],
+    };
+    const result = applyUi(activeUi, frame);
+    expect(result).not.toHaveProperty('slot');
+  });
+
+  it('removed slot → removes from activeUi too', () => {
+    const activeUi = { a: patch1, b: patch2 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      removed: ['a'],
+    };
+    const result = applyUi(activeUi, frame);
+    expect(result).not.toHaveProperty('a');
+    expect(result.b).toEqual(patch2);
+  });
+
+  it('style-only partial (empty states, uiChanged only) → works', () => {
+    const activeUi = { slot: patch1 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { slot: patch2 },
+      uiChanged: ['slot'],
+    };
+    const result = applyUi(activeUi, frame);
+    expect(result.slot).toEqual(patch2);
+  });
+
+  // ── Phase 6: Apply 강화 ──
+
+  it('full → partial → full sequence maintains ui consistency', () => {
+    let ui: Record<string, UiPatch | null> = {};
+
+    // Full frame with ui
+    const full1: StateFrameState = {
+      type: 'state',
+      states: { a: {} },
+      ui: { a: patch1 },
+    };
+    ui = applyUi(ui, full1);
+    expect(ui).toEqual({ a: patch1 });
+
+    // Partial update
+    const partial: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { a: patch2 },
+      uiChanged: ['a'],
+    };
+    ui = applyUi(ui, partial);
+    expect(ui).toEqual({ a: patch2 });
+
+    // Another full frame replaces everything
+    const full2: StateFrameState = {
+      type: 'state',
+      states: { b: {} },
+      ui: { b: { cssVars: { '--x': '1' } } },
+    };
+    ui = applyUi(ui, full2);
+    expect(ui).toEqual({ b: { cssVars: { '--x': '1' } } });
+    expect(ui).not.toHaveProperty('a');
+  });
+
+  it('removed + uiChanged on same slot → removed wins', () => {
+    const activeUi = { a: patch1, b: patch2 };
+    const frame: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { a: { classAdd: ['new'] } },
+      removed: ['a'],
+      uiChanged: ['a'],
+    };
+    const result = applyUi(activeUi, frame);
+    expect(result).not.toHaveProperty('a'); // removed wins
+    expect(result.b).toEqual(patch2);
+  });
+
+  it('consecutive style-only partials accumulate correctly', () => {
+    let ui: Record<string, UiPatch | null> = { slot: patch1 };
+
+    const partial1: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { slot: { classAdd: ['step1'] } },
+      uiChanged: ['slot'],
+    };
+    ui = applyUi(ui, partial1);
+    expect(ui.slot).toEqual({ classAdd: ['step1'] });
+
+    const partial2: StateFrameState = {
+      type: 'state',
+      full: false,
+      states: {},
+      ui: { slot: { classAdd: ['step2'], cssVars: { '--v': '2' } } },
+      uiChanged: ['slot'],
+    };
+    ui = applyUi(ui, partial2);
+    expect(ui.slot).toEqual({ classAdd: ['step2'], cssVars: { '--v': '2' } });
   });
 });

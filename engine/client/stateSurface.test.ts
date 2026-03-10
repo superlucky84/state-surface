@@ -624,6 +624,317 @@ describe('StateSurface', () => {
     });
   });
 
+  // ── UI Patch ──
+
+  describe('ui patch', () => {
+    it('no ui in frame → DOM unchanged', () => {
+      setupDOM(['a']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+      });
+      (surface as any).flushQueue(true);
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.length).toBe(0);
+      expect(el.style.length).toBe(0);
+    });
+
+    it('classAdd → adds classes to h-state element', () => {
+      setupDOM(['a']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+        ui: { a: { classAdd: ['highlight', 'active'] } },
+      });
+      (surface as any).flushQueue(true);
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.contains('highlight')).toBe(true);
+      expect(el.classList.contains('active')).toBe(true);
+    });
+
+    it('classRemove → removes classes from h-state element', () => {
+      setupDOM(['a']);
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      el.classList.add('old-class');
+
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+        ui: { a: { classRemove: ['old-class'] } },
+      });
+      (surface as any).flushQueue(true);
+
+      expect(el.classList.contains('old-class')).toBe(false);
+    });
+
+    it('cssVars → sets CSS variables on h-state element', () => {
+      setupDOM(['a']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+        ui: { a: { cssVars: { '--accent': '#f00', '--size': '16px' } } },
+      });
+      (surface as any).flushQueue(true);
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.style.getPropertyValue('--accent')).toBe('#f00');
+      expect(el.style.getPropertyValue('--size')).toBe('16px');
+    });
+
+    it('ui[slot] = null → clears previous patch', () => {
+      setupDOM(['a']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      // Full frame with UI
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+        ui: { a: { classAdd: ['highlight'], cssVars: { '--accent': '#f00' } } },
+      });
+      (surface as any).flushQueue(true);
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.contains('highlight')).toBe(true);
+
+      // Partial with ui null → clear
+      (surface as any).frameQueue.push({
+        type: 'state',
+        full: false,
+        states: {},
+        ui: { a: null },
+        uiChanged: ['a'],
+      });
+      (surface as any).flushQueue(true);
+
+      expect(el.classList.contains('highlight')).toBe(false);
+      expect(el.style.getPropertyValue('--accent')).toBe('');
+    });
+
+    it('partial coalesce merges ui/uiChanged correctly', () => {
+      setupDOM(['a', 'b']);
+      const { surface, traces } = createMockSurface();
+      surface.discoverAnchors();
+
+      // Full frame first
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 }, b: { v: 2 } },
+      });
+      (surface as any).flushQueue(true);
+
+      // Two consecutive partials with ui
+      (surface as any).frameQueue.push({
+        type: 'state',
+        full: false,
+        states: {},
+        ui: { a: { classAdd: ['x'] } },
+        uiChanged: ['a'],
+      });
+      (surface as any).frameQueue.push({
+        type: 'state',
+        full: false,
+        states: {},
+        ui: { b: { classAdd: ['y'] } },
+        uiChanged: ['b'],
+      });
+      (surface as any).flushQueue(true);
+
+      const mergedEvents = traces.filter(t => t.kind === 'merged');
+      expect(mergedEvents).toHaveLength(1);
+
+      const elA = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      const elB = document.querySelector<HTMLElement>('h-state[name="b"]')!;
+      expect(elA.classList.contains('x')).toBe(true);
+      expect(elB.classList.contains('y')).toBe(true);
+    });
+
+    it('trace event includes ui info when ui is present', () => {
+      setupDOM(['a']);
+      const { surface, traces } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+        ui: { a: { classAdd: ['x'] } },
+      });
+      (surface as any).flushQueue(true);
+
+      const applied = traces.find(t => t.kind === 'applied');
+      expect(applied).toBeDefined();
+      expect((applied!.detail as any).uiCount).toBe(1);
+      expect((applied!.detail as any).uiSlots).toEqual(['a']);
+    });
+
+    it('trace event omits ui info when no ui', () => {
+      setupDOM(['a']);
+      const { surface, traces } = createMockSurface();
+      surface.discoverAnchors();
+
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 1 } },
+      });
+      (surface as any).flushQueue(true);
+
+      const applied = traces.find(t => t.kind === 'applied');
+      expect(applied).toBeDefined();
+      expect((applied!.detail as any).uiCount).toBeUndefined();
+    });
+
+    it('hydration applies initial ui patches', () => {
+      setupDOM(['a'], { a: { v: 1 } });
+
+      // Add __UI__ script tag
+      const uiScript = document.createElement('script');
+      uiScript.id = '__UI__';
+      uiScript.type = 'application/json';
+      uiScript.textContent = JSON.stringify({
+        a: { classAdd: ['hydrated'], cssVars: { '--color': 'blue' } },
+      });
+      document.body.appendChild(uiScript);
+
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+      surface.bootstrap();
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.contains('hydrated')).toBe(true);
+      expect(el.style.getPropertyValue('--color')).toBe('blue');
+      expect(surface.activeUi).toEqual({
+        a: { classAdd: ['hydrated'], cssVars: { '--color': 'blue' } },
+      });
+    });
+  });
+
+  // ── SSR → Hydration → Transition (Phase 6) ──
+
+  describe('SSR → hydration → transition ui flow', () => {
+    it('hydration ui is replaced by transition full frame ui', () => {
+      setupDOM(['a'], { a: { v: 1 } });
+
+      const uiScript = document.createElement('script');
+      uiScript.id = '__UI__';
+      uiScript.type = 'application/json';
+      uiScript.textContent = JSON.stringify({ a: { classAdd: ['ssr-class'] } });
+      document.body.appendChild(uiScript);
+
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+      surface.bootstrap();
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.contains('ssr-class')).toBe(true);
+
+      // Transition full frame with different ui
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 2 } },
+        ui: { a: { classAdd: ['new-class'], cssVars: { '--c': 'red' } } },
+      });
+      (surface as any).flushQueue(true);
+
+      expect(el.classList.contains('ssr-class')).toBe(false); // cleared
+      expect(el.classList.contains('new-class')).toBe(true);
+      expect(el.style.getPropertyValue('--c')).toBe('red');
+    });
+
+    it('hydration ui is cleared when transition full frame has no ui', () => {
+      setupDOM(['a'], { a: { v: 1 } });
+
+      const uiScript = document.createElement('script');
+      uiScript.id = '__UI__';
+      uiScript.type = 'application/json';
+      uiScript.textContent = JSON.stringify({
+        a: { classAdd: ['ssr-class'], cssVars: { '--x': '1' } },
+      });
+      document.body.appendChild(uiScript);
+
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+      surface.bootstrap();
+
+      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+      expect(el.classList.contains('ssr-class')).toBe(true);
+
+      // Transition full frame without ui
+      (surface as any).frameQueue.push({
+        type: 'state',
+        states: { a: { v: 2 } },
+      });
+      (surface as any).flushQueue(true);
+
+      expect(el.classList.contains('ssr-class')).toBe(false);
+      expect(el.style.getPropertyValue('--x')).toBe('');
+    });
+  });
+
+  // ── End-to-End Frame Flow (Phase 6) ──
+
+  describe('full+ui → partial+uiChanged → done flow', () => {
+    it('complete frame sequence applies ui correctly', () => {
+      setupDOM(['card', 'sidebar']);
+      const { surface } = createMockSurface();
+      surface.discoverAnchors();
+
+      // 1. Full frame with ui
+      (surface as any).onFrame(
+        {
+          type: 'state',
+          states: { card: { title: 'A' }, sidebar: { items: [] } },
+          ui: { card: { classAdd: ['tone-default'], cssVars: { '--accent': 'blue' } } },
+        },
+        new AbortController().signal
+      );
+      (surface as any).flushQueue(true);
+
+      const cardEl = document.querySelector<HTMLElement>('h-state[name="card"]')!;
+      expect(cardEl.classList.contains('tone-default')).toBe(true);
+      expect(cardEl.style.getPropertyValue('--accent')).toBe('blue');
+
+      // 2. Partial frame with uiChanged (style-only)
+      (surface as any).onFrame(
+        {
+          type: 'state',
+          full: false,
+          states: {},
+          ui: { card: { classAdd: ['tone-warning'], classRemove: ['tone-default'], cssVars: { '--accent': '#f59e0b' } } },
+          uiChanged: ['card'],
+        },
+        new AbortController().signal
+      );
+      (surface as any).flushQueue(true);
+
+      expect(cardEl.classList.contains('tone-default')).toBe(false);
+      expect(cardEl.classList.contains('tone-warning')).toBe(true);
+      expect(cardEl.style.getPropertyValue('--accent')).toBe('#f59e0b');
+
+      // 3. Done
+      (surface as any).onFrame({ type: 'done' }, new AbortController().signal);
+
+      // Final state integrity
+      expect(surface.activeStates).toEqual({ card: { title: 'A' }, sidebar: { items: [] } });
+      expect(surface.activeUi).toEqual({
+        card: { classAdd: ['tone-warning'], classRemove: ['tone-default'], cssVars: { '--accent': '#f59e0b' } },
+      });
+    });
+  });
+
   describe('transition timeout', () => {
     it('aborts slow transition and reports timeout error', async () => {
       vi.useFakeTimers();

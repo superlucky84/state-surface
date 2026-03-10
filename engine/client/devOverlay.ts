@@ -32,8 +32,13 @@ export function attachDevOverlay(surface: StateSurface): (() => void) | undefine
   };
 
   function onTrace(event: TraceEvent) {
-    // Update states panel
-    statesPanel.textContent = JSON.stringify(surface.activeStates, null, 2);
+    // Update states panel (include activeUi when non-empty)
+    const uiKeys = Object.keys(surface.activeUi);
+    const stateDisplay =
+      uiKeys.length > 0
+        ? { activeStates: surface.activeStates, activeUi: surface.activeUi }
+        : surface.activeStates;
+    statesPanel.textContent = JSON.stringify(stateDisplay, null, 2);
 
     // Append to log
     const ts = new Date().toISOString().slice(11, 23);
@@ -45,7 +50,12 @@ export function attachDevOverlay(surface: StateSurface): (() => void) | undefine
   }
 
   // Initial render
-  statesPanel.textContent = JSON.stringify(surface.activeStates, null, 2);
+  const initUiKeys = Object.keys(surface.activeUi);
+  const initDisplay =
+    initUiKeys.length > 0
+      ? { activeStates: surface.activeStates, activeUi: surface.activeUi }
+      : surface.activeStates;
+  statesPanel.textContent = JSON.stringify(initDisplay, null, 2);
 
   function detach() {
     surface.trace = prevTrace;

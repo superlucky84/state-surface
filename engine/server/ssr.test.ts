@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeStateJSON, fillHState, buildStateScript, ssrHash } from './ssr.js';
+import { safeStateJSON, fillHState, buildStateScript, buildUiScript, ssrHash } from './ssr.js';
 
 describe('safeStateJSON', () => {
   it('escapes < > & for safe HTML embedding', () => {
@@ -64,6 +64,34 @@ describe('fillHState', () => {
     expect(result).toContain('mode="visibility"');
     expect(result).toContain('<h1>Hi</h1>');
   });
+
+  it('injects class attribute from ui classAdd', () => {
+    const html = '<h-state name="page:article"></h-state>';
+    const states = { 'page:article': { title: 'Test' } };
+    const ui = { 'page:article': { classAdd: ['highlight', 'active'] } };
+
+    const result = fillHState(html, states, renderTemplate, ui);
+    expect(result).toContain('class="highlight active"');
+    expect(result).toContain('<h1>Test</h1>');
+  });
+
+  it('injects style attribute from ui cssVars', () => {
+    const html = '<h-state name="page:article"></h-state>';
+    const states = { 'page:article': { title: 'Test' } };
+    const ui = { 'page:article': { cssVars: { '--accent': '#f00', '--size': '16px' } } };
+
+    const result = fillHState(html, states, renderTemplate, ui);
+    expect(result).toContain('style="--accent: #f00; --size: 16px"');
+  });
+
+  it('no ui → no class/style attributes added (regression)', () => {
+    const html = '<h-state name="page:article"></h-state>';
+    const states = { 'page:article': { title: 'Test' } };
+
+    const result = fillHState(html, states, renderTemplate);
+    expect(result).not.toContain('class=');
+    expect(result).not.toContain('style=');
+  });
 });
 
 describe('buildStateScript', () => {
@@ -75,6 +103,21 @@ describe('buildStateScript', () => {
     expect(result).toMatch(/<\/script>$/);
     expect(result).not.toContain('<Test>');
     expect(result).toContain('\\u003cTest\\u003e');
+  });
+});
+
+describe('buildUiScript', () => {
+  it('produces a script tag with ui data', () => {
+    const ui = { 'page:article': { classAdd: ['highlight'] } };
+    const result = buildUiScript(ui);
+
+    expect(result).toMatch(/^<script id="__UI__" type="application\/json">/);
+    expect(result).toMatch(/<\/script>$/);
+    expect(result).toContain('highlight');
+  });
+
+  it('returns empty string when ui is empty', () => {
+    expect(buildUiScript({})).toBe('');
   });
 });
 

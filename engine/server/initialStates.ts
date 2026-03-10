@@ -1,9 +1,15 @@
 import type { Request } from 'express';
 import type { RouteModule } from '../shared/routeModule.js';
+import type { UiPatch } from '../shared/protocol.js';
 import { getTransition, type TransitionHandler } from './transition.js';
 
 type InitialStatesOptions = {
   getTransition?: (name: string) => TransitionHandler | undefined;
+};
+
+export type InitialResult = {
+  states: Record<string, any>;
+  ui: Record<string, UiPatch | null>;
 };
 
 /**
@@ -28,6 +34,28 @@ export async function getInitialStates(
     return {};
   }
 
+  const result = await getInitialResult(route, req, options);
+  return result.states;
+}
+
+/**
+ * Resolve initial states and ui for SSR rendering.
+ * Returns both states and ui from the first full frame.
+ */
+export async function getInitialResult(
+  route: RouteModule,
+  req: Request,
+  options: InitialStatesOptions = {}
+): Promise<InitialResult> {
+  if (route.initial) {
+    const states = await route.initial(req);
+    return { states, ui: {} };
+  }
+
+  if (!route.transition) {
+    return { states: {}, ui: {} };
+  }
+
   const params = route.params?.(req) ?? {};
   const resolveTransition = options.getTransition ?? getTransition;
   const handler = resolveTransition(route.transition);
@@ -43,7 +71,7 @@ export async function getInitialStates(
   await gen.return(undefined as never);
 
   if (value?.type === 'state' && value.full !== false) {
-    return value.states;
+    return { states: value.states, ui: value.ui ?? {} };
   }
 
   throw new Error('SSR requires a full first frame when initial is missing');

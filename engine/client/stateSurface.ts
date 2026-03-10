@@ -1,5 +1,5 @@
-import type { StateFrame, StateFrameState } from '../shared/protocol.js';
-import { applyFrame } from '../shared/protocol.js';
+import type { StateFrame, StateFrameState, UiPatch } from '../shared/protocol.js';
+import { applyFrame, applyUi } from '../shared/protocol.js';
 import { createNdjsonParser } from '../shared/ndjson.js';
 
 // ── Types ──
@@ -44,6 +44,7 @@ export interface StateSurfacePlugin {
 
 export class StateSurface {
   activeStates: Record<string, any> = {};
+  activeUi: Record<string, UiPatch | null> = {};
   private frameQueue: StateFrameState[] = [];
   private anchors = new Map<string, HTMLElement>();
   private mounted = new Set<string>();
@@ -95,11 +96,18 @@ export class StateSurface {
     if (!stateEl?.textContent) return;
 
     const initialStates = JSON.parse(stateEl.textContent) as Record<string, any>;
-    this.hydrate(initialStates);
+
+    const uiEl = document.getElementById('__UI__');
+    const initialUi = uiEl?.textContent
+      ? (JSON.parse(uiEl.textContent) as Record<string, UiPatch | null>)
+      : {};
+
+    this.hydrate(initialStates, initialUi);
   }
 
-  hydrate(initialStates: Record<string, any>) {
+  hydrate(initialStates: Record<string, any>, initialUi: Record<string, UiPatch | null> = {}) {
     this.activeStates = { ...initialStates };
+    this.activeUi = { ...initialUi };
 
     for (const [name, data] of Object.entries(initialStates)) {
       const el = this.anchors.get(name);
@@ -108,6 +116,13 @@ export class StateSurface {
       this.hydrateTemplate(name, data, el);
       this.mounted.add(name);
       this.notifyMount(name, el, data);
+    }
+
+    // Apply initial UI patches after hydration
+    for (const [name, patch] of Object.entries(initialUi)) {
+      const el = this.anchors.get(name);
+      if (!el || !patch) continue;
+      this.applyUiPatch(name, el, patch);
     }
   }
 
@@ -313,6 +328,11 @@ export class StateSurface {
         states: { ...merged.states, ...next.states },
         removed: [...new Set([...(merged.removed ?? []), ...(next.removed ?? [])])],
         changed: [...new Set([...(merged.changed ?? []), ...(next.changed ?? [])])],
+        ui: merged.ui || next.ui ? { ...merged.ui, ...next.ui } : undefined,
+        uiChanged:
+          merged.uiChanged || next.uiChanged
+            ? [...new Set([...(merged.uiChanged ?? []), ...(next.uiChanged ?? [])])]
+            : undefined,
       };
       mergeCount++;
     }
@@ -329,26 +349,40 @@ export class StateSurface {
   private applyStateFrame(frame: StateFrameState) {
     const prevStates = this.activeStates;
     const nextStates = applyFrame(prevStates, frame);
+    const prevUi = this.activeUi;
+    const nextUi = applyUi(prevUi, frame);
 
     if (frame.accumulate === true) {
       // Accumulate frame: only the listed slots changed
-      this.sync(nextStates, Object.keys(frame.states), []);
+      this.sync(nextStates, nextUi, Object.keys(frame.states), []);
     } else if (frame.full !== false) {
       // Full frame: find removed keys
       const removedKeys = Object.keys(prevStates).filter(k => !(k in nextStates));
       const changedKeys = Object.keys(nextStates);
-      this.sync(nextStates, changedKeys, removedKeys);
+      this.sync(nextStates, nextUi, changedKeys, removedKeys);
     } else {
-      this.sync(nextStates, frame.changed ?? Object.keys(frame.states), frame.removed ?? []);
+      this.sync(nextStates, nextUi, frame.changed ?? Object.keys(frame.states), frame.removed ?? []);
     }
 
+    const uiCount = Object.keys(nextUi).length;
     this.trace?.({
       kind: 'applied',
-      detail: { full: frame.full !== false, stateCount: Object.keys(nextStates).length },
+      detail: {
+        full: frame.full !== false,
+        stateCount: Object.keys(nextStates).length,
+        ...(uiCount > 0 ? { uiCount, uiSlots: Object.keys(nextUi) } : {}),
+      },
     });
   }
 
-  private sync(nextStates: Record<string, any>, changedKeys: string[], removedKeys: string[]) {
+  private sync(
+    nextStates: Record<string, any>,
+    nextUi: Record<string, UiPatch | null>,
+    changedKeys: string[],
+    removedKeys: string[]
+  ) {
+    const prevUi = this.activeUi;
+
     const doSync = () => {
       // Remove inactive templates
       for (const key of removedKeys) {
@@ -356,9 +390,12 @@ export class StateSurface {
           const el = this.anchors.get(key);
           this.unmountTemplate(key, el!);
           this.mounted.delete(key);
-          if (el) this.notifyUnmount(key, el);
-          // Clear anchor content
-          if (el) el.innerHTML = '';
+          if (el) {
+            this.notifyUnmount(key, el);
+            // Clear previous UI patch before clearing content
+            if (prevUi[key]) this.clearUiPatch(key, el, prevUi[key]!);
+            el.innerHTML = '';
+          }
         }
       }
 
@@ -390,16 +427,70 @@ export class StateSurface {
           });
         }
       }
+
+      // Apply UI patches after template render (per design: render first, then UI patch)
+      for (const key of Object.keys(nextUi)) {
+        const el = this.anchors.get(key);
+        if (!el) continue;
+
+        const prev = prevUi[key];
+        const next = nextUi[key];
+
+        if (next === null || next === undefined) {
+          // Clear previous patch
+          if (prev) this.clearUiPatch(key, el, prev);
+        } else if (prev !== next) {
+          // Clear old then apply new
+          if (prev) this.clearUiPatch(key, el, prev);
+          this.applyUiPatch(key, el, next);
+        }
+      }
+
+      // Clear UI for slots that were in prevUi but not in nextUi
+      for (const key of Object.keys(prevUi)) {
+        if (key in nextUi) continue;
+        const el = this.anchors.get(key);
+        if (!el || !prevUi[key]) continue;
+        this.clearUiPatch(key, el, prevUi[key]!);
+      }
     };
 
-    // State must update synchronously (frame queue depends on this)
+    // State and UI must update synchronously (frame queue depends on this)
     this.activeStates = nextStates;
+    this.activeUi = nextUi;
 
     // Use View Transition API for smooth DOM transitions (progressive enhancement)
     if (document.startViewTransition) {
       document.startViewTransition(doSync);
     } else {
       doSync();
+    }
+  }
+
+  // ── UI Patch ──
+
+  private applyUiPatch(_slotName: string, el: HTMLElement, patch: UiPatch) {
+    if (patch.classRemove?.length) {
+      el.classList.remove(...patch.classRemove);
+    }
+    if (patch.classAdd?.length) {
+      el.classList.add(...patch.classAdd);
+    }
+    if (patch.cssVars) {
+      for (const [key, value] of Object.entries(patch.cssVars)) {
+        el.style.setProperty(key, value);
+      }
+    }
+  }
+
+  private clearUiPatch(_slotName: string, el: HTMLElement, patch: UiPatch) {
+    if (patch.classAdd?.length) {
+      el.classList.remove(...patch.classAdd);
+    }
+    if (patch.cssVars) {
+      for (const key of Object.keys(patch.cssVars)) {
+        el.style.removeProperty(key);
+      }
     }
   }
 

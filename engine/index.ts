@@ -16,4 +16,4 @@ export { prefixPath, getBasePath } from './shared/basePath.js';
 export type { RouteModule, BootConfig } from './shared/routeModule.js';
 
 // Protocol
-export type { StateFrame } from './shared/protocol.js';
+export type { StateFrame, UiPatch } from './shared/protocol.js';
