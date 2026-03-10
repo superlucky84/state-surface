@@ -9,7 +9,7 @@ beforeAll(async () => {
 import { guideContent, guideLoadedState } from './content.js';
 import type { Block } from './content.js';
 
-const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action', 'accumulate'] as const;
+const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'] as const;
 const ALL_SLUGS = [
   'quickstart',
   'surface',
@@ -17,6 +17,7 @@ const ALL_SLUGS = [
   'transition',
   'action',
   'accumulate',
+  'ui-patch',
 ] as const;
 const LANGS = ['en', 'ko'] as const;
 const REQUIRED_SECTION_IDS = [
@@ -33,6 +34,7 @@ const REQUIRED_SECTION_IDS = [
 const SURFACE_EXTRA_SECTION_IDS = ['mixed'];
 const TEMPLATE_EXTRA_SECTION_IDS = ['plugins'];
 const TRANSITION_EXTRA_SECTION_IDS = ['frames', 'animation'];
+const UI_PATCH_EXTRA_SECTION_IDS = ['ssr'];
 const QUICKSTART_REQUIRED_SECTION_IDS = [
   'preview',
   'prereqs',
@@ -69,6 +71,11 @@ describe('guide content schema (concept guides)', () => {
           }
           if (slug === 'transition') {
             for (const extra of TRANSITION_EXTRA_SECTION_IDS) {
+              expect(ids).toContain(extra);
+            }
+          }
+          if (slug === 'ui-patch') {
+            for (const extra of UI_PATCH_EXTRA_SECTION_IDS) {
               expect(ids).toContain(extra);
             }
           }
@@ -286,7 +293,9 @@ describe('guide SSR rendering', () => {
             ? TEMPLATE_EXTRA_SECTION_IDS.length
             : slug === 'transition'
               ? TRANSITION_EXTRA_SECTION_IDS.length
-              : 0;
+              : slug === 'ui-patch'
+                ? UI_PATCH_EXTRA_SECTION_IDS.length
+                : 0;
       const expectedCount = baseCount + extraCount;
       expect(content.sections.length).toBe(expectedCount);
       expect(content.demoHref).toBeTruthy();

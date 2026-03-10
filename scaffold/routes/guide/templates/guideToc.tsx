@@ -15,6 +15,7 @@ const LABELS: Record<string, string> = {
   transition: 'Transition',
   action: 'Action',
   accumulate: 'Accumulate',
+  'ui-patch': 'UI Patch',
 };
 
 const GuideToc = ({ slug, items, sections }: TocProps) => (

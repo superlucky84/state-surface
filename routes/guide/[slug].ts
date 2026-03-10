@@ -3,7 +3,7 @@ import { baseSurface, joinSurface, stateSlots } from '../../layouts/surface.js';
 import { getLang } from '../../shared/i18n.js';
 import { guideLoadingState } from '../../shared/content.js';
 
-const VALID_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'];
+const VALID_SLUGS = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'];
 
 function parseSlug(req: { params: Record<string, string> }): string {
   const slug = req.params.slug;

@@ -5,7 +5,10 @@ import type { Lang } from '../../../../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-const THEMES: Record<string, { classAdd: string[]; classRemove: string[]; cssVars: Record<string, string> }> = {
+const THEMES: Record<
+  string,
+  { classAdd: string[]; classRemove: string[]; cssVars: Record<string, string> }
+> = {
   warning: {
     classAdd: ['tone-warning'],
     classRemove: ['tone-default', 'tone-success', 'tone-info'],
@@ -35,7 +38,7 @@ async function* uiPatchDemo(
   const theme = (params.theme as string) ?? 'reset';
   const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
   const ko = lang === 'ko';
-  const headerTitle = ko ? 'UI Patch ??????' : 'UI Patch Demo';
+  const headerTitle = ko ? 'UI Patch 데모' : 'UI Patch Demo';
 
   if (action === 'theme') {
     const patch = THEMES[theme] ?? THEMES.reset;

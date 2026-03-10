@@ -1478,6 +1478,257 @@ export default defineTransition('chat', chat);`,
         },
       ],
     },
+    'ui-patch': {
+      title: 'UI Patch',
+      demoHref: '/examples/ui-patch',
+      demoLabel: 'UI Patch Demo',
+      sections: [
+        {
+          id: 'tldr',
+          heading: 'TL;DR',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'UI Patch lets the server change the appearance of an <h-state> element — add/remove CSS classes or set CSS custom properties — without re-rendering the template inside it. State drives content; UI Patch drives visual presentation. They travel in the same frame but update different targets.',
+            },
+          ],
+        },
+        {
+          id: 'analogy',
+          heading: 'Mental model',
+          blocks: [
+            {
+              type: 'analogy',
+              text: 'Think of a building. Templates are the interior — furniture, decorations, the stuff inside each room. UI Patch is the exterior paint job — you can repaint the facade or swap the window tinting without touching the furniture inside. The building frame (<h-state>) stays the same; what changes is its outer appearance.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Why separate from state? State changes trigger template re-renders (VDOM diff + patch). UI Patches skip that entirely — they apply CSS directly to the <h-state> element. This means theme switches, status indicators, and visual feedback can happen at near-zero cost.',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'UI Patch supports three operations: classAdd (append CSS classes), classRemove (remove CSS classes), and cssVars (set CSS custom properties). All three are optional and can be combined freely.',
+            },
+          ],
+        },
+        {
+          id: 'when',
+          heading: 'When to use',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                'Use for theme switching: dark mode, color schemes, brand theming.',
+                'Use for status indicators: success/error/warning borders, highlight states.',
+                'Use for CSS variable-driven styling: dynamic colors, spacing, or sizing without template changes.',
+                "Don't use for content changes — that's what state and templates are for.",
+                "Don't use with accumulate frames — ui is forbidden on accumulate (protocol rule).",
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: 'Step-by-step',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'Define a UiPatch object: { classAdd?: string[], classRemove?: string[], cssVars?: Record<string, string> }.',
+                'In a full frame, add a ui field mapping slot names to UiPatch objects: ui: { "slot:name": patch }.',
+                'For partial updates, use uiChanged to list which slots have new ui: { full: false, uiChanged: ["slot:name"], ui: { "slot:name": patch } }.',
+                'Set ui[slotName] to null to clear all overrides for that slot.',
+                'On the client, the engine applies classes and CSS variables directly to the <h-state> element — no template re-render needed.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: 'Minimal example',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'Theme toggle transition with UI Patch',
+              text: `import { defineTransition } from 'state-surface/server';
+import type { StateFrame } from 'state-surface';
+
+const THEMES = {
+  dark: {
+    classAdd: ['dark-theme'],
+    classRemove: ['light-theme'],
+    cssVars: { '--card-bg': '#1e293b', '--card-text': '#f8fafc' },
+  },
+  light: {
+    classAdd: ['light-theme'],
+    classRemove: ['dark-theme'],
+    cssVars: { '--card-bg': '#ffffff', '--card-text': '#0f172a' },
+  },
+};
+
+async function* toggleTheme(
+  params: Record<string, unknown>
+): AsyncGenerator<StateFrame> {
+  const theme = (params.theme as string) === 'dark' ? 'dark' : 'light';
+
+  // Full frame — set content + appearance together
+  yield {
+    type: 'state',
+    states: { 'app:panel': { theme, label: \`Current: \${theme}\` } },
+    ui: { 'app:panel': THEMES[theme] },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('toggle-theme', toggleTheme);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: 'The template receives { theme, label } as props and renders content. The <h-state name="app:panel"> element itself gets the CSS classes and variables — the template never knows about them.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'Style-only partial — change appearance without touching content',
+              text: `// Partial frame: only ui changes, no state changes
+yield {
+  type: 'state',
+  full: false,
+  states: {},
+  uiChanged: ['app:panel'],
+  ui: { 'app:panel': { cssVars: { '--card-accent': '#10b981' } } },
+};`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: 'Execution sequence',
+          blocks: [
+            {
+              type: 'diagram',
+              label: 'Full frame with ui',
+              text: `Server yields frame:
+  { type: 'state', states: { 'slot': data }, ui: { 'slot': patch } }
+    │
+    ├─ 1. activeStates['slot'] = data        (state update)
+    ├─ 2. Template re-renders with new data   (VDOM diff)
+    └─ 3. Apply patch to <h-state> element    (direct DOM)
+         ├─ classAdd → element.classList.add(...)
+         ├─ classRemove → element.classList.remove(...)
+         └─ cssVars → element.style.setProperty(...)`,
+            },
+            {
+              type: 'diagram',
+              label: 'Style-only partial (no template re-render)',
+              text: `Server yields frame:
+  { type: 'state', full: false, states: {}, uiChanged: ['slot'],
+    ui: { 'slot': { cssVars: { '--accent': 'red' } } } }
+    │
+    ├─ 1. No state change → no template re-render
+    └─ 2. Apply patch to <h-state> element
+         └─ cssVars → element.style.setProperty('--accent', 'red')`,
+            },
+          ],
+        },
+        {
+          id: 'ssr',
+          heading: 'SSR behavior',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'UI Patches are applied during SSR too. The server injects class and style attributes directly into the <h-state> HTML tag, and serializes the active UI state into a <script id="__UI__"> tag. On hydration, the client reads this data to keep activeUi in sync without a flash of unstyled content.',
+            },
+            {
+              type: 'code',
+              lang: 'html',
+              label: 'SSR output with UI Patch applied',
+              text: `<!-- Server renders: -->
+<h-state name="app:panel"
+  class="dark-theme"
+  style="--card-bg:#1e293b; --card-text:#f8fafc">
+  <!-- template content here -->
+</h-state>
+<script id="__UI__" type="application/json">
+  {"app:panel":{"classAdd":["dark-theme"],"cssVars":{"--card-bg":"#1e293b","--card-text":"#f8fafc"}}}
+</script>`,
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: 'The __UI__ script tag is analogous to the __STATE__ script tag for state data. Both are read once during hydration and then removed from the DOM.',
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: 'Common mistakes',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'UI Patch is forbidden on accumulate frames (accumulate: true). The protocol rejects frames that combine both. If you need to change appearance during an accumulate sequence, yield a separate partial frame with uiChanged.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                'Partial frame with ui must include uiChanged array listing affected slot names.',
+                'classAdd and classRemove should not contain the same class name — classRemove is applied first, then classAdd.',
+                'cssVars keys must start with -- (CSS custom property convention).',
+                'Use ui: { "slot": null } to clear all overrides — do not send an empty patch {}.',
+                'accumulate frames must not include a ui field — use a separate partial frame instead.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: 'Troubleshooting',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'UI Patch classes not appearing on the <h-state> element.',
+                  cause: 'The ui field was included in the frame but uiChanged was missing on a partial frame.',
+                  fix: 'For partial frames (full: false), always include uiChanged: ["slotName"] alongside the ui field. Full frames do not need uiChanged.',
+                },
+                {
+                  symptom: 'SSR renders without theme classes, then they flash in on hydration.',
+                  cause: 'The initial state function does not include ui data, so SSR has no patches to apply.',
+                  fix: 'Return ui patches from the initial() function or the first full frame of the boot transition. The SSR pipeline reads ui from the initial state.',
+                },
+                {
+                  symptom: "Validation error: 'ui not allowed on accumulate frame'.",
+                  cause: 'A frame has both accumulate: true and a ui field.',
+                  fix: 'Remove the ui field from the accumulate frame. Yield a separate partial frame (full: false) with uiChanged to update appearance during an accumulate sequence.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: 'Next: try it live',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'Open the UI Patch demo to see theme switching and style-only partials in action — the preview panel changes appearance without any template re-render.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'Transition guide — how full, partial, and accumulate frames work together.',
+                'Accumulate guide — progressive streaming patterns (and why ui is forbidden there).',
+              ],
+            },
+          ],
+        },
+      ],
+    },
     quickstart: {
       title: '10-Minute Quickstart',
       demoHref: '/examples/streaming',
@@ -3082,6 +3333,257 @@ export default defineTransition('chat', chat);`,
         },
       ],
     },
+    'ui-patch': {
+      title: 'UI Patch',
+      demoHref: '/examples/ui-patch',
+      demoLabel: 'UI 패치 데모',
+      sections: [
+        {
+          id: 'tldr',
+          heading: '한 줄 요약',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'UI Patch는 <h-state> 엘리먼트의 외형(CSS 클래스, CSS 커스텀 속성)을 템플릿 재렌더 없이 서버에서 변경하는 메커니즘입니다. 상태(state)는 콘텐츠를 결정하고, UI Patch는 시각적 표현을 결정합니다. 같은 프레임 안에 함께 전달되지만 서로 다른 대상을 업데이트합니다.',
+            },
+          ],
+        },
+        {
+          id: 'analogy',
+          heading: '멘탈 모델',
+          blocks: [
+            {
+              type: 'analogy',
+              text: '건물을 생각해보세요. 템플릿은 인테리어 — 가구, 장식, 각 방 안의 물건입니다. UI Patch는 외벽 페인트 — 내부 가구를 건드리지 않고 외관만 바꿀 수 있습니다. 건물 뼈대(<h-state>)는 그대로이고, 바뀌는 것은 외관뿐입니다.',
+            },
+            {
+              type: 'paragraph',
+              text: '왜 상태와 분리할까요? 상태 변경은 템플릿 재렌더(VDOM diff + patch)를 트리거합니다. UI Patch는 이를 완전히 건너뛰고 CSS를 <h-state> 엘리먼트에 직접 적용합니다. 테마 전환, 상태 표시, 시각 피드백을 거의 제로 비용으로 처리할 수 있습니다.',
+            },
+            {
+              type: 'callout',
+              kind: 'info',
+              text: 'UI Patch는 세 가지 연산을 지원합니다: classAdd(CSS 클래스 추가), classRemove(CSS 클래스 제거), cssVars(CSS 커스텀 속성 설정). 모두 선택적이며 자유롭게 조합할 수 있습니다.',
+            },
+          ],
+        },
+        {
+          id: 'when',
+          heading: '사용 시점',
+          blocks: [
+            {
+              type: 'bullets',
+              items: [
+                '테마 전환에 사용: 다크 모드, 컬러 스킴, 브랜드 테마.',
+                '상태 표시에 사용: 성공/에러/경고 테두리, 하이라이트 상태.',
+                'CSS 변수 기반 스타일링: 템플릿 변경 없이 동적 색상, 간격, 크기 조정.',
+                '콘텐츠 변경에는 사용하지 마세요 — 그것은 state와 template의 역할입니다.',
+                'accumulate 프레임에서는 사용 금지 — 프로토콜 규칙으로 ui 필드가 거부됩니다.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'steps',
+          heading: '단계별 가이드',
+          blocks: [
+            {
+              type: 'sequence',
+              steps: [
+                'UiPatch 객체를 정의: { classAdd?: string[], classRemove?: string[], cssVars?: Record<string, string> }.',
+                'Full 프레임에 ui 필드 추가 — 슬롯 이름을 UiPatch 객체에 매핑: ui: { "slot:name": patch }.',
+                'Partial 업데이트 시 uiChanged로 변경된 슬롯 명시: { full: false, uiChanged: ["slot:name"], ui: { "slot:name": patch } }.',
+                'ui[slotName]에 null을 설정하면 해당 슬롯의 모든 오버라이드가 초기화됩니다.',
+                '클라이언트에서 엔진이 <h-state> 엘리먼트에 클래스와 CSS 변수를 직접 적용 — 템플릿 재렌더 없음.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'example',
+          heading: '최소 예제',
+          blocks: [
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: 'UI Patch를 활용한 테마 토글 transition',
+              text: `import { defineTransition } from 'state-surface/server';
+import type { StateFrame } from 'state-surface';
+
+const THEMES = {
+  dark: {
+    classAdd: ['dark-theme'],
+    classRemove: ['light-theme'],
+    cssVars: { '--card-bg': '#1e293b', '--card-text': '#f8fafc' },
+  },
+  light: {
+    classAdd: ['light-theme'],
+    classRemove: ['dark-theme'],
+    cssVars: { '--card-bg': '#ffffff', '--card-text': '#0f172a' },
+  },
+};
+
+async function* toggleTheme(
+  params: Record<string, unknown>
+): AsyncGenerator<StateFrame> {
+  const theme = (params.theme as string) === 'dark' ? 'dark' : 'light';
+
+  // Full 프레임 — 콘텐츠와 외형을 함께 설정
+  yield {
+    type: 'state',
+    states: { 'app:panel': { theme, label: \`현재: \${theme}\` } },
+    ui: { 'app:panel': THEMES[theme] },
+  };
+
+  yield { type: 'done' };
+}
+
+export default defineTransition('toggle-theme', toggleTheme);`,
+            },
+            {
+              type: 'callout',
+              kind: 'tip',
+              text: '템플릿은 { theme, label }을 props로 받아 콘텐츠를 렌더링합니다. <h-state name="app:panel"> 엘리먼트 자체가 CSS 클래스와 변수를 받으며, 템플릿은 이에 대해 전혀 알지 못합니다.',
+            },
+            {
+              type: 'code',
+              lang: 'typescript',
+              label: '스타일 전용 partial — 콘텐츠 변경 없이 외형만 변경',
+              text: `// Partial 프레임: ui만 변경, state 변경 없음
+yield {
+  type: 'state',
+  full: false,
+  states: {},
+  uiChanged: ['app:panel'],
+  ui: { 'app:panel': { cssVars: { '--card-accent': '#10b981' } } },
+};`,
+            },
+          ],
+        },
+        {
+          id: 'sequence',
+          heading: '실행 시퀀스',
+          blocks: [
+            {
+              type: 'diagram',
+              label: 'ui를 포함한 Full 프레임',
+              text: `서버가 프레임 yield:
+  { type: 'state', states: { 'slot': data }, ui: { 'slot': patch } }
+    │
+    ├─ 1. activeStates['slot'] = data        (상태 업데이트)
+    ├─ 2. 새 데이터로 템플릿 재렌더링          (VDOM diff)
+    └─ 3. <h-state> 엘리먼트에 patch 적용     (직접 DOM 조작)
+         ├─ classAdd → element.classList.add(...)
+         ├─ classRemove → element.classList.remove(...)
+         └─ cssVars → element.style.setProperty(...)`,
+            },
+            {
+              type: 'diagram',
+              label: '스타일 전용 partial (템플릿 재렌더 없음)',
+              text: `서버가 프레임 yield:
+  { type: 'state', full: false, states: {}, uiChanged: ['slot'],
+    ui: { 'slot': { cssVars: { '--accent': 'red' } } } }
+    │
+    ├─ 1. 상태 변경 없음 → 템플릿 재렌더 없음
+    └─ 2. <h-state> 엘리먼트에 patch 적용
+         └─ cssVars → element.style.setProperty('--accent', 'red')`,
+            },
+          ],
+        },
+        {
+          id: 'ssr',
+          heading: 'SSR 동작',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'UI Patch는 SSR에서도 적용됩니다. 서버가 <h-state> HTML 태그에 class와 style 속성을 직접 주입하고, 활성 UI 상태를 <script id="__UI__"> 태그에 직렬화합니다. 하이드레이션 시 클라이언트가 이 데이터를 읽어 스타일 깜빡임 없이 activeUi를 동기화합니다.',
+            },
+            {
+              type: 'code',
+              lang: 'html',
+              label: 'UI Patch가 적용된 SSR 출력',
+              text: `<!-- 서버 렌더링 결과: -->
+<h-state name="app:panel"
+  class="dark-theme"
+  style="--card-bg:#1e293b; --card-text:#f8fafc">
+  <!-- 템플릿 콘텐츠 -->
+</h-state>
+<script id="__UI__" type="application/json">
+  {"app:panel":{"classAdd":["dark-theme"],"cssVars":{"--card-bg":"#1e293b","--card-text":"#f8fafc"}}}
+</script>`,
+            },
+            {
+              type: 'callout',
+              kind: 'note',
+              text: '__UI__ 스크립트 태그는 상태 데이터를 위한 __STATE__ 스크립트 태그와 유사합니다. 둘 다 하이드레이션 시 한 번 읽히고 DOM에서 제거됩니다.',
+            },
+          ],
+        },
+        {
+          id: 'mistakes',
+          heading: '흔한 실수',
+          blocks: [
+            {
+              type: 'warning',
+              text: 'UI Patch는 accumulate 프레임(accumulate: true)에서 사용할 수 없습니다. 프로토콜이 두 가지를 결합한 프레임을 거부합니다. accumulate 시퀀스 중 외형을 변경해야 하면 uiChanged가 포함된 별도의 partial 프레임을 yield하세요.',
+            },
+            {
+              type: 'checklist',
+              items: [
+                'ui가 포함된 partial 프레임은 반드시 uiChanged 배열에 영향받는 슬롯 이름을 포함해야 합니다.',
+                'classAdd와 classRemove에 같은 클래스명이 들어가면 안 됩니다 — classRemove가 먼저 적용된 후 classAdd가 적용됩니다.',
+                'cssVars 키는 --로 시작해야 합니다 (CSS 커스텀 속성 규칙).',
+                '모든 오버라이드를 초기화하려면 ui: { "slot": null }을 사용하세요 — 빈 패치 {}를 보내지 마세요.',
+                'accumulate 프레임에 ui 필드를 포함하면 안 됩니다 — 별도의 partial 프레임을 사용하세요.',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'debug',
+          heading: '트러블슈팅',
+          blocks: [
+            {
+              type: 'debug',
+              items: [
+                {
+                  symptom: 'UI Patch 클래스가 <h-state> 엘리먼트에 나타나지 않는다.',
+                  cause: 'partial 프레임에 ui 필드는 포함했지만 uiChanged가 누락됨.',
+                  fix: 'Partial 프레임(full: false)에서는 반드시 ui 필드와 함께 uiChanged: ["slotName"]을 포함하세요. Full 프레임에서는 uiChanged가 필요 없습니다.',
+                },
+                {
+                  symptom: 'SSR에서 테마 클래스 없이 렌더링된 후 하이드레이션 시 깜빡이며 적용된다.',
+                  cause: 'initial 함수가 ui 데이터를 포함하지 않아 SSR에 적용할 패치가 없음.',
+                  fix: 'initial() 함수 또는 boot transition의 첫 full 프레임에서 ui 패치를 반환하세요. SSR 파이프라인은 initial state에서 ui를 읽습니다.',
+                },
+                {
+                  symptom: "검증 에러: 'ui not allowed on accumulate frame'.",
+                  cause: '하나의 프레임에 accumulate: true와 ui 필드가 동시에 있음.',
+                  fix: 'accumulate 프레임에서 ui 필드를 제거하세요. accumulate 시퀀스 중 외형 업데이트가 필요하면 별도의 partial 프레임(full: false)을 uiChanged와 함께 yield하세요.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'next',
+          heading: '다음: 직접 실습',
+          blocks: [
+            {
+              type: 'paragraph',
+              text: 'UI Patch 데모를 열어 테마 전환과 스타일 전용 partial을 직접 확인하세요 — 프리뷰 패널의 외형이 템플릿 재렌더 없이 변경됩니다.',
+            },
+            {
+              type: 'bullets',
+              items: [
+                'Transition 가이드 — full, partial, accumulate 프레임이 어떻게 함께 동작하는지.',
+                'Accumulate 가이드 — 점진적 스트리밍 패턴 (그리고 왜 ui가 거기서 금지되는지).',
+              ],
+            },
+          ],
+        },
+      ],
+    },
     quickstart: {
       title: '10분 퀵스타트',
       demoHref: '/examples/streaming',
@@ -3385,7 +3887,7 @@ export function guideContent(slug: string, lang: Lang) {
 
 export function guideLoadingState(slug: string, lang: Lang) {
   const guide = guideContent(slug, lang);
-  const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'];
+  const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'];
   const sections = guide?.sections.map(s => ({ id: s.id, heading: s.heading })) ?? [];
   return {
     'page:header': {
@@ -3885,7 +4387,7 @@ export function pageContent(
     case 'guide': {
       const slug = (params?.slug as string) ?? 'quickstart';
       const guide = guideContent(slug, lang);
-      const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate'];
+      const items = ['quickstart', 'surface', 'template', 'transition', 'action', 'accumulate', 'ui-patch'];
       return {
         'page:header': {
           title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
