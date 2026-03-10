@@ -107,11 +107,19 @@ fs.rmSync(packageTemplatePath);
 for (const [from, to] of [
   ['gitignore', '.gitignore'],
   ['npmrc', '.npmrc'],
+  ['env.example', '.env.example'],
 ]) {
   const fromPath = path.join(targetDir, from);
   if (fs.existsSync(fromPath)) {
     fs.renameSync(fromPath, path.join(targetDir, to));
   }
+}
+
+// Copy .env.example to .env so the app runs out of the box
+const envExample = path.join(targetDir, '.env.example');
+const envFile = path.join(targetDir, '.env');
+if (fs.existsSync(envExample) && !fs.existsSync(envFile)) {
+  fs.copyFileSync(envExample, envFile);
 }
 
 const gitResult = spawnSync('git', ['init'], {

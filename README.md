@@ -1,21 +1,34 @@
-# StateSurface
+<p align="center">
+  <h1 align="center">StateSurface</h1>
+  <p align="center">
+    <strong>Server owns state. Client owns DOM. Pages stream.</strong>
+  </p>
+</p>
 
-[![CI](https://github.com/superlucky84/state-surface/actions/workflows/ci.yml/badge.svg)](https://github.com/superlucky84/state-surface/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/superlucky84/state-surface/actions/workflows/ci.yml"><img src="https://github.com/superlucky84/state-surface/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/state-surface"><img src="https://img.shields.io/npm/v/state-surface.svg" alt="npm"></a>
+  <a href="https://github.com/superlucky84/state-surface/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/state-surface.svg" alt="license"></a>
+</p>
 
-A **state-layout mapping runtime** for MPA pages with NDJSON streaming updates.
+---
 
-The server owns state. The client owns DOM projection. Pages load as real HTML; in-page updates stream through `<h-state>` anchors — no SPA router, no client-side state management.
-
-## Frame Flow
+StateSurface is a **state-layout mapping runtime** for the web. Pages load as real MPA HTML. In-page updates stream through `<h-state>` anchors via NDJSON — no SPA router, no client-side state management, no virtual DOM diffing on your side.
 
 ```
-User action
-  → POST /transition/:name          (declarative data-action trigger)
-  → Server async generator yields    (StateFrame objects)
-  → NDJSON stream over HTTP          (one JSON line per frame)
-  → Client frame queue               (FIFO, 33ms budget per flush)
-  → DOM update per <h-state>         (Lithent VDOM diff/patch)
+User action → POST /transition/:name → Server yields state frames
+            → NDJSON stream → Client frame queue → DOM projection
 ```
+
+## Why StateSurface?
+
+| Traditional SPA | StateSurface |
+|---|---|
+| Client fetches data, manages state, renders UI | Server streams state, client projects DOM |
+| Full-page JS bundle, hydration cost | Per-anchor hydration, minimal client JS |
+| Complex state sync (Redux, Zustand, ...) | No client state — server is the source of truth |
+| Router + layout + data loading | File-based routes, declarative layout slots |
+| Loading spinners everywhere | Progressive streaming with partial/accumulate frames |
 
 ## Quick Start
 
@@ -26,42 +39,15 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000` — the app runs with SSR, streaming transitions, and live action binding out of the box.
+Open `http://localhost:3000` — full SSR, streaming transitions, and live action binding out of the box.
 
-## Install and Update Model
+## The Four Concepts
 
-Use **CLI scaffolding for new projects**, and **package upgrade for existing projects**.
+StateSurface has exactly four concepts. That's the whole model.
 
-- `create-state-surface`: project bootstrap only
-- `state-surface`: runtime dependency to upgrade over time
+### 1. Surface — The page shell
 
-Do not re-run `npx create-state-surface` to update an existing app.
-
-### Update Existing Project
-
-Run this inside your generated app directory:
-
-```bash
-pnpm up state-surface
-pnpm test
-pnpm build
-```
-
-For breaking releases, follow release notes and migration guidance.
-See [`MIGRATION.md`](./MIGRATION.md) for structured migration steps.
-
-## Core Concepts
-
-| Concept        | What                                              | File location                |
-| -------------- | ------------------------------------------------- | ---------------------------- |
-| **Surface**    | Page shell with `<h-state>` anchors (HTML string) | `routes/*.ts` layout         |
-| **Template**   | Projection component inside each anchor (TSX)     | `routes/**/templates/*.tsx`  |
-| **Transition** | Server-side async generator yielding state frames | `routes/**/transitions/*.ts` |
-| **Action**     | Declarative trigger binding via HTML attributes   | `data-action` in templates   |
-
-### Surface
-
-Define a page layout mixing static HTML with dynamic slots. The surface never changes during a page visit — only the content inside each `<h-state>` updates.
+A surface is static HTML with `<h-state>` anchor slots. It never changes during a page visit — only the content inside each slot updates.
 
 ```typescript
 // routes/dashboard.ts
@@ -74,10 +60,9 @@ export default {
       joinSurface(
         '<main class="max-w-6xl mx-auto p-6">',
         '  <h1 class="text-2xl font-bold mb-6">Stock Dashboard</h1>',
-        '  <div class="grid grid-cols-3 gap-4 mb-8">',
+        '  <div class="grid grid-cols-3 gap-4">',
         stateSlots('stock:price', 'stock:news', 'stock:chart'),
         '  </div>',
-        '  <h2 class="text-lg font-semibold mb-3">Market Analysis</h2>',
         stateSlots('stock:analysis'),
         '</main>'
       ),
@@ -86,9 +71,9 @@ export default {
 } satisfies RouteModule;
 ```
 
-### Template
+### 2. Template — Pure projection
 
-A pure function that receives server data and returns JSX. No `useState`, no `useEffect`, no fetch.
+A template receives server data and returns JSX. No `useState`, no `useEffect`, no fetch calls.
 
 ```tsx
 // routes/dashboard/templates/stockPrice.tsx
@@ -99,8 +84,7 @@ const StockPrice = ({ symbol, price, change }: Props) => (
     <h3 class="font-bold">{symbol}</h3>
     <p class="text-2xl">${price}</p>
     <span class={change >= 0 ? 'text-green-600' : 'text-red-600'}>
-      {change >= 0 ? '+' : ''}
-      {change}%
+      {change >= 0 ? '+' : ''}{change}%
     </span>
   </div>
 );
@@ -108,15 +92,16 @@ const StockPrice = ({ symbol, price, change }: Props) => (
 export default defineTemplate('stock:price', StockPrice);
 ```
 
-### Transition
+### 3. Transition — Server-side state generator
 
-An async generator that yields state frames. Each `yield` = one NDJSON line = one UI update.
+An async generator that yields state frames. Each `yield` sends one NDJSON line to the client, updating the UI progressively.
 
 ```typescript
 // routes/dashboard/transitions/loadDashboard.ts
 import { defineTransition } from 'state-surface/server';
 
 export default defineTransition('dashboard-load', async function* (_params, _req) {
+  // First frame: full state — renders loading skeleton
   yield {
     type: 'state',
     states: {
@@ -126,6 +111,7 @@ export default defineTransition('dashboard-load', async function* (_params, _req
     },
   };
 
+  // Partial frame: update only price slot
   const price = await fetchPrice('AAPL');
   yield {
     type: 'state',
@@ -133,12 +119,14 @@ export default defineTransition('dashboard-load', async function* (_params, _req
     changed: ['stock:price'],
     states: { 'stock:price': price },
   };
+
+  // More partial frames as data arrives...
 });
 ```
 
-### Action
+### 4. Action — Declarative trigger
 
-Trigger transitions from HTML attributes — no JS event handlers needed.
+Trigger transitions from HTML attributes — zero JS event handlers.
 
 ```html
 <button data-action="search" data-params='{"query":"test"}'>Search</button>
@@ -151,110 +139,132 @@ Trigger transitions from HTML attributes — no JS event handlers needed.
 </form>
 ```
 
-- `data-action` — transition name to invoke
-- `data-params` — JSON params (optional)
-- `data-pending-targets` — comma-separated anchor names to mark pending (optional)
+| Attribute | Purpose |
+|---|---|
+| `data-action` | Transition name to invoke |
+| `data-params` | JSON params (optional) |
+| `data-pending-targets` | Anchor names to mark pending during transition (optional) |
+
+## Frame Types
+
+StateSurface streams three types of state frames:
+
+**Full frame** — Replaces all active state. First frame in every stream must be full.
+
+```json
+{"type":"state","states":{"slot:a":{"title":"Hello"},"slot:b":{"items":[1,2,3]}}}
+```
+
+**Partial frame** — Updates or removes specific slots without touching others.
+
+```json
+{"type":"state","full":false,"changed":["slot:a"],"states":{"slot:a":{"title":"Updated"}}}
+```
+
+**Accumulate frame** — Appends data into existing slots (arrays concat, strings concat, objects merge). Perfect for streaming chat, logs, or progressive content.
+
+```json
+{"type":"state","accumulate":true,"states":{"chat:current":{"text":" world"}}}
+```
 
 ## Features
 
-- **Full SSR** — every page renders complete HTML on the server
-- **NDJSON streaming** — progressive UI updates via state frames (full, partial, accumulate)
-- **Abort previous** — concurrent transitions auto-cancel earlier ones
-- **Accumulate frames** — append/concat data into existing slots (arrays, strings, objects)
-- **Per-anchor hydration** — SHA256 hash mismatch triggers client-side fallback, not full-page rehydration
-- **i18n** — bilingual (ko/en) content driven by `lang` cookie + transition hook
-- **View Transition API** — MPA cross-fade + in-page element morphing via `view-transition-name`
-- **Animation presets** — 8 opt-in CSS animations via `data-animate` attribute (`fade`, `slide-up`, `scale`, `blur`, etc.)
-- **Sub-path mounting** — `BASE_PATH=/demo pnpm dev` serves under any prefix
-- **File-based routing** — routes, templates, and transitions auto-discovered from `routes/` directory
+- **Full SSR** — Every page renders complete HTML on the server
+- **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames
+- **Abort previous** — Concurrent transitions auto-cancel earlier ones
+- **Per-anchor hydration** — SHA256 hash check, no full-page rehydration
+- **File-based routing** — Routes, templates, and transitions auto-discovered from `routes/`
+- **View Transition API** — MPA cross-fade + in-page element morphing
+- **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
+- **i18n ready** — Bilingual content driven by cookie + transition
+- **Sub-path mounting** — `BASE_PATH=/demo pnpm dev`
 
 ## Project Structure
 
 ```
+routes/                  # Your route modules (auto-loaded)
+  index.ts               #   GET / — page layout + config
+  guide/[slug].ts        #   Dynamic params: GET /guide/:slug
+  <route>/templates/     #   TSX projection components
+  <route>/transitions/   #   Server-side state generators
+  _shared/               #   Cross-route templates & transitions
+
+layouts/                 # Page composition helpers
+shared/                  # Data helpers, i18n utilities
+client/                  # Assets (styles.css, plugins/)
+
 engine/                  # Framework core (do not edit)
   server/                #   Express routes, SSR, transition handler
   client/                #   Browser bootstrap, hydration, frame queue
-  shared/                #   Protocol types, template registry, basePath
-
-routes/                  # Your route modules + templates + transitions
-  index.ts               #   GET / — home page
-  guide/[slug].ts        #   GET /guide/:slug (dynamic param)
-  examples/              #   Example/demo pages (streaming, actions, chat, etc.)
-  _shared/               #   Cross-route templates, transitions, hooks
-  <route>/templates/     #   Per-route TSX projection components
-  <route>/transitions/   #   Per-route server-side state generators
-
-layouts/                 # Page composition helpers (HTML string builders)
-shared/                  # Data helpers, i18n utilities
-client/                  # User entry/plugins/assets (main.ts, plugins/, styles.css)
+  shared/                #   Protocol types, template registry
 ```
+
+## Install & Update
+
+**New project** — use the CLI scaffolding:
+
+```bash
+npx create-state-surface my-app
+```
+
+**Update existing project** — upgrade the runtime package:
+
+```bash
+pnpm up state-surface
+pnpm test && pnpm build
+```
+
+> Do not re-run `create-state-surface` to update an existing app.
+> For breaking releases, see [`MIGRATION.md`](./MIGRATION.md).
 
 ## Commands
 
 ```bash
-pnpm dev                          # Start dev server (tsx watch + Vite middleware)
-pnpm build                        # Production build (Vite)
+pnpm dev                          # Dev server (tsx watch + Vite HMR)
+pnpm build                        # Production build
+pnpm start                        # Run production server
 pnpm test                         # Run all tests (Vitest)
 pnpm test path/to/file.test.ts    # Run a single test file
 pnpm format                       # Format with Prettier
-pnpm format:check                 # Check formatting
-pnpm up state-surface             # Upgrade framework runtime (in generated app)
 
 BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ```
 
 ## Environment Variables
 
-- `PORT` (default: `3000`): server listen port for both `pnpm dev` and `pnpm start`.
-- `BASE_PATH` (default: empty): mount app under a sub-path (example: `/demo`).
-- `NODE_ENV`:
-  - `development`: Vite middleware mode for local development.
-  - `test`: app instance for test harnesses (no dev middleware startup).
-  - `production`: static assets from `dist/client` + production route handling.
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | Server listen port |
+| `BASE_PATH` | _(empty)_ | Mount app under a sub-path (e.g. `/demo`) |
+| `NODE_ENV` | `development` | `development` / `test` / `production` |
 
 ## API Reference
 
-Public APIs are split into three entry points:
+```typescript
+// Client + shared
+import { defineTemplate, prefixPath, getBasePath } from 'state-surface';
+
+// Server
+import { createApp, defineTransition } from 'state-surface/server';
+
+// Client runtime
+import { createStateSurface } from 'state-surface/client';
+```
 
 ```typescript
-import {
-  defineTemplate, // Register a template component for an anchor name
-  prefixPath, // Prepend BASE_PATH to a URL
-  getBasePath, // Get the current BASE_PATH value
-} from 'state-surface';
-
-import {
-  createApp, // Create server app instance
-  defineTransition, // Register a transition handler
-} from 'state-surface/server';
-
-import {
-  createStateSurface, // Bootstrap client runtime
-} from 'state-surface/client';
-
-import type {
-  RouteModule, // Route module contract (layout, transition, initial, boot)
-  BootConfig, // Boot transition config
-  StateFrame, // NDJSON state frame type
-  TemplateModule, // Template module shape
-} from 'state-surface';
-
-import type {
-  TransitionHandler, // Transition async generator type
-  StateSurfaceServerOptions,
-  TransitionHooks,
-} from 'state-surface/server';
-
+// Types
+import type { RouteModule, StateFrame, BootConfig, TemplateModule } from 'state-surface';
+import type { TransitionHandler, TransitionHooks } from 'state-surface/server';
 import type { StateSurfacePlugin } from 'state-surface/client';
 ```
 
 ## Tech Stack
 
-- **Server**: Express 5 + Vite middleware (dev)
-- **Rendering**: [Lithent](https://github.com/user/lithent) (~4KB VDOM diffing engine)
-- **Styling**: Tailwind CSS via `@tailwindcss/vite`
+- **Server**: [Express 5](https://expressjs.com/) + [Vite](https://vite.dev/) middleware
+- **Rendering**: [Lithent](https://github.com/superlucky84/lithent) (~4 KB VDOM diff engine)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) via `@tailwindcss/vite`
 - **Transport**: NDJSON over HTTP POST
-- **Testing**: Vitest + Supertest + happy-dom
+- **Testing**: [Vitest](https://vitest.dev/) + [Supertest](https://github.com/ladjs/supertest) + [happy-dom](https://github.com/nicedaycode/happy-dom)
 
 ## License
 
