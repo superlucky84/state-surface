@@ -63,6 +63,7 @@ console.log('Downloading template from GitHub...');
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'create-state-surface-'));
 const tarball = path.join(tmpDir, 'repo.tar.gz');
+const extractDir = path.join(tmpDir, 'extracted');
 
 try {
   // Download tarball
@@ -73,11 +74,22 @@ try {
   const buffer = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(tarball, buffer);
 
-  // Extract scaffold/ directory only, stripping the repo prefix + "scaffold/"
+  // Extract entire tarball to temp, then copy scaffold/ to target
+  fs.mkdirSync(extractDir, { recursive: true });
+  execSync(`tar xzf "${tarball}" -C "${extractDir}"`, { stdio: 'pipe' });
+
+  // GitHub tarball has a single root dir (e.g. "superlucky84-state-surface-abc1234")
+  const entries = fs.readdirSync(extractDir);
+  if (entries.length !== 1) {
+    fail('Unexpected tarball structure: expected a single root directory.');
+  }
+  const scaffoldSrc = path.join(extractDir, entries[0], 'scaffold');
+  if (!fs.existsSync(scaffoldSrc)) {
+    fail('scaffold/ directory not found in the downloaded template.');
+  }
+
   fs.mkdirSync(targetDir, { recursive: true });
-  execSync(`tar xzf "${tarball}" -C "${targetDir}" --strip-components=2 '*/scaffold/'`, {
-    stdio: 'pipe',
-  });
+  fs.cpSync(scaffoldSrc, targetDir, { recursive: true });
 } catch (err) {
   // Clean up on failure
   fs.rmSync(targetDir, { recursive: true, force: true });
