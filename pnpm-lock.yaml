@@ -34,8 +34,8 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       ctxbin:
-        specifier: ^1.3.0
-        version: 1.3.0
+        specifier: ^1.3.1
+        version: 1.3.1
       happy-dom:
         specifier: ^20.5.0
         version: 20.5.0
@@ -613,8 +613,8 @@ packages:
   cookiejar@2.1.4:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
 
-  ctxbin@1.3.0:
-    resolution: {integrity: sha512-t3/qCr4vRiy6zeDkpV9om+hIYFftKpXpNJvmsqQ0YpDdcjccTO8ze0EKJdaQCjZyPsp4gGabt2CtI7oelrtsZg==}
+  ctxbin@1.3.1:
+    resolution: {integrity: sha512-R2IEyN0YKrkFOoBUgCN2obYSe8fhkB9hyowrPr5fjC/JY3obhZcBWV7AIRtQ9xBRQfZ9eR65JcFH6cg0RIYLzA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -1649,7 +1649,7 @@ snapshots:
 
   cookiejar@2.1.4: {}
 
-  ctxbin@1.3.0:
+  ctxbin@1.3.1:
     dependencies:
       tar: 6.2.1
 
