@@ -3908,7 +3908,7 @@ export function guideLoadingState(slug: string, lang: Lang) {
       switchParams: { slug },
     },
     'guide:toc': { slug, items, sections },
-    'guide:content': { slug, loading: true, title: guide?.title ?? slug },
+    'guide:content': { slug, lang, loading: true, title: guide?.title ?? slug },
   };
 }
 
@@ -4432,13 +4432,14 @@ export function pageContent(
         'guide:content': guide
           ? {
               slug,
+              lang,
               loading: false,
               title: guide.title,
               sections: guide.sections,
               demoHref: prefixPath(guide.demoHref),
               demoLabel: guide.demoLabel,
             }
-          : { slug, loading: false, title: slug },
+          : { slug, lang, loading: false, title: slug },
       };
     }
     case 'examples':

@@ -228,25 +228,25 @@ const AnalogyBlock = ({ text }: { text: string }) => (
   </div>
 );
 
-const DebugBlock = ({ items }: { items: DebugItem[] }) => (
+const DebugBlock = ({ items, ko }: { items: DebugItem[]; ko: boolean }) => (
   <div class="space-y-3">
     {items.map((item, i) => (
       <div key={i} class="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div class="flex items-start gap-3 border-b border-slate-100 bg-red-50 px-4 py-2.5">
           <span class="mt-0.5 shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-600">
-            증상
+            {ko ? '증상' : 'Symptom'}
           </span>
           <p class="text-sm leading-6 text-red-800">{item.symptom}</p>
         </div>
         <div class="flex items-start gap-3 border-b border-slate-100 px-4 py-2.5">
           <span class="mt-0.5 shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
-            원인
+            {ko ? '원인' : 'Cause'}
           </span>
           <p class="text-sm leading-6 text-slate-600">{item.cause}</p>
         </div>
         <div class="flex items-start gap-3 px-4 py-2.5">
           <span class="mt-0.5 shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">
-            해결
+            {ko ? '해결' : 'Fix'}
           </span>
           <p class="text-sm leading-6 text-slate-600">{item.fix}</p>
         </div>
@@ -255,7 +255,7 @@ const DebugBlock = ({ items }: { items: DebugItem[] }) => (
   </div>
 );
 
-function renderBlock(block: Block, idx: number) {
+function renderBlock(block: Block, idx: number, ko = false) {
   switch (block.type) {
     case 'paragraph':
       return <ParagraphBlock key={idx} text={block.text} />;
@@ -284,7 +284,7 @@ function renderBlock(block: Block, idx: number) {
     case 'analogy':
       return <AnalogyBlock key={idx} text={block.text} />;
     case 'debug':
-      return <DebugBlock key={idx} items={block.items} />;
+      return <DebugBlock key={idx} items={block.items} ko={ko} />;
   }
 }
 
@@ -298,6 +298,7 @@ type Section = {
 
 type GuideContentProps = {
   slug: string;
+  lang?: string;
   loading?: boolean;
   title?: string;
   sections?: Section[];
@@ -309,12 +310,14 @@ const CONCEPT_SLUGS = ['surface', 'template', 'transition', 'action'];
 
 const GuideContent = ({
   slug,
+  lang,
   loading,
   title,
   sections,
   demoHref,
   demoLabel,
 }: GuideContentProps) => {
+  const ko = lang === 'ko';
   if (loading) {
     return (
       <div class="space-y-6">
@@ -364,7 +367,9 @@ const GuideContent = ({
           class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
         >
           <h3 class="mb-3 text-base font-semibold text-slate-900">{s.heading}</h3>
-          <div class="space-y-3">{(s.blocks ?? []).map((block, i) => renderBlock(block, i))}</div>
+          <div class="space-y-3">
+            {(s.blocks ?? []).map((block, i) => renderBlock(block, i, ko))}
+          </div>
         </section>
       ))}
 
