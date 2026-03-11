@@ -3,9 +3,11 @@ import { defineTemplate, prefixPath } from 'state-surface';
 type HeaderProps = {
   title: string;
   nav: string;
+  page?: string;
   lang?: string;
   backHref?: string;
   backLabel?: string;
+  switchParams?: Record<string, unknown>;
 };
 
 const NAV_PAGES: Record<string, string> = {
@@ -28,9 +30,10 @@ function langBtnClass(active: boolean): string {
   return 'rounded px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900';
 }
 
-const Header = ({ title, nav, lang, backHref, backLabel }: HeaderProps) => {
+const Header = ({ title, nav, page: pageProp, lang, backHref, backLabel, switchParams }: HeaderProps) => {
   const currentLang = lang ?? 'en';
-  const page = NAV_PAGES[nav] ?? 'home';
+  const page = pageProp ?? NAV_PAGES[nav] ?? 'home';
+  const extra = switchParams ?? {};
   const targetLang = currentLang === 'ko' ? 'en' : 'ko';
 
   return (
@@ -51,7 +54,7 @@ const Header = ({ title, nav, lang, backHref, backLabel }: HeaderProps) => {
             <button
               type="button"
               data-action="switch-lang"
-              data-params={JSON.stringify({ lang: 'en', page })}
+              data-params={JSON.stringify({ ...extra, lang: 'en', page })}
               class={langBtnClass(currentLang === 'en')}
             >
               EN
@@ -59,7 +62,7 @@ const Header = ({ title, nav, lang, backHref, backLabel }: HeaderProps) => {
             <button
               type="button"
               data-action="switch-lang"
-              data-params={JSON.stringify({ lang: 'ko', page })}
+              data-params={JSON.stringify({ ...extra, lang: 'ko', page })}
               class={langBtnClass(currentLang === 'ko')}
             >
               KO

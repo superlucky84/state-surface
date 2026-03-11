@@ -47,7 +47,7 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'ui-patch', lang },
+        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: theme, lang },
         'uipatch:preview': { theme, lang, updating: true },
       },
@@ -76,7 +76,7 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'ui-patch', lang },
+        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: theme, lang },
         'uipatch:preview': { theme, lang, updating: false },
       },
@@ -99,7 +99,7 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'ui-patch', lang },
+        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: 'reset', lang },
         'uipatch:preview': { theme: 'reset', lang, updating: false },
       },

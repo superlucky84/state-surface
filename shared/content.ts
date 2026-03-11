@@ -3905,6 +3905,7 @@ export function guideLoadingState(slug: string, lang: Lang) {
       title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
       nav: 'guide',
       lang,
+      switchParams: { slug },
     },
     'guide:toc': { slug, items, sections },
     'guide:content': { slug, loading: true, title: guide?.title ?? slug },
@@ -3931,6 +3932,7 @@ export function streamingContent(lang: Lang) {
     'page:header': {
       title: lang === 'ko' ? '스트리밍 데모' : 'Streaming Demo',
       nav: 'examples',
+      page: 'streaming',
       lang,
       backHref: prefixPath('/examples'),
       backLabel: lang === 'ko' ? 'Examples' : 'Examples',
@@ -3955,6 +3957,7 @@ export function actionsContent(lang: Lang) {
     'page:header': {
       title: lang === 'ko' ? '액션 플레이그라운드' : 'Actions Playground',
       nav: 'examples',
+      page: 'actions',
       lang,
       backHref: prefixPath('/examples'),
       backLabel: 'Examples',
@@ -4015,6 +4018,7 @@ export function viewTransitionContent(lang: Lang) {
     'page:header': {
       title: ko ? 'View Transition 데모' : 'View Transition Demo',
       nav: 'examples',
+      page: 'view-transition',
       lang,
       backHref: prefixPath('/examples'),
       backLabel: 'Examples',
@@ -4213,6 +4217,7 @@ export function searchContent(lang: Lang, query?: string) {
     'page:header': {
       title: lang === 'ko' ? '검색' : 'Search',
       nav: 'examples',
+      page: 'search',
       lang,
       backHref: prefixPath('/examples'),
       backLabel: 'Examples',
@@ -4263,6 +4268,7 @@ export function chatContent(lang: Lang) {
     'page:header': {
       title: lang === 'ko' ? '챗봇 데모' : 'Chatbot Demo',
       nav: 'examples',
+      page: 'chat',
       lang,
       backHref: prefixPath('/examples'),
       backLabel: 'Examples',
@@ -4299,8 +4305,11 @@ export function uiPatchContent(lang: Lang) {
   return {
     'page:header': {
       title: ko ? 'UI Patch 데모' : 'UI Patch Demo',
-      nav: 'ui-patch',
+      nav: 'examples',
+      page: 'ui-patch',
       lang,
+      backHref: prefixPath('/examples'),
+      backLabel: 'Examples',
     },
     'uipatch:controls': { currentTheme: 'reset', lang },
     'uipatch:preview': { theme: 'reset', lang, updating: false },
@@ -4385,7 +4394,8 @@ export type PageKey =
   | 'actions'
   | 'search'
   | 'chat'
-  | 'ui-patch';
+  | 'ui-patch'
+  | 'view-transition';
 
 export function pageContent(
   page: PageKey,
@@ -4412,8 +4422,13 @@ export function pageContent(
           title: guide ? `${lang === 'ko' ? '가이드' : 'Guide'}: ${guide.title}` : 'Guide',
           nav: 'guide',
           lang,
+          switchParams: { slug },
         },
-        'guide:toc': { slug, items },
+        'guide:toc': {
+          slug,
+          items,
+          sections: guide?.sections.map(s => ({ id: s.id, heading: s.heading })) ?? [],
+        },
         'guide:content': guide
           ? {
               slug,
@@ -4438,6 +4453,8 @@ export function pageContent(
       return chatContent(lang);
     case 'ui-patch':
       return uiPatchContent(lang);
+    case 'view-transition':
+      return viewTransitionContent(lang);
     default:
       return homeContent(lang);
   }

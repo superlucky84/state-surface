@@ -359,7 +359,7 @@ const GuideContent = ({
 
       {(sections ?? []).map(s => (
         <section
-          key={s.id}
+          key={`${s.id}-${s.heading}`}
           id={s.id}
           class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
         >

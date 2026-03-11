@@ -18,7 +18,7 @@ async function* actionDemo(
   yield {
     type: 'state',
     states: {
-      'page:header': { title: headerTitle, nav: 'actions', lang },
+      'page:header': { title: headerTitle, nav: 'examples', page: 'actions', lang },
       'actions:playground': {
         lastAction: actionType,
         lastParams: params,

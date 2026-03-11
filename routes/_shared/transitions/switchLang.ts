@@ -13,6 +13,8 @@ const VALID_PAGES: PageKey[] = [
   'actions',
   'search',
   'chat',
+  'ui-patch',
+  'view-transition',
 ];
 
 async function* switchLang(
