@@ -30,7 +30,15 @@ function langBtnClass(active: boolean): string {
   return 'rounded px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900';
 }
 
-const Header = ({ title, nav, page: pageProp, lang, backHref, backLabel, switchParams }: HeaderProps) => {
+const Header = ({
+  title,
+  nav,
+  page: pageProp,
+  lang,
+  backHref,
+  backLabel,
+  switchParams,
+}: HeaderProps) => {
   const currentLang = lang ?? 'en';
   const page = pageProp ?? NAV_PAGES[nav] ?? 'home';
   const extra = switchParams ?? {};
