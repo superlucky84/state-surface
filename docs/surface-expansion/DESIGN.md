@@ -723,10 +723,27 @@ const response: Response = await handler.fetch(request, platform);
 | Deno               | `Deno.serve(handler)`                         | `serveDir` 또는 내장            | 권한 플래그(net·read·env) 문서화              |
 | Cloudflare Workers | `export default { fetch }`                    | Workers Static Assets           | 파일시스템 없음·CPU 한도. `platform.env` 사용 |
 
-- 패키지 배치(코어 패키지와 어댑터 subpath export vs 별도 패키지), Node 어댑터의 기본 여부와 Express를
-  선택 의존성으로 옮길지는 DC-28에서 정한다. scaffold(`create-state-surface`)는 어댑터 선택지를 제공한다.
-- dev는 Node + Vite middleware를 유지한다. 코어 핸들러를 Vite dev 서버에 연결해 dev와 production이 같은
-  코어를 사용하게 한다. Workers 동등성 검증은 Vite Environment API·workerd 실행을 후속 선택지로 둔다.
+- **패키지 구조**(DC-28 결정): 단일 `state-surface` 패키지에 subpath export로 둔다. 어댑터별 외부 의존성은
+  optional peerDependency로 선언하고 해당 어댑터 subpath에서만 import한다. 외부 기여 어댑터가 생기거나
+  어댑터의 의존성·릴리스 주기가 코어와 갈라지면 `@state-surface/<adapter>` 별도 패키지로 분리한다.
+
+  ```ts
+  // vite.config.ts (가칭)
+  import { surface } from 'state-surface/vite';
+  import { node } from 'state-surface/adapters/node';
+  export default defineConfig({ plugins: [surface({ adapter: node() })] });
+  ```
+
+- **기본값**(DC-28 결정): 어댑터를 지정하지 않으면 Node 자체 서버를 사용하고 scaffold 기본값도 같다.
+  `express`는 `dependencies`에서 빼고 optional peer로 옮긴다. scaffold는 어댑터 선택지를 제공한다.
+- **배포 형식**(DC-28 결정): 원본 `engine/**/*.ts` 배포를 중단하고 컴파일된 ESM JS + `.d.ts` + source map을
+  `exports`로 배포한다. 저장소 내부 개발은 기존 tsconfig·Vite alias로 원본을 참조한다. 빌드 도구(tsc/tsup 등)
+  선택은 구현 단계에서 정한다.
+- **어댑터 계약**: 어댑터는 `{ name, serverEntry, supports: { fs, imageTransform, longStream, ... } }`를
+  선언한다. 빌드는 사용 기능과 `supports`를 대조해 미지원 기능을 원본 위치와 함께 빌드 오류로 보고한다.
+- **dev·검증**(DC-28 결정): dev는 Node + Vite middleware 단일 경로를 유지하고 코어 핸들러를 Vite dev 서버에
+  연결해 dev와 production이 같은 코어를 사용하게 한다. Workers는 production 빌드 산출물을 CI에서
+  wrangler dev(workerd)로 실행해 V-28 적합성 테스트를 통과시킨다. Bun·Deno도 각 런타임으로 같은 테스트를 실행한다.
 
 ### 11.4 빌드 산출물과 런타임 제약
 
@@ -828,8 +845,14 @@ const response: Response = await handler.fetch(request, platform);
       ③ 양파형 `onRequest(ctx, next)` 미들웨어, `TransitionHooks` 제거 ④ 사용자 없음 → Express `req` shim·
       legacy 어댑터 없이 일괄 전환 ⑤ `ctx.env` 어댑터 주입, `App.Locals` 타입 확장. 근거: 런타임 간 동일 동작과
       테스트 용이성, 스트림 헤더 확정 시점과 full baseline 규칙의 일치, 0.x 단계의 이행 비용 최소화. 11.2. V-28.
-- [ ] DC-28: 어댑터 패키징·기본값. 코어/어댑터 패키지 구성, 기본 어댑터(Node 자체 서버 권고), Express의
-      선택 의존성 전환 시점, Workers 제약 진단 방식, dev의 workerd 검증 여부를 정한다. V-29.
+- [x] DC-28 (2026-10-13 결정): 어댑터 패키징·기본값. ① 단일 `state-surface` 패키지의 subpath
+      (`state-surface/adapters/{node,express,bun,deno,cloudflare}`)로 시작하고, 외부 기여 어댑터가 생기거나
+      어댑터 의존성·릴리스 주기가 코어와 갈라질 때 별도 패키지로 분리한다 ② 기본 어댑터는 Node 자체 서버,
+      `express`는 optional peerDependency ③ 배포물은 컴파일된 ESM JS + `.d.ts`(원본 TS 배포 중단)
+      ④ Workers는 production 빌드 산출물을 CI에서 wrangler dev(workerd)로 적합성 검증, dev는 Node + Vite 단일
+      경로 ⑤ 어댑터는 Vite 플러그인 설정에서 선택하고, 지원하지 않는 기능 사용은 빌드 실패로 진단한다.
+      근거: 0.x에서 버전·배포 단위를 하나로 유지, 기본 설치 의존성 최소화, Vite 밖 런타임(Node·Deno·테스트
+      러너)에서의 실행 안정성, dev 서버 단순성. 11.3. V-29.
 
 기존 아이디어 문서의 미결정 항목도 이어받는다. 이전 DC-01은 DC-01/DC-15, DC-02는 DC-02/DC-08,
 DC-03은 DC-03/DC-08, DC-04는 DC-09, DC-05는 DC-10, DC-06/DC-07은 DC-04/DC-11,
@@ -906,7 +929,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-27을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
