@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "target": "claude",
+  "resource": "skill",
+  "items": {
+    "doc-driven-designer-v1": "5e3b9056860d76b2a5282c43b7b5507fa94e55e0fe0f97b1f8e7a5e15536ade8"
+  }
+}
