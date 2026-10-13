@@ -86,7 +86,7 @@ Slot 문법은 DC-01에서 결정했다. 확장자와 단일 파일 문법은 DC
   Astro처럼 컴포넌트 props로 데이터를 넘긴다는 점은 같고, 이름 붙은 갱신 경계를 둔다는 점이 다르다.
 - **ID**: `<Slot>`의 `name`은 필수이며 transition이 겨냥하는 안정 식별자다. 직접 지시자 아일랜드는
   컴파일러가 자동 ID를 부여하고 프레임 대상이 될 수 없다. 프레임이나 액션 `targets`가 자동 ID를 가리키면
-  진단한다. ID 형식·중복 규칙은 DC-08에서 정한다.
+  진단한다. ID 형식·중복·반복 규칙은 4.3(DC-08)을 따른다.
 - **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다. `<Slot>`과 직접
   지시자 모두 같은 prop을 지원한다(Astro의 `slot="fallback"` 자식 방식은 쓰지 않는다).
 - **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
@@ -229,10 +229,23 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
 
 - server replace는 내부 HTML과 관련 플러그인 cleanup을 대상으로 한다. 입력·선택·포커스
   보존이 필요한 복잡한 UI는 client로 작성하거나 명시적인 morph 계약을 추가한다(DC-03).
-- server 슬롯의 client 자식은 부모 교체 때 사라진다. 최초 범위에서는 이 조합을 진단하는 안이다.
-  지원하려면 stable ID, detach/reattach, cleanup과 props 전달 책임을 검증해야 한다.
-- client 내부는 일반 Lithent 자식 컴포넌트로 작성한다. 외부 runtime이 그 내부 DOM을
-  HTML로 교체하지 않는다. 서버에서 렌더한 static children 전달 범위는 DC-08에서 정한다.
+- **Slot-in-Slot 금지**(DC-08 결정): `<Slot>`의 자식 컴포넌트 트리 안에 다시 `<Slot>`을 두면 컴파일러가
+  진단한다. 정적 Layout·페이지 마크업 안에 여러 `<Slot>`을 나란히 두는 것은 허용한다.
+- **server 슬롯 안 아일랜드는 재생성**(DC-08 결정): server 슬롯 컴포넌트 안의 직접 지시자 아일랜드는
+  허용한다. 부모 슬롯이 교체되면 기존 아일랜드를 dispose하고 새 HTML의 아일랜드를 다시 활성화한다.
+  로컬 상태는 초기화되며 이 수명을 가이드에 명시한다. 상태 보존(detach/reattach)은 후속 범위다.
+- **client 아일랜드 children**(DC-08 결정): client 아일랜드에 넘긴 JSX children은 서버에서 HTML로 렌더해
+  정적 조각으로 전달한다(Astro 방식). 아일랜드는 지정한 위치에 그대로 출력만 하고 내부를 수정하지
+  않는다. children의 서버 전용 코드·데이터는 브라우저로 가지 않는다. 전달 형식(템플릿 요소 등)은 구현에서 정한다.
+- client 내부는 일반 Lithent 자식 컴포넌트로 작성한다. 외부 runtime이 그 내부 DOM을 HTML로 교체하지 않는다.
+- **이름 형식·구역**(DC-08 결정): `<Slot name>`은 `[a-z0-9-]+(:[a-z0-9-]+)*` 형식의 문자열 리터럴이다.
+  레이아웃·페이지·컴포넌트 안의 모든 `<Slot>`이 한 페이지 안에서 하나의 이름 구역을 공유하며, 중복은
+  빌드에서, 빌드로 판정할 수 없는 경우 SSR에서 진단한다. `#`은 후속 key 반복 슬롯(`comment#42`)용으로 예약한다.
+- **반복**(DC-08 결정): 직접 지시자 아일랜드와 `server:defer`는 Astro처럼 루프 안에서 자유롭게 반복할 수
+  있다(자동 ID, 프레임 대상 아님). transition 대상 `<Slot>`은 1차에서 정적 이름만 허용하며 목록은 슬롯
+  하나가 목록 컴포넌트를 갖고 partial·accumulate로 갱신한다. key 반복 `<Slot>`은 후속 범위다.
+- **componentId**: 컴파일러가 모듈 경로 + export 이름으로 생성한다. 같은 컴포넌트를 여러 슬롯·아일랜드에서
+  써도 인스턴스는 slotId(자동 ID 포함)별로 독립이다.
 - 알 수 없는 슬롯·중복 slotId·미지원 동적 선언은 적용 전에 진단한다.
   기존 전체 anchor 탐색과 정규식 치환만으로 중첩 보존을 보장하지 않는다.
 
@@ -812,8 +825,13 @@ const response: Response = await handler.fetch(request, platform);
       브라우저·reduced motion 범위를 정한다. V-08/V-14.
 - [ ] DC-07: 단일 파일 문법·컴파일러. .surface와 ---는 후보. JSX 내부 계약을 먼저 검증하는 안.
       parser·서버 context·CSS 범위·공개 entry와 최종 문법을 결정한다. V-05/V-11/V-16.
-- [ ] DC-08: slotId/componentId·동적 ID·children·중첩. 컴포넌트와 인스턴스를 분리하고 server 부모의
-      client 자식은 최초 진단하는 안. V-12/V-15/V-16.
+- [x] DC-08 (2026-10-13 결정): slotId/componentId·동적 ID·children·중첩. ① 이름은
+      `[a-z0-9-]+(:[a-z0-9-]+)*` 리터럴, 페이지 단위 단일 구역, `#` 예약 ② 반복 아일랜드·`server:defer`는
+      Astro처럼 루프 허용(자동 ID), transition 대상 Slot은 정적 이름만, key 반복 Slot은 후속 ③ Slot-in-Slot
+      금지, server 슬롯 안 아일랜드는 부모 교체 시 재생성(로컬 상태 초기화) ④ client 아일랜드 children은
+      서버 렌더 정적 HTML로 전달 ⑤ componentId는 모듈 경로+export 이름. 근거: 갱신 대상을 빌드에서 모두
+      알 수 있어 진단·권한·타입 검사가 단순하고, Astro 사용 경험을 유지하며, 상태 보존 중첩의 비용을
+      후속으로 미룬다. 4.3. V-12/V-15/V-16.
 - [ ] DC-09: versioned wire·JSON envelope. targets·states·html의 범위별 full을 권고하나 협상·
       bootstrap·빈 성공·done/EOF·async handler 타입은 미결정이다. V-02/V-07/V-08/V-18.
 - [ ] DC-10: server accumulate. 요청 내 full 기준 reducer와 HTML 생성안. 요청 간 저장·revision과
@@ -942,7 +960,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
