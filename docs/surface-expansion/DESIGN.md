@@ -8,7 +8,8 @@
 현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `.surface`, `Surface`,
 `definePage`, `Slot`과 신규 프레임 필드는 제안이며 현재 공개 API가 아니다.
 `ClientRouter`, `transition:persist`, `server:defer`, `defineAction`, `defineCollection`,
-`Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다.
+`Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다. 11장의 `createHandler`, `SurfaceContext`와
+어댑터 패키지 이름도 가칭이다.
 이번 작업은 두 문서까지다. `IMPLEMENT.md`와 `MANUAL_TEST_CHECKLIST.md`는 검토 후 작성한다.
 
 ## 1. 현재 기반과 설계의 출발점
@@ -24,6 +25,7 @@
 | 상태 적용           | [stateSurface.ts](../../engine/client/stateSurface.ts)                                      | reducer·프레임 큐를 활용하고 비동기 로드와 DOM 반영을 분리한다.                   |
 | Lithent 갱신        | [lithentBridge.ts](../../engine/client/lithentBridge.ts)                                    | DataProxy와 기존 마운트를 활용하며 인스턴스 키를 슬롯 ID로 관리한다.              |
 | 전송                | [server/index.ts](../../engine/server/index.ts), [ndjson.ts](../../engine/shared/ndjson.ts) | JSON 분기·혼합 모드 projection·스트림 상태 검증을 추가한다.                       |
+| 서버 런타임         | [server/index.ts](../../engine/server/index.ts): Express 조립, `node:fs`·`node:crypto` 사용 | 웹 표준 `Request → Response` 코어와 런타임 어댑터로 분리한다(11장).               |
 | UI·MPA              | [protocol.ts](../../engine/shared/protocol.ts), [styles.css](../../client/styles.css)       | 기존 UI 패치와 MPA opt-in을 활용하고 안전성·적용 순서를 보강한다.                 |
 | 페이지 이동         | [main.ts](../../engine/client/main.ts): 문서당 1회 초기화, History API·링크 가로채기 없음   | 재초기화 가능한 runtime 수명과 선택형 라우터·prefetch를 추가한다(10장).           |
 | 페이지 출력         | [routeHandler.ts](../../engine/server/routeHandler.ts): 모든 페이지 요청 시 SSR             | 페이지별 prerender·지연 server 슬롯 엔드포인트를 추가한다.                        |
@@ -121,7 +123,8 @@ export default definePage({
 
 - frontmatter의 요청 데이터 처리는 요청별 async 렌더 함수로 변환한다. 모듈 초기화 시점의
   `await`로 변환해 요청 데이터를 공유하지 않는다. import와 안전한 정의는 모듈에서 관리할 수 있다.
-- Context는 params, 요청 정보, 인증된 사용자 등을 서버에서 제공한다. 정확한 공개 API는 TBD다.
+- Context는 params, 요청 정보, 인증된 사용자 등을 서버에서 제공한다. 웹 표준 `Request` 기반
+  `SurfaceContext`(11.2)를 권고하며 정확한 공개 API는 DC-27에서 정한다.
 - 레이아웃도 같은 서버 렌더 계약으로 props와 children을 받는다. 일반 마크업·조건·반복은
   서버에서 평가한다. 비동기 데이터는 스크립트 영역에서 준비하는 범위부터 시작한다.
 - client의 `data`는 명시적으로 공개할 props다. 함수·Request·비밀 값을 자동 직렬화하지 않는다.
@@ -594,8 +597,8 @@ export default defineAction({
 
 - 페이지 선언(가칭 `export const prerender = true`, 단일 파일에서는 frontmatter)으로 페이지별로 고른다.
   기본값은 기존과 같은 요청 시 SSR이다. 동적 라우트는 `getStaticPaths()`(가칭)로 params 목록을 제공한다.
-- 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력하고, Express는
-  정적 파일을 SSR보다 먼저 서빙한다. BASE_PATH는 빌드 시 고정되며 다른 값으로 실행하면 진단한다.
+- 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력하고, 어댑터
+  (11.3)는 정적 파일을 SSR보다 먼저 서빙한다. BASE_PATH는 빌드 시 고정되며 다른 값으로 실행하면 진단한다.
 - prerender에서는 요청 객체가 없다. cookie·header·인증을 읽으면 빌드 오류로 진단한다. 현재 쿠키 기반
   언어 선택은 prerender와 양립하지 않으므로 언어별 경로(`/en/...`, `/ko/...`) 생성, 또는 기본 언어
   prerender + 클라이언트 언어 전환 시 transition 사용 중에서 DC-24로 정한다.
@@ -624,12 +627,87 @@ export default defineAction({
   결과를 캐시한다. 원격 이미지는 허용 도메인 목록에 있을 때만 변환하고, 아니면 진단한다.
 - `<Picture>`(가칭, 포맷별 `<source>`)와 배경 이미지 지원은 DC-26에서 범위를 정한다.
 
-## 11. 의사결정 체크리스트
+## 11. 런타임 중립 서버 코어와 어댑터 (R-26)
 
-### 11.1 합의한 방향
+사용자 합의(AG-07)로 Express·Node 고정을 풀고 웹 표준 서버 코어와 어댑터 구조를 1차 범위에 포함한다.
+Astro·SvelteKit·Remix·Hono가 사용하는 `fetch(Request) → Response` 핸들러 + 어댑터 방식을 따른다.
+
+### 11.1 현재 결합 지점
+
+| 결합                                 | 위치                                                                                                                                                 | 분리 방향                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Express 앱 조립·JSON body·static·404 | [server/index.ts](../../engine/server/index.ts)                                                                                                      | 코어 라우터 + 어댑터의 정적 서빙         |
+| `req`/`res` 기반 SSR·NDJSON 쓰기     | [routeHandler.ts](../../engine/server/routeHandler.ts), `index.ts`의 transition                                                                      | `Response` + `ReadableStream` 반환       |
+| 사용자 API의 Express `Request` 노출  | [routeModule.ts](../../engine/shared/routeModule.ts), [i18n.ts](../../shared/i18n.ts)                                                                | `SurfaceContext` + legacy `req` 어댑터   |
+| 실행 중 fs 스캔·동적 import          | [routeScanner.ts](../../engine/server/routeScanner.ts), [bootstrap.ts](../../engine/server/bootstrap.ts), [assets.ts](../../engine/server/assets.ts) | 빌드 생성 registry·asset manifest import |
+| `node:crypto` 동기 sha256            | [ssr.ts](../../engine/server/ssr.ts)                                                                                                                 | Web Crypto `subtle.digest` (async)       |
+| `node:http` 종료 처리·logger         | [gracefulShutdown.ts](../../engine/server/gracefulShutdown.ts), [logger.ts](../../engine/server/logger.ts)                                           | Node 어댑터로 이동, logger는 주입        |
+
+### 11.2 코어 계약
+
+```ts
+// 가칭
+const handler = createHandler({ manifest, basePath, security, bodyLimit, logger, hooks });
+const response: Response = await handler.fetch(request, platform);
+```
+
+- 코어는 `engine/server/core/`(가칭)에 두고 `node:*`·Express import를 금지한다. lint 규칙과 번들 검사로
+  강제한다(V-29). 라우팅은 빌드 manifest의 경로 패턴으로 수행하고 페이지 SSR·`/transition/:name`·
+  지연 슬롯(10.4)·액션(10.5)·404를 모두 처리한다. 정적 파일 서빙은 어댑터 책임이다.
+- `SurfaceContext`(가칭): `request`, `url`, `params`, `cookies`(읽기·`Set-Cookie` 쓰기), `locals`(미들웨어가
+  채우는 요청별 값), `signal`, `platform`(어댑터별 env·ctx). 페이지 데이터 준비, transition params,
+  액션 handler, 지연 슬롯 renderer가 같은 컨텍스트를 받는다.
+- legacy: 기존 `.ts` route의 `params(req)`·`initial(req)`·`boot.params(req)`에는 `req.params`·
+  `req.headers`·`req.query`·`req.cookies`·`req.path`를 제공하는 최소 호환 객체를 넘긴다(DC-15/DC-27).
+  Express 어댑터에서는 원래 Express `req`를 넘기는 선택지를 둔다.
+- 미들웨어 훅: `onRequest(ctx, next)` 체인으로 인증·보안 헤더·로깅을 처리한다. 현재 `hooks.ts`의
+  역할을 이 체인으로 옮긴다. body 크기 한도는 코어가 스트림을 읽으며 강제한다.
+- transition 응답은 async generator를 `ReadableStream`으로 감싸 `application/x-ndjson`으로 반환한다.
+  `request.signal` abort 시 generator의 `return()`을 호출해 서버 작업을 멈춘다. 기존 timeout·done·
+  error 프레임 처리와 trace는 그대로 옮긴다.
+- SSR 해시는 Web Crypto로 계산한다. 결과는 기존 sha256 hex와 같아야 한다(hydration 호환).
+- 환경 값은 `process.env` 직접 접근 대신 어댑터가 전달하는 설정으로 받는다. BASE_PATH도 같다.
+
+### 11.3 어댑터 (1차 지원)
+
+| 어댑터             | 진입점·형태                                   | 정적 파일·자산                  | 비고                                          |
+| ------------------ | --------------------------------------------- | ------------------------------- | --------------------------------------------- |
+| Node 자체 서버     | `node:http` + Request/Response 변환, CLI 실행 | 내장 static 서빙(캐시 헤더)     | 외부 서버 의존성 없음. graceful shutdown 담당 |
+| Express 호환       | `app.use(surface())` 미들웨어                 | 사용자 앱 또는 `express.static` | 기존 앱 장착·현재 사용자 이행 경로            |
+| Bun                | `Bun.serve({ fetch })`                        | `Bun.file` 기반 서빙            | Node 어댑터와 같은 결과 검증                  |
+| Deno               | `Deno.serve(handler)`                         | `serveDir` 또는 내장            | 권한 플래그(net·read·env) 문서화              |
+| Cloudflare Workers | `export default { fetch }`                    | Workers Static Assets           | 파일시스템 없음·CPU 한도. `platform.env` 사용 |
+
+- 패키지 배치(코어 패키지와 어댑터 subpath export vs 별도 패키지), Node 어댑터의 기본 여부와 Express를
+  선택 의존성으로 옮길지는 DC-28에서 정한다. scaffold(`create-state-surface`)는 어댑터 선택지를 제공한다.
+- dev는 Node + Vite middleware를 유지한다. 코어 핸들러를 Vite dev 서버에 연결해 dev와 production이 같은
+  코어를 사용하게 한다. Workers 동등성 검증은 Vite Environment API·workerd 실행을 후속 선택지로 둔다.
+
+### 11.4 빌드 산출물과 런타임 제약
+
+- 빌드는 route·template·transition·action registry와 asset manifest를 정적 import하는 서버 엔트리를 생성한다.
+  어댑터별로 이 엔트리를 감싸는 얇은 파일만 다르다. 실행 중 `readdir`·`fs.readFileSync`를 사용하지 않는다.
+- 런타임별 기능 제약 매트릭스를 문서와 진단에 반영한다.
+
+| 기능                 | Node·Express·Bun·Deno | Cloudflare Workers                                          |
+| -------------------- | --------------------- | ----------------------------------------------------------- |
+| 긴 NDJSON 스트림     | 지원                  | 지원. 요청 시간·CPU 한도 내에서 동작, 한도 문서화           |
+| 이미지 변환(R-25)    | 빌드·요청 시 변환     | 빌드 시 변환만. 요청 시 변환은 진단 또는 플랫폼 서비스 위임 |
+| 콘텐츠 컬렉션(R-24)  | 빌드 번들             | 빌드 번들(실행 중 파일 읽기 금지)                           |
+| 지연 슬롯 서명(R-20) | Web Crypto            | Web Crypto                                                  |
+| prerender 서빙(R-23) | 어댑터 static         | Static Assets                                               |
+
+- 요청 간 공유 상태(모듈 전역 캐시)는 Edge에서 isolate마다 다를 수 있다. 정확성이 이에 의존하지 않도록 한다.
+- 비 JS 서버의 페이지 SSR은 비목표다. 외부 백엔드가 NDJSON 프레임을 생성하고 코어가 중계하는 구성은
+  후속 검토로 남긴다.
+
+## 12. 의사결정 체크리스트
+
+### 12.1 합의한 방향
 
 - [x] AG-01: MPA·명시적 슬롯·NDJSON 스트리밍 유지(R-02/R-08/R-14, V-02/V-08/V-14).
-- [x] AG-02: Express·Vite·Lithent 기반 유지(R-03/R-05, V-03/V-05).
+- [x] AG-02: Vite·Lithent 기반 유지(R-03/R-05, V-03/V-05). 서버는 AG-07에 따라 Express 고정에서
+      웹 표준 코어 + 어댑터로 바꾸고 Express는 호환 어댑터로 유지한다.
 - [x] AG-03: 서버 스크립트·마크업·레이아웃·아일랜드를 한 파일의 자연스러운 트리로 작성(R-11, V-11).
 - [x] AG-04: 새 작성 모델의 static 기본값과 client 로컬 UI 상태 공존(R-01/R-12, V-01/V-12).
 - [x] AG-05: RSC/Flight·임의 클로저 직렬화·전체 SPA(클라이언트 VDOM 라우터)는 비목표(R-11, V-05/V-11).
@@ -637,8 +715,10 @@ export default defineAction({
 - [x] AG-06 (2026-10-13): Astro 참고 기능을 1차 범위에 포함한다. 선택형 클라이언트 라우터·persist·
       prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지 최적화
       (R-17~R-25, NFR-04, V-19~V-27). 모두 opt-in이고 기본 이동은 문서 로드로 유지한다.
+- [x] AG-07 (2026-10-13): 런타임 중립 서버 코어(`Request → Response`)와 1차 지원 어댑터 Node 자체 서버·
+      Express 호환·Bun·Deno·Cloudflare Workers를 1차 범위에 포함한다(R-26, NFR-05, V-28/V-29).
 
-### 11.2 구현 방식: 전 항목 TBD, 아래는 권고안
+### 12.2 구현 방식: 전 항목 TBD, 아래는 권고안
 
 - [ ] DC-01: Slot API·직접 컴포넌트 지시자. 명시 Slot부터 시작하고 같은 정의로 정규화하는 안.
       갱신 경계와 ID를 보이게 하는 목적이다. V-11/V-15/V-18.
@@ -694,47 +774,53 @@ export default defineAction({
       `shared/content.ts` 이행 순서를 정한다. V-27.
 - [ ] DC-26: 이미지. 변환 엔진·포맷·srcset 폭 목록·dev 캐시 위치·원격 허용 목록·`<Picture>`와
       배경 이미지 범위를 정한다. V-27.
+- [ ] DC-27: 요청 컨텍스트·코어 API. `SurfaceContext` 필드, cookie 쓰기 방식, 미들웨어 체인 모양,
+      legacy `req` 호환 객체의 범위와 지원 기간, 설정·env 주입 방식을 정한다. V-28/V-18.
+- [ ] DC-28: 어댑터 패키징·기본값. 코어/어댑터 패키지 구성, 기본 어댑터(Node 자체 서버 권고), Express의
+      선택 의존성 전환 시점, Workers 제약 진단 방식, dev의 workerd 검증 여부를 정한다. V-29.
 
 기존 아이디어 문서의 미결정 항목도 이어받는다. 이전 DC-01은 DC-01/DC-15, DC-02는 DC-02/DC-08,
 DC-03은 DC-03/DC-08, DC-04는 DC-09, DC-05는 DC-10, DC-06/DC-07은 DC-04/DC-11,
 DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17로 대응한다.
 이전 번호는 docs/idea/DESIGN.md의 번호이며 문서 간 같은 번호를 혼동하지 않는다.
 
-## 12. 검증 매트릭스
+## 13. 검증 매트릭스
 
 후속 IMPLEMENT.md·MANUAL_TEST_CHECKLIST.md의 입력이며 실행된 결과가 아니다.
 
-| ID   | 대상           | 시나리오와 통과 기준                                                                                                                         |
-| ---- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| V-01 | R-01           | static에 프레임을 보내도 콘텐츠 유지. action/boot/plugin 없는 페이지는 실행 JS 요청 0건.                                                     |
-| V-02 | R-02           | server SSR·업데이트 HTML 일치. 단건/스트림·언어 전환·제거 처리, client 템플릿 배제.                                                          |
-| V-03 | R-03           | 복수 아일랜드의 독립 hydrate/mount/unmount. 같은 컴포넌트의 인스턴스끼리 간섭 없음.                                                          |
-| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영.                                                   |
-| V-05 | R-01/R-05/R-11 | 전체 client 산출물에 static/server 전용 모듈·비밀 sentinel 없음. 필요한 컴포넌트·CSS만 로드.                                                 |
-| V-06 | R-06           | 페이지별 불필요한 plugin/debug 로딩 없음. client 아일랜드 없는 페이지에서 Lithent 배제.                                                      |
-| V-07 | R-07           | JSON/NDJSON 최종 DOM·state·UI 일치. async handler·실패·빈 결과·Content-Type 규약 준수.                                                       |
-| V-08 | R-08/R-02      | partial/accumulate first·done 후·깨진 JSON·누락 delta·EOF·한도·취소·병합 순서에 잘못 적용하지 않음.                                          |
-| V-09 | R-09           | UI-only에서 renderer 미호출. full/partial/null/removed와 SSR/hydration 일치, reset·원래 값 처리 검증.                                        |
-| V-10 | R-10/NFR-03    | SSR 속성 breakout·script/event URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단.                                      |
-| V-11 | R-11           | JSX/전용 파일의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                    |
-| V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                          |
-| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                 |
-| V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                     |
-| V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                      |
-| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·전용 파일 일치.                                                   |
-| V-17 | NFR-01         | 고정 조건에서 총 초기 gzip JS 70% 감소. HTML/JSON/SSR·첫 액션·INP/CLS가 결정된 예산 충족.                                                    |
-| V-18 | NFR-02         | 기존 route/template/generator·BASE_PATH·boot·UI·abort·plugin·생성 scaffold와 구형 wire/cache 이행 동작.                                      |
-| V-19 | R-17/NFR-04    | 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 동일. 100회 이동 후 리스너·인스턴스 누적 없음.                           |
-| V-20 | R-17           | 진행 중 스트림 abort, head 병합·CSS 선로드, script 1회 실행, opt-out·외부·수정 키·오류·build ID 불일치 fallback, scroll·hash·focus·announce. |
-| V-21 | R-18           | persist 아일랜드의 로컬 상태·포커스·재생 유지와 새 props 반영/유지 옵션. 짝 없는 요소 cleanup, 미지원 대상 진단.                             |
-| V-22 | R-19           | 전략별 trigger 1회 요청, 적중 시 추가 네트워크 없이 교체, Save-Data 생략, 캐시 TTL·액션 후 무효화, 부작용 URL 제외.                          |
-| V-23 | R-20           | 셸 즉시 응답·fallback 후 교체, 토큰 변조·권한 밖 거부, 실패 시 fallback 유지, 선행 transition 우선, prerender 셸에서 동작.                   |
-| V-24 | R-21           | 스키마 위반 필드 오류, JS 없음 POST→303→결과 반영, JS 있음 동일 결과, CSRF 거부, handler 코드 client 미포함.                                 |
-| V-25 | R-22           | SSR·server 교체·client 렌더에서 범위 일치, 다른 컴포넌트·슬롯 자식 비적용, global 탈출, 이동 시 CSS 로드.                                    |
-| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작.                                |
-| V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                         |
+| ID   | 대상           | 시나리오와 통과 기준                                                                                                                          |
+| ---- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| V-01 | R-01           | static에 프레임을 보내도 콘텐츠 유지. action/boot/plugin 없는 페이지는 실행 JS 요청 0건.                                                      |
+| V-02 | R-02           | server SSR·업데이트 HTML 일치. 단건/스트림·언어 전환·제거 처리, client 템플릿 배제.                                                           |
+| V-03 | R-03           | 복수 아일랜드의 독립 hydrate/mount/unmount. 같은 컴포넌트의 인스턴스끼리 간섭 없음.                                                           |
+| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영.                                                    |
+| V-05 | R-01/R-05/R-11 | 전체 client 산출물에 static/server 전용 모듈·비밀 sentinel 없음. 필요한 컴포넌트·CSS만 로드.                                                  |
+| V-06 | R-06           | 페이지별 불필요한 plugin/debug 로딩 없음. client 아일랜드 없는 페이지에서 Lithent 배제.                                                       |
+| V-07 | R-07           | JSON/NDJSON 최종 DOM·state·UI 일치. async handler·실패·빈 결과·Content-Type 규약 준수.                                                        |
+| V-08 | R-08/R-02      | partial/accumulate first·done 후·깨진 JSON·누락 delta·EOF·한도·취소·병합 순서에 잘못 적용하지 않음.                                           |
+| V-09 | R-09           | UI-only에서 renderer 미호출. full/partial/null/removed와 SSR/hydration 일치, reset·원래 값 처리 검증.                                         |
+| V-10 | R-10/NFR-03    | SSR 속성 breakout·script/event URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단.                                       |
+| V-11 | R-11           | JSX/전용 파일의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                     |
+| V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                           |
+| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                  |
+| V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                      |
+| V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                       |
+| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·전용 파일 일치.                                                    |
+| V-17 | NFR-01         | 고정 조건에서 총 초기 gzip JS 70% 감소. HTML/JSON/SSR·첫 액션·INP/CLS가 결정된 예산 충족.                                                     |
+| V-18 | NFR-02         | 기존 route/template/generator·BASE_PATH·boot·UI·abort·plugin·생성 scaffold와 구형 wire/cache 이행 동작.                                       |
+| V-19 | R-17/NFR-04    | 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 동일. 100회 이동 후 리스너·인스턴스 누적 없음.                            |
+| V-20 | R-17           | 진행 중 스트림 abort, head 병합·CSS 선로드, script 1회 실행, opt-out·외부·수정 키·오류·build ID 불일치 fallback, scroll·hash·focus·announce.  |
+| V-21 | R-18           | persist 아일랜드의 로컬 상태·포커스·재생 유지와 새 props 반영/유지 옵션. 짝 없는 요소 cleanup, 미지원 대상 진단.                              |
+| V-22 | R-19           | 전략별 trigger 1회 요청, 적중 시 추가 네트워크 없이 교체, Save-Data 생략, 캐시 TTL·액션 후 무효화, 부작용 URL 제외.                           |
+| V-23 | R-20           | 셸 즉시 응답·fallback 후 교체, 토큰 변조·권한 밖 거부, 실패 시 fallback 유지, 선행 transition 우선, prerender 셸에서 동작.                    |
+| V-24 | R-21           | 스키마 위반 필드 오류, JS 없음 POST→303→결과 반영, JS 있음 동일 결과, CSRF 거부, handler 코드 client 미포함.                                  |
+| V-25 | R-22           | SSR·server 교체·client 렌더에서 범위 일치, 다른 컴포넌트·슬롯 자식 비적용, global 탈출, 이동 시 CSS 로드.                                     |
+| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작.                                 |
+| V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                          |
+| V-28 | R-26/NFR-02    | 공통 적합성 테스트(SSR·transition 스트림·abort·지연 슬롯·액션·404·BASE_PATH·cookie)가 기존 Express 결과와 동일. legacy `req` route 동작.      |
+| V-29 | R-26/NFR-05    | 5개 어댑터에서 V-28 통과. 코어 번들에 `node:*`·Express import 없음, 실행 중 fs 접근 없음, Workers 제약 기능 진단, 콜드 스타트·번들 크기 기록. |
 
-## 13. 후속 구현 순서와 게이트
+## 14. 후속 구현 순서와 게이트
 
 실행용 IMPLEMENT.md는 아직 작성하지 않았다. 상세 작업·entry/exit·실행 기록은 검토 후
 구체화하며 다음은 순서 후보다. 관련 DC가 미결정이면 해당 단계의 진입 조건을 충족하지 않는다.
@@ -742,21 +828,22 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | 단계                       | 선행 결정                     | baseline과 종료 확인                                                                               |
 | -------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
 | 0. 기준선 고정             | DC-17 측정 조건               | 기존 pnpm test, client build·production SSR·대표 페이지·문서 로드 이동 측정 기록.                  |
-| 1. Page/Slot·JSX           | DC-01/DC-07/DC-08/DC-15       | 기존 baseline에 V-03/V-11/V-15. SSR·요청 분리·legacy 보존.                                         |
-| 2. 모드·manifest           | DC-02/DC-03/DC-12/DC-16       | baseline과 V-01/V-03/V-05/V-06. 서버 코드 제외·CSS·SSR 분기 실증.                                  |
-| 3. projection·응답·검증    | DC-09/DC-10/DC-13/DC-14/DC-21 | protocol/server/client baseline과 V-02/V-07~V-10/V-23. 안전성·순서·지연 슬롯 토큰 검증.            |
-| 4. 활성화·액션·pending     | DC-04/DC-05/DC-11/DC-22       | bridge/abort/action baseline과 V-04/V-12/V-13/V-24. 로드 경쟁·로컬 상태·no-JS 액션.                |
-| 5. 라우터·persist·prefetch | DC-18/DC-19/DC-20             | runtime 수명 분리 후 전체 baseline 유지와 V-19~V-22. 반복 이동 누수·fallback 실증.                 |
-| 6. 콘텐츠·이미지·prerender | DC-24/DC-25/DC-26             | 가이드 parity baseline과 V-26/V-27. 정적 출력·i18n 경로·콘텐츠 이행.                               |
-| 7. 단일 파일 컴파일러      | DC-07/DC-16/DC-23             | baseline·compiler fixture·V-05/V-11/V-16/V-18/V-25. 최종 문법·scoped CSS의 dev/prod/scaffold.      |
-| 8. Test Hardening          | 확정 계약·한도                | 전체 baseline과 이상 frame·악성 입력·지연 로드·동시 요청·취소·이동 경쟁 회귀. V-08/V-10/V-13/V-20. |
-| 9. Integration Test        | DC-06/DC-17·브라우저 범위     | production·BASE_PATH·생성 앱 E2E. V-14/V-17/V-18/V-19/V-26 성능·공개 계약 판정.                    |
+| 1. 서버 코어·어댑터        | DC-27/DC-28                   | 기존 전체 baseline을 코어 경유로 유지하고 V-28/V-29. Express 결과와 동일, legacy route 보존.       |
+| 2. Page/Slot·JSX           | DC-01/DC-07/DC-08/DC-15       | 기존 baseline에 V-03/V-11/V-15. SSR·요청 분리·legacy 보존.                                         |
+| 3. 모드·manifest           | DC-02/DC-03/DC-12/DC-16       | baseline과 V-01/V-03/V-05/V-06. 서버 코드 제외·CSS·SSR 분기 실증.                                  |
+| 4. projection·응답·검증    | DC-09/DC-10/DC-13/DC-14/DC-21 | protocol/server/client baseline과 V-02/V-07~V-10/V-23. 안전성·순서·지연 슬롯 토큰 검증.            |
+| 5. 활성화·액션·pending     | DC-04/DC-05/DC-11/DC-22       | bridge/abort/action baseline과 V-04/V-12/V-13/V-24. 로드 경쟁·로컬 상태·no-JS 액션.                |
+| 6. 라우터·persist·prefetch | DC-18/DC-19/DC-20             | runtime 수명 분리 후 전체 baseline 유지와 V-19~V-22. 반복 이동 누수·fallback 실증.                 |
+| 7. 콘텐츠·이미지·prerender | DC-24/DC-25/DC-26             | 가이드 parity baseline과 V-26/V-27. 정적 출력·i18n 경로·콘텐츠 이행.                               |
+| 8. 단일 파일 컴파일러      | DC-07/DC-16/DC-23             | baseline·compiler fixture·V-05/V-11/V-16/V-18/V-25. 최종 문법·scoped CSS의 dev/prod/scaffold.      |
+| 9. Test Hardening          | 확정 계약·한도                | 전체 baseline과 이상 frame·악성 입력·지연 로드·동시 요청·취소·이동 경쟁 회귀. V-08/V-10/V-13/V-20. |
+| 10. Integration Test       | DC-06/DC-17·브라우저 범위     | production·BASE_PATH·생성 앱·5개 어댑터 E2E. V-14/V-17/V-18/V-19/V-26/V-29 판정.                   |
 
 안전성과 버전 계약은 새로운 HTML·외부 입력 경로를 도입하는 시점에 필요하다.
 hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·overrides에 반영하고 생성물을
 직접 수정하지 않는다. 후속 문서에는 각 단계의 필수 테스트·통과 기록을 연결한다.
 
-## 14. 참고와 Handoff
+## 15. 참고와 Handoff
 
 단일 파일의 작성 경험은 [Astro components](https://docs.astro.build/en/basics/astro-components/),
 빌드 연동 후보는 [Vite plugin API](https://vite.dev/guide/api-plugin#virtual-modules-convention)를
@@ -765,7 +852,8 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
 - 완료: 현재 코드·작성 예시·실행 분리·mode/metadata/wire/수명·AG-01~AG-05·DC-01~DC-17·
   V-01~V-18과 후속 게이트를 정리했다. 2026-10-13 개정으로 AG-06과 10장(클라이언트 라우터·persist·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
-  DC-18~DC-26, V-19~V-27과 구현 단계 5·6을 추가했다.
+  DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
+  DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
