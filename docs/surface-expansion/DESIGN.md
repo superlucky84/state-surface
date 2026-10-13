@@ -45,13 +45,15 @@ SSR의 UI 클래스 문자열에 따옴표를 넣으면 추가 HTML 속성이 �
 ### 2.1 최종 목표: 서버 스크립트와 템플릿을 한 파일에 작성
 
 다음은 가칭 `routes/article/[id].surface`의 작성 예시다. ArticleBody는 서버에서 갱신하고
-ArticleEditor는 화면에 들어올 때 활성화한다. 일반 마크업에는 클라이언트 컴포넌트 코드가 없다.
+ArticleEditor는 화면에 들어올 때 활성화한다. LikeButton은 서버 갱신이 없는 독립 아일랜드다.
+일반 마크업에는 클라이언트 컴포넌트 코드가 없다.
 
 ```astro
 ---
 import Layout from '../../layouts/Layout.surface';
 import ArticleBody from '../../components/ArticleBody';
 import ArticleEditor from '../../components/ArticleEditor';
+import LikeButton from '../../components/LikeButton';
 import { getArticle } from '../../server/articles';
 
 const article = await getArticle(Surface.params.id);
@@ -61,27 +63,35 @@ const article = await getArticle(Surface.params.id);
   <main>
     <h1>{article.title}</h1>
 
-    <Slot
-      name="article:body"
-      mode="server"
-      component={ArticleBody}
-      data={article}
-    />
+    <Slot name="article:body" mode="server">
+      <ArticleBody article={article} />
+    </Slot>
 
-    <Slot
-      name="article:editor"
-      component={ArticleEditor}
-      data={{ articleId: article.id }}
-      client:visible
-    />
+    <Slot name="article:editor" client:visible fallback={<EditorSkeleton />}>
+      <ArticleEditor articleId={article.id} />
+    </Slot>
+
+    <LikeButton count={article.likes} client:idle />
   </main>
 </Layout>
 ```
 
-확장자와 API 이름은 DC-01/DC-07에서 결정한다. 페이지 전체를 자연스러운 트리로 작성하고
-`<Slot>`으로 갱신 경계를 표시한다. `<ArticleEditor client:visible />` 직접 문법을 제공하더라도
-같은 내부 SlotDefinition으로 변환한다. 자동 생성 ID와 스트리밍에서 사용할 ID의 관계는 TBD다.
-예시의 Surface와 Slot은 컴파일러가 제공하는 컨텍스트·내장 경계 후보이며 가져오기 방식도 미결정이다.
+Slot 문법은 DC-01에서 결정했다. 확장자와 단일 파일 문법은 DC-07에서 정한다.
+
+- **두 가지 선언**: 서버 transition이 갱신하는 경계는 `<Slot>`으로 감싼다. 갱신 없는 독립 아일랜드는
+  컴포넌트에 직접 지시자를 붙인다(`<LikeButton client:idle />`). 둘 다 같은 내부 SlotDefinition으로 정규화한다.
+- **단일 자식 엘리먼트**: `<Slot>`의 자식은 컴포넌트 엘리먼트 정확히 1개다. 그 props가 슬롯 상태이며
+  transition 프레임은 같은 props 모양을 보낸다(`states: { 'article:body': { article } }`). JSX 타입 검사가
+  props와 상태 모양을 함께 검증한다. 자식이 0개·2개 이상·텍스트·Fragment·조건식이면 컴파일러가 진단한다.
+  Astro처럼 컴포넌트 props로 데이터를 넘긴다는 점은 같고, 이름 붙은 갱신 경계를 둔다는 점이 다르다.
+- **ID**: `<Slot>`의 `name`은 필수이며 transition이 겨냥하는 안정 식별자다. 직접 지시자 아일랜드는
+  컴파일러가 자동 ID를 부여하고 프레임 대상이 될 수 없다. 프레임이나 액션 `targets`가 자동 ID를 가리키면
+  진단한다. ID 형식·중복 규칙은 DC-08에서 정한다.
+- **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다. `<Slot>`과 직접
+  지시자 모두 같은 prop을 지원한다(Astro의 `slot="fallback"` 자식 방식은 쓰지 않는다).
+- **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
+  `fallback`, `capability`, `resetKey`. 자식 props와 엔진 속성이 섞이지 않는다.
+- 예시의 Surface와 Slot은 컴파일러가 제공하는 컨텍스트·내장 경계 후보이며 가져오기 방식은 DC-07에서 정한다.
 
 ### 2.2 선행 검증: 단일 `.tsx` 페이지
 
@@ -101,13 +111,13 @@ export default definePage({
     <Layout title={article.title}>
       <main>
         <h1>{article.title}</h1>
-        <Slot name="article:body" mode="server" component={ArticleBody} data={article} />
-        <Slot
-          name="article:editor"
-          component={ArticleEditor}
-          data={{ articleId: article.id }}
-          client:visible
-        />
+        <Slot name="article:body" mode="server">
+          <ArticleBody article={article} />
+        </Slot>
+        <Slot name="article:editor" client:visible fallback={<EditorSkeleton />}>
+          <ArticleEditor articleId={article.id} />
+        </Slot>
+        <LikeButton count={article.likes} client:idle />
       </main>
     </Layout>
   ),
@@ -558,7 +568,7 @@ page-load  (문서 로드에서도 동일하게 발생)
 슬롯 HTML 교체 (server 모드 적용 경로 재사용)
 ```
 
-- 선언은 `<Slot mode="server" server:defer>` + fallback children(가칭)이다. props는 서버가 서명 또는
+- 선언은 `<Slot name="..." mode="server" server:defer fallback={...}>`이다(DC-01). props는 서버가 서명 또는
   암호화한 토큰으로만 전달한다. 클라이언트가 componentId·props를 바꿔 다른 renderer를 실행할 수 없다.
 - GET 요청으로 CDN 캐시를 허용할지, 개인화 응답의 `Cache-Control: private` 기본값은 DC-21에서 정한다.
   키 회전과 토큰 크기 한도(초과 시 POST)도 함께 정한다.
@@ -785,8 +795,11 @@ const response: Response = await handler.fetch(request, platform);
 
 ### 12.2 구현 방식: 전 항목 TBD, 아래는 권고안
 
-- [ ] DC-01: Slot API·직접 컴포넌트 지시자. 명시 Slot부터 시작하고 같은 정의로 정규화하는 안.
-      갱신 경계와 ID를 보이게 하는 목적이다. V-11/V-15/V-18.
+- [x] DC-01 (2026-10-13 결정): Slot API·직접 컴포넌트 지시자. ① 서버 갱신 경계는 `<Slot>`, 독립 아일랜드는
+      직접 지시자, 둘 다 같은 SlotDefinition으로 정규화 ② `<Slot>` 자식은 컴포넌트 엘리먼트 1개, 그 props가
+      슬롯 상태(Astro식 props 전달) ③ `<Slot name>` 필수, 직접 지시자는 자동 ID이며 프레임 대상 불가
+      ④ fallback은 `fallback` prop. 근거: transition이 겨냥할 이름 붙은 경계는 필수이고, props=상태로 JSX 타입
+      검사를 그대로 쓰며, 작은 아일랜드의 이름 부담을 없앤다. 2.1. V-11/V-15/V-18.
 - [ ] DC-02: AST 선언 분석·Vite 가상 모듈. 이름 조사용 eager import를 제거하고 dev/build에 같은
       manifest 생성을 사용한다. 분석 불가능할 때의 명시 registry도 결정한다. V-05/V-16.
 - [ ] DC-03: server HTML 적용. 평탄한 슬롯 replace·플러그인 cleanup부터 시작하는 안.
@@ -929,7 +942,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
