@@ -197,7 +197,7 @@ R-26은 2026-10-13 사용자 합의(AG-07)로 1차 범위에 포함한다.
 
 - **R-26 (웹 표준 서버 코어와 런타임 어댑터)**:
   - 서버 코어는 웹 표준 `Request`를 받아 `Response`를 반환하는 단일 핸들러로 제공한다. 페이지 SSR, transition 스트림, 지연 server 슬롯(R-20), 서버 액션(R-21), 정적·prerender 자산 조회를 이 핸들러가 처리하며 Express·`node:*` API에 의존하지 않는다.
-  - 사용자 API(페이지 데이터 준비, transition params, 액션 handler)는 Express `req` 대신 웹 표준 기반 요청 컨텍스트(요청·URL·params·cookie·locals·abort signal)를 받는다. 기존 `.ts` route의 `req` 기반 `params`·`initial`·`boot.params`는 legacy 어댑터로 계속 동작해야 한다(NFR-02).
+  - 사용자 API(페이지 데이터 준비, transition params, 액션 handler)는 Express `req` 대신 웹 표준 기반 요청 컨텍스트(요청·URL·params·cookie·locals·abort signal)를 받는다. Express `req` 호환 shim은 두지 않고 기존 라우트·훅을 일괄 전환한다(DC-27, 사용자 없는 0.x 단계).
   - 1차 지원 어댑터: **Node 자체 서버**(`node:http`, 외부 서버 의존성 없음, CLI 실행), **Express 호환 미들웨어**(기존 앱에 장착), **Bun**, **Deno**, **Cloudflare Workers**. 어댑터는 요청·응답 변환, 정적 파일 서빙, 종료 처리, 플랫폼 환경 변수 연결만 담당하고 동작 차이를 만들지 않는다.
   - production 실행은 실행 중 파일시스템 스캔 없이 빌드가 생성한 route·template·action·asset registry를 사용한다. dev 서버는 Node + Vite를 유지할 수 있다.
   - transition NDJSON은 `ReadableStream`으로 반환하고 취소는 `request.signal`로 감지한다. 보안 헤더·로깅·body 크기 한도·오류 페이지는 코어 옵션 또는 미들웨어 훅으로 모든 어댑터에서 같은 의미를 갖는다. BASE_PATH와 SSR 해시도 모든 런타임에서 같은 결과를 낸다.
