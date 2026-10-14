@@ -1001,18 +1001,50 @@ export default async function Page(ctx: SurfaceContext) {
 - **ISR**: 주기적 재생성(증분 재생성)은 1차 범위가 아니다. 자주 바뀌는 페이지는 SSR + `Cache-Control`
   (`s-maxage`, `stale-while-revalidate`)로 CDN에 맡기도록 가이드한다.
 
-### 10.8 콘텐츠 컬렉션 (R-24)
+### 10.8 콘텐츠 컬렉션 (R-24, DC-25 결정)
 
-- `content/<collection>/` 디렉터리와 `content/config.ts`(가칭)의 `defineCollection({ schema, loader })`로
-  선언한다. 1차 loader는 Markdown(frontmatter)·JSON·YAML 파일이다. 조회 API는
-  `getCollection(name, filter?)`, `getEntry(name, id)`(가칭)이며 반환 타입은 스키마에서 추론한다.
-- Markdown은 빌드·dev에서 AST로 변환하고 R-10의 rich capability 정책으로 렌더링한다. raw HTML은 기본
-  비활성화한다. 기존 가이드의 10개 블록 타입은 Markdown 확장(디렉티브 문법 후보)이나 frontmatter
-  블록으로 매핑한다. 매핑 문법은 DC-25다.
-- 다국어는 `content/guides/{en,ko}/<slug>.md` 구조와 parity 검사 유틸리티(같은 섹션 ID·블록 수·타입)를
-  제공해 현재 테스트 수준의 보장을 유지한다. `shared/content.ts`의 가이드 데이터는 7단계에서 일괄 전환한다.
-- 스키마 위반은 파일 경로·필드·라인과 함께 dev 오버레이와 빌드 오류로 표시한다. dev에서는 콘텐츠 파일
-  변경 시 해당 페이지를 다시 로드한다. 콘텐츠 조회는 서버 전용이며 client 산출물에 포함하지 않는다(V-05).
+```text
+content/
+  config.ts                     defineCollection({ schema, loader, i18n })
+  guides/en/quickstart.md       Markdown + ::: 디렉티브 (기본)
+  guides/ko/quickstart.md
+  guides/en/live-demo.mdx       컴포넌트·데모 아일랜드가 필요한 문서 (선택)
+  pages/en/home.yaml            페이지 UI 문구 데이터
+  pages/ko/home.yaml
+```
+
+```md
+## 설치
+
+:::warning
+Node 22 이상이 필요합니다.
+:::
+
+:::debug{symptom="화면이 안 바뀜" cause="done 누락"}
+transition 끝에 done을 yield하세요.
+:::
+```
+
+- **위치·구조**: 루트 `content/`와 `content/config.ts`. 경로는 `content/<컬렉션>/<언어>/<id>.<ext>`이며 언어 폴더별 같은
+  id가 같은 문서다. i18n을 쓰지 않는 컬렉션은 언어 폴더를 생략한다.
+- **loader**: 1차는 `.md`·`.mdx`·`.json`·`.yaml` 파일이다. 원격 CMS loader는 후속이다. 콘텐츠는 빌드·dev에서
+  변환해 서버 번들에 포함하므로 Workers에서도 동작하고 client 산출물에는 들어가지 않는다(V-05).
+- **조회 API**: `getCollection(name, { lang, filter })`, `getEntry(name, id, { lang })`. 반환 타입은 스키마에서 추론한다.
+  Markdown·MDX 항목은 렌더 가능한 `Content` 컴포넌트와 heading 목록(TOC용)을 함께 돌려준다.
+- **형식**(DC-25 결정):
+  - `.md` + 디렉티브(기본): `remark-directive` 문법(`:::name{attr}`)으로 가이드 블록 10종(paragraph·bullets·code·
+    checklist·warning·sequence·diagram·callout·analogy·debug)을 표현한다. 알 수 없는 디렉티브·속성은 빌드 오류다. AST
+    allowlist 렌더(8.1 rich)를 쓰고 raw HTML은 차단한다. 외부·CMS 콘텐츠는 이 경로로만 받는다.
+  - `.mdx`(선택): 문서 안에 컴포넌트·데모 아일랜드(`<LiveDemo client:visible />`)가 필요할 때 파일 단위로 쓴다.
+    `@mdx-js/rollup`을 `jsxImportSource: 'lithent'`로 빌드하며 저장소 안 파일(신뢰된 코드)에만 허용한다. 블록 10종은
+    디렉티브와 같은 렌더러를 MDX 컴포넌트로 노출한다. 지시자 분석·서버 전용 검사(DC-02)는 `.mdx`에도 적용된다.
+- **i18n parity**(DC-25 결정): 컬렉션에 `i18n: { locales, parity: true }`를 켜면 번역 누락과 구조 불일치를 빌드 오류로,
+  dev에서는 경고로 보고한다. `.md`는 섹션 ID·블록 수·블록 타입까지, `.mdx`는 heading 구조까지 비교한다.
+- **진단**: 스키마·디렉티브 위반은 파일 경로·필드·줄 번호와 함께 dev 오버레이와 빌드 오류로 보인다. dev에서 콘텐츠 파일이
+  바뀌면 해당 페이지를 다시 로드한다.
+- **이행**(DC-25 결정): `shared/content.ts`를 전부 옮기고 제거한다(AG-08). 가이드는 `guides` Markdown 컬렉션, 홈·예제
+  페이지의 히어로·기능 목록 같은 UI 문구는 언어별 YAML `pages` 데이터 컬렉션으로 옮긴다. 기존 i18n parity 테스트는
+  프레임워크 parity 검사로 대체한다. 7단계에서 일괄 전환한다.
 
 ### 10.9 이미지 최적화 (R-25)
 
@@ -1295,8 +1327,11 @@ const response: Response = await handler.fetch(request, platform);
       BASE_PATH 빌드 고정 ⑤ i18n은 언어별 경로 `/en/…`·`/ko/…`(hreflang, 언어 없는 경로는 쿠키·Accept-Language로 302,
       전환은 경로 이동) ⑥ ISR 제외. 근거: 언어별 정적 HTML과 SEO·CDN 캐시를 함께 얻고, 기존 SSR 기본 동작을 유지한다.
       10.7. V-26.
-- [ ] DC-25: 콘텐츠 컬렉션. 디렉터리·config 위치, loader 범위, Markdown 블록 확장 문법, parity 유틸리티,
-      `shared/content.ts` 전환 방식을 정한다. V-27.
+- [x] DC-25 (2026-10-14 결정): 콘텐츠 컬렉션. ① `content/<컬렉션>/<언어>/<id>`, `content/config.ts` ② loader는 md·mdx·json·yaml
+      (CMS 후속) ③ `.md` + `:::` 디렉티브 기본(블록 10종 매핑, rich 렌더, 외부 콘텐츠 경로), `.mdx`는 데모·컴포넌트가 필요한
+      저장소 문서에 선택(@mdx-js/rollup + lithent) ④ i18n parity는 빌드 오류(dev 경고), md는 블록 수준·mdx는 heading 수준
+      ⑤ `shared/content.ts` 전부 이행(가이드=md, UI 문구=yaml) 후 제거. 근거: 정형 문서는 엄격하고 안전하게, 데모가 필요한
+      문서는 MDX의 표현력을 쓰며, 현재 테스트 수준의 번역 보장을 프레임워크 기능으로 옮긴다. 10.8. V-27.
 - [ ] DC-26: 이미지. 변환 엔진·포맷·srcset 폭 목록·dev 캐시 위치·원격 허용 목록·`<Picture>`와
       배경 이미지 범위를 정한다. V-27.
 - [x] DC-27 (2026-10-13 결정): 요청 컨텍스트·코어 API. ① 모든 서버 함수에 명시적 `ctx` 인자
@@ -1390,7 +1425,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-25·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
