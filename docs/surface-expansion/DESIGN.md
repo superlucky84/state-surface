@@ -1227,14 +1227,19 @@ export default async function Page(ctx: SurfaceContext) {
   빌드 오류다. 목록에 없는 params로 요청이 오면 404다.
 - **요청 의존 코드 진단**: prerender 중의 `ctx`는 제한 모드다. `ctx.cookies`·`ctx.request` 헤더·`ctx.locals`·`ctx.flash`·
   `ctx.nonce`를 읽으면 원본 위치와 함께 빌드 오류다. 개인화는 지연 슬롯(10.4)으로 분리한다.
-- **출력·서빙**: 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력한다. 어댑터는
-  정적 파일을 SSR보다 먼저 서빙하고(Workers는 Static Assets) 기본 `Cache-Control: public, max-age=0, must-revalidate`와
-  ETag를 붙인다. BASE_PATH는 빌드 시 고정되며 실행 환경 값과 다르면 시작 시 진단한다. CSP nonce가 필요한 페이지는
+- **출력·서빙**: 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력한다. JS·CSS·
+  이미지 등 정적 자산은 어댑터가 코어보다 먼저 서빙한다. prerender HTML은 아래처럼 코어를 거쳐 응답하며 기본
+  `Cache-Control: public, max-age=0, must-revalidate`와 빌드 manifest의 해시 기반 ETag(`If-None-Match` → 304)를 붙인다. BASE_PATH는 빌드 시 고정되며 실행 환경 값과 다르면 시작 시 진단한다. CSP nonce가 필요한 페이지는
   prerender할 수 없다(요청별 값). 엔진이 출력하는 스크립트는 외부 module script와 실행되지 않는 JSON뿐이므로
   prerender 페이지는 nonce 없이 `script-src 'self'` 계열 CSP로 동작한다.
-- **미들웨어와 보안 헤더**: 어댑터가 정적 파일을 먼저 서빙하면 prerender HTML은 `onRequest` 미들웨어(11.2)를 거치지
-  않아 미들웨어가 붙이는 CSP·보안 헤더·인증·로깅이 빠진다. prerender HTML에 이를 적용하는 방식은 DC-32에서 정한다
-  (권고: HTML 응답은 코어를 통과해 미들웨어를 실행하고, JS·CSS·이미지 등 나머지 정적 자산만 어댑터가 먼저 서빙).
+- **미들웨어와 보안 헤더**(DC-32 결정): prerender HTML 요청도 코어를 통과해 `onRequest` 미들웨어(11.2)를 실행한다.
+  코어는 경로가 prerender 목록에 있으면 렌더하지 않고 어댑터의 정적 읽기(11.3 어댑터 계약)로 빌드된 본문을 응답한다.
+  따라서 CSP·보안 헤더·인증·로깅·서버 SDK 트레이스와 언어 없는 경로의 302(i18n)가 SSR 페이지와 같은 코드로 적용된다.
+  - 미들웨어는 `ctx.route.prerendered === true`로 prerender 응답을 구분한다. 헤더 추가·변경과 조기 응답(401·리다이렉트)은
+    할 수 있지만 본문은 빌드 결과 그대로이며 바꾸지 않는다. nonce는 본문이 고정이라 여전히 쓸 수 없다.
+  - 비용은 HTML 요청마다 서버 함수 1회 실행이며 렌더는 없다. 정적 자산 요청은 코어를 거치지 않는다.
+  - 서버 없는 순수 정적 호스팅(모든 페이지 prerender, 10.7 선언)은 해당하지 않으며, 호스팅의 헤더 설정(`_headers` 등)
+    가이드로 대신한다. 이 경우 인증·요청별 처리는 제공하지 않는다.
 - **i18n**(DC-24 결정): 언어를 URL에 넣는다(`routes/[lang]/…` → `/en/…`, `/ko/…`). 언어별로 prerender하고 각 페이지에
   `hreflang` 대체 링크를 출력한다. 언어가 없는 경로(`/`, `/guide/x`)는 `lang` 쿠키 → `Accept-Language` → 기본 언어
   순으로 골라 302로 해당 언어 경로에 보낸다. 언어 전환은 같은 페이지의 다른 언어 경로로 이동하며(라우터가 매끄럽게
@@ -1344,7 +1349,8 @@ const response: Response = await handler.fetch(request, platform);
 
 - 코어는 `engine/server/core/`(가칭)에 두고 `node:*`·Express import를 금지한다. lint 규칙과 번들 검사로
   강제한다(V-29). 라우팅은 빌드 manifest의 경로 패턴으로 수행하고 페이지 SSR·`/transition/:name`·
-  지연 슬롯(10.4)·액션(10.5)·404를 모두 처리한다. 정적 파일 서빙은 어댑터 책임이다.
+  지연 슬롯(10.4)·액션(10.5)·prerender HTML(10.7, 미들웨어 후 정적 본문)·404를 모두 처리한다. JS·CSS·이미지 등
+  정적 자산 서빙은 어댑터 책임이다.
 - `SurfaceContext`(가칭)를 모든 서버 함수에 **명시적 인자**로 넘긴다(DC-27 결정). 암묵적
   `getContext()`(AsyncLocalStorage)는 제공하지 않는다. 깊은 헬퍼에는 ctx를 인자로 전달한다.
 
@@ -1382,7 +1388,8 @@ const response: Response = await handler.fetch(request, platform);
   새 API로 일괄 전환하고 데모 라우트·scaffold·가이드 문서도 같은 단계에서 갱신한다.
 - **미들웨어**(DC-27 결정): 양파형 `onRequest(ctx, next) => Response`. `sequence(...)`로 합성하며
   `next()` 전에 조기 `Response`를 반환하거나 `next()` 결과를 가공할 수 있다. 페이지·transition·액션·
-  지연 슬롯 요청 모두 통과한다. 요청 종류는 `ctx.route.kind`(가칭)로 구분한다. 보안 헤더·로깅·인증을
+  지연 슬롯·prerender HTML 요청 모두 통과한다. 요청 종류는 `ctx.route.kind`(가칭), prerender 응답 여부는
+  `ctx.route.prerendered`로 구분한다(DC-32). 보안 헤더·로깅·인증을
   여기서 처리하며 기존 `TransitionHooks`는 제거한다. body 크기 한도는 코어가 스트림을 읽으며 강제한다.
 - **env**: `ctx.env`는 어댑터가 주입한다(Node·Bun·Deno는 프로세스 환경, Workers는 binding env).
   코어는 `process.env`를 직접 읽지 않는다. BASE_PATH·NODE_ENV 같은 엔진 설정은 `createHandler` 옵션으로 받는다.
@@ -1420,8 +1427,10 @@ const response: Response = await handler.fetch(request, platform);
 - **배포 형식**(DC-28 결정): 원본 `engine/**/*.ts` 배포를 중단하고 컴파일된 ESM JS + `.d.ts` + source map을
   `exports`로 배포한다. 저장소 내부 개발은 기존 tsconfig·Vite alias로 원본을 참조한다. 빌드 도구(tsc/tsup 등)
   선택은 구현 단계에서 정한다.
-- **어댑터 계약**: 어댑터는 `{ name, serverEntry, supports: { fs, imageTransform, longStream, ... } }`를
-  선언한다. 빌드는 사용 기능과 `supports`를 대조해 미지원 기능을 원본 위치와 함께 빌드 오류로 보고한다.
+- **어댑터 계약**: 어댑터는 `{ name, serverEntry, readStatic(path), supports: { fs, imageTransform, longStream, ... } }`를
+  선언한다. `readStatic`은 prerender HTML 본문을 읽는 함수다(Node·Bun·Deno는 파일, Workers는 `ASSETS` 바인딩
+  fetch). Workers는 HTML 경로에 Worker 우선 실행(`run_worker_first`)을 설정하고 나머지 자산은 Static Assets가
+  먼저 응답한다(DC-32). 빌드는 사용 기능과 `supports`를 대조해 미지원 기능을 원본 위치와 함께 빌드 오류로 보고한다.
 - **dev·검증**(DC-28 결정): dev는 Node + Vite middleware 단일 경로를 유지하고 코어 핸들러를 Vite dev 서버에
   연결해 dev와 production이 같은 코어를 사용하게 한다. Workers는 production 빌드 산출물을 CI에서
   wrangler dev(workerd)로 실행해 V-28 적합성 테스트를 통과시킨다. Bun·Deno도 각 런타임으로 같은 테스트를 실행한다.
@@ -1432,13 +1441,13 @@ const response: Response = await handler.fetch(request, platform);
   어댑터별로 이 엔트리를 감싸는 얇은 파일만 다르다. 실행 중 `readdir`·`fs.readFileSync`를 사용하지 않는다.
 - 런타임별 기능 제약 매트릭스를 문서와 진단에 반영한다.
 
-| 기능                 | Node·Express·Bun·Deno | Cloudflare Workers                                          |
-| -------------------- | --------------------- | ----------------------------------------------------------- |
-| 긴 NDJSON 스트림     | 지원                  | 지원. 요청 시간·CPU 한도 내에서 동작, 한도 문서화           |
-| 이미지 변환(R-25)    | 빌드·요청 시 변환     | 빌드 시 변환만. 요청 시 변환은 진단 또는 플랫폼 서비스 위임 |
-| 콘텐츠 컬렉션(R-24)  | 빌드 번들             | 빌드 번들(실행 중 파일 읽기 금지)                           |
-| 지연 슬롯 서명(R-20) | Web Crypto            | Web Crypto                                                  |
-| prerender 서빙(R-23) | 어댑터 static         | Static Assets                                               |
+| 기능                 | Node·Express·Bun·Deno      | Cloudflare Workers                                              |
+| -------------------- | -------------------------- | --------------------------------------------------------------- |
+| 긴 NDJSON 스트림     | 지원                       | 지원. 요청 시간·CPU 한도 내에서 동작, 한도 문서화               |
+| 이미지 변환(R-25)    | 빌드·요청 시 변환          | 빌드 시 변환만. 요청 시 변환은 진단 또는 플랫폼 서비스 위임     |
+| 콘텐츠 컬렉션(R-24)  | 빌드 번들                  | 빌드 번들(실행 중 파일 읽기 금지)                               |
+| 지연 슬롯 서명(R-20) | Web Crypto                 | Web Crypto                                                      |
+| prerender 서빙(R-23) | 코어(미들웨어) + 파일 읽기 | HTML은 Worker 우선 실행 + `ASSETS` 바인딩, 자산은 Static Assets |
 
 - 요청 간 공유 상태(모듈 전역 캐시)는 Edge에서 isolate마다 다를 수 있다. 정확성이 이에 의존하지 않도록 한다.
 - 비 JS 서버의 페이지 SSR은 비목표다. 외부 백엔드가 NDJSON 프레임을 생성하고 코어가 중계하는 구성은
@@ -1625,8 +1634,8 @@ const response: Response = await handler.fetch(request, platform);
 
 #### 최종 검토에서 추가한 결정 (2026-10-14)
 
-DC-01~DC-28 결정 후 최종 검토에서 Lithent SSR 제약(1장)과 계약 공백을 확인해 다음 네 항목을 추가했다. 미결 항목은
-결정 전까지 해당 구현 단계의 진입 조건을 충족하지 않는다(14장).
+DC-01~DC-28 결정 후 최종 검토에서 Lithent SSR 제약(1장)과 계약 공백을 확인해 다음 네 항목을 추가하고
+같은 날 모두 결정했다.
 
 - [x] DC-29 (2026-10-14 결정): SSR 비동기 범위와 컴포넌트 데이터 단계. ① async는 페이지 함수에만, 레이아웃·
       컴포넌트는 동기(레이아웃 데이터는 `ctx.locals` 또는 props) ② `defineServerComponent({ load, render })`(가칭)는
@@ -1648,12 +1657,13 @@ DC-01~DC-28 결정 후 최종 검토에서 Lithent SSR 제약(1장)과 계약 �
       금지 ⑤ client 아일랜드 안은 빌드 오류, 라우터 이동 후 새 페이지 boot 실행. 검토 후 제외: named export
       (페이지 함수와 별도 계산·중복 조회, 조건부 어색), boot 제거(로드 직후 스트림·client props 갱신 불가). 근거:
       페이지 함수가 준비한 값을 그대로 쓰고 조건부 boot가 자연스럽다. 2.1/2.5/10.1. V-04/V-18/V-19.
-- [ ] DC-32: prerender HTML의 미들웨어·보안 헤더. 어댑터가 정적 파일을 먼저 서빙하면 `onRequest`의 CSP·보안
-      헤더·인증·로깅이 prerender HTML에 적용되지 않는다. 후보 ① HTML 응답은 코어를 통과해 미들웨어를 실행하고
-      어댑터가 제공하는 정적 읽기로 본문을 응답, JS·CSS·이미지 등 나머지 정적 자산만 어댑터 우선(Workers는 HTML
-      경로에 Worker 우선 실행) ② 어댑터 우선 서빙을 유지하고 `surface({ headers })` 경로별 정적 헤더 규칙 제공
-      (미들웨어·인증은 적용 안 됨을 명시) ③ 기본 ②에 opt-in ①. 권고: ①. SSR 페이지와 같은 헤더·인증 경로를
-      보장한다. 서버 없는 정적 호스팅은 호스팅 헤더 설정 가이드로 대신한다. 10.7/11.2. V-26/V-28.
+- [x] DC-32 (2026-10-14 결정): prerender HTML의 미들웨어·보안 헤더. ① prerender HTML 요청은 코어를 통과해
+      `onRequest`를 실행하고 어댑터의 `readStatic`으로 빌드된 본문을 응답(렌더 없음), JS·CSS·이미지는 어댑터 우선
+      ② 미들웨어는 `ctx.route.prerendered`로 구분하며 헤더 변경·조기 응답은 가능, 본문 변경은 불가 ③ ETag(빌드
+      해시)·304와 `Cache-Control` 기본값은 코어가 처리 ④ Workers는 HTML 경로에 `run_worker_first` + `ASSETS` 바인딩
+      ⑤ 서버 없는 순수 정적 호스팅은 호스팅 헤더 설정 가이드로 대신. 검토 후 제외: 어댑터 우선 + 정적 헤더 규칙(헤더
+      정의가 두 곳으로 갈라지고 인증·로깅 없음), 두 방식 병행(구현·테스트 이중화). 근거: SSR 페이지와 같은 헤더·
+      인증·관측 경로를 보장하고 비용은 HTML 요청당 함수 1회로 작다. 10.7/11.2/11.3. V-26/V-28.
 
 기존 아이디어 문서의 미결정 항목도 이어받는다. 이전 DC-01은 DC-01/DC-15, DC-02는 DC-02/DC-08,
 DC-03은 DC-03/DC-08, DC-04는 DC-09, DC-05는 DC-10, DC-06/DC-07은 DC-04/DC-11,
@@ -1691,7 +1701,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | V-23 | R-20           | 셸 즉시 응답·fallback 후 교체, 토큰 변조·권한 밖 거부, 실패 시 fallback 유지, 선행 transition 우선, prerender 셸에서 동작. `defineServerComponent`의 `load`가 토큰 props로 실행되고 `ctx.signal` 취소 반영.                                                                                                                               |
 | V-24 | R-21           | 스키마 위반 필드 오류, JS 없음 POST→303→결과 반영, JS 있음 동일 결과, CSRF 거부, handler 코드 client 미포함. 외부·`//`·스킴 `_redirect` 거부, flash 한도 초과 시 입력값 생략, opt-in 밖 입력·file 값 미포함.                                                                                                                              |
 | V-25 | R-22           | SSR·server 교체·client 렌더에서 범위 일치, 다른 컴포넌트·슬롯 자식 비적용, global 탈출, 이동 시 CSS 로드.                                                                                                                                                                                                                                 |
-| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작.                                                                                                                                                                                                                             |
+| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 자산 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작. prerender HTML에 미들웨어 헤더·조기 응답 적용(`ctx.route.prerendered`), 본문 불변, ETag·304.                                                                                                                           |
 | V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                                                                                                                                                                                                                      |
 | V-28 | R-26/NFR-02    | 공통 적합성 테스트(SSR·transition 스트림·abort·지연 슬롯·액션·404·BASE_PATH·cookie)가 모든 어댑터에서 Node 어댑터와 동일(1단계에서는 전환 전 Express 결과와도 비교). 첫 yield 후 cookie 무시·dev 경고, 미들웨어 조기 반환·응답 가공.                                                                                                      |
 | V-29 | R-26/NFR-05    | 5개 어댑터에서 V-28 통과. 코어 번들에 `node:*`·Express import 없음, 실행 중 fs 접근 없음, Workers 제약 기능 진단, 콜드 스타트·번들 크기 기록.                                                                                                                                                                                             |
@@ -1737,9 +1747,10 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   실행으로 확인하고 async 범위(2.1), 호출 지점 변환·트리 순회 수집(3장), 문서 조립(4.4), 작성 층 full·done 규칙과
   pageId·`islands`(6.2), persist 이동 순서(10.2), PRG 리다이렉트·flash 한도(10.5), SSR 해시 제거(11.2)를 반영하고
   DC-29~DC-32를 추가했다. DC-29는 페이지 함수만 async + server 슬롯 `defineServerComponent` load 단계로, DC-30은
-  targets 생략 시 모든 슬롯과 겹침으로, DC-31은 JSX `<Boot>`로 결정했다(2.5).
-- 다음: DC-32를 결정한다. 이후 IMPLEMENT.md와 MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을
-  연결한다.
+  targets 생략 시 모든 슬롯과 겹침으로, DC-31은 JSX `<Boot>`로(2.5), DC-32는 prerender HTML도 코어·미들웨어
+  통과로 결정해 DC-01~DC-32를 모두 결정했다.
+- 다음: IMPLEMENT.md(0~10단계의 작업·baseline test·entry/exit·검증 ID)와 MANUAL_TEST_CHECKLIST.md를 작성하고
+  검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
   공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
 - 현재 기준 커밋: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
