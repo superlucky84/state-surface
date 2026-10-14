@@ -562,21 +562,49 @@ props }], ui, boot }`이며 실제 렌더된 슬롯만 담는다. server 슬롯�
 - 취소는 대기 큐와 비동기 DOM 반영도 요청 generation으로 무효화한다. 확정된 결과를 자동 rollback하지 않는다.
   모듈 로드 취소와 액션 실행 취소는 별도로 처리한다.
 
-## 7. 컴포넌트 액션과 Pending UI
+## 7. 컴포넌트 액션과 Pending UI (DC-11 결정)
 
-useAction 또는 context를 통한 action handle을 client 실행 컨텍스트에서 제공하는 안이다
-(DC-11). 함수를 서버 JSON에 직렬화하거나 debug용 window.\_\_surface에 의존하지 않는다.
-API 이름·타입은 TBD다. data-action은 간단한 서버 조작의 공개 작성 방식으로 유지한다.
+```tsx
+import { useAction } from 'state-surface/client';
 
-- 초기 동시성은 기존 abort-previous 유지안을 권고한다. keyed queue·병렬 액션은 별도 결정이다.
-- loading·hasResult·pending·error·aborted를 요청 ID로 관리한다. 첫 프레임에서 해제되던 기존
-  data-pending은 요청 완료까지 유지하는 의미로 바꾸고 첫 결과 도착은 별도 상태(가칭 data-has-result)로 표시한다.
-- 승인된 프레임의 상태와 현재 활성 슬롯의 DOM 반영을 액션 완료 조건으로 삼는 안이다.
-  visible/media를 기다리는 휴면 아일랜드의 활성화까지 완료를 기다리지 않는다.
-- 이전 요청 finally가 새 요청의 UI를 해제하지 않는다. timeout·HTTP·wire·chunk 오류를
-  구분하고 첫 결과 후의 실패도 관찰 가능하게 한다. 정확한 action 결과 타입은 TBD다.
-- 이벤트 위임과 직접 handler의 우선순위, defaultPrevented, submitter와 복수 폼 값을 정의한다.
-  첫 이벤트를 잡은 경로에서 한 번만 실행한다(V-13).
+const SearchBox = mount((renew, props) => {
+  const search = useAction(renew, 'search'); // 상태 가진 핸들
+  let q = '';
+  return () => (
+    <form
+      onSubmit={e => {
+        e.preventDefault();
+        search.run({ q });
+      }}
+    >
+      <input onInput={e => (q = e.target.value)} />
+      <button disabled={search.pending}>{search.pending ? '검색 중…' : '검색'}</button>
+      {search.error && <p>{search.error.message}</p>}
+    </form>
+  );
+});
+```
+
+- **핸들 API**: `useAction(renew, name, options?)`는 `{ run(params), abort(), pending, hasResult, error, aborted }`를
+  돌려준다. 상태가 바뀌면 `renew()`로 컴포넌트를 다시 렌더한다. 컴포넌트 unmount 시 진행 중 요청을 abort하지 않고
+  핸들 구독만 해제한다. DC-22의 타입 지정 액션이면 params·결과 타입을 서버 정의에서 추론한다.
+  함수를 서버 JSON에 직렬화하거나 debug용 `window.__surface`에 의존하지 않는다.
+- **`data-action` 유지**: 간단한 서버 조작은 기존 선언형 `data-action`을 그대로 쓴다. 두 경로는 같은 액션
+  런타임(요청 ID·동시성·pending)을 공유한다.
+- **완료 Promise**: `run()`은 `done`을 받고 활성 슬롯 반영을 마치면 `{ ok: true }`, 실패하면 `{ ok: false, error }`,
+  취소되면 `{ ok: false, aborted: true }`로 resolve한다. throw하지 않는다. 휴면 아일랜드의 활성화는 기다리지 않는다.
+- **오류 구분**: `error.kind`로 `timeout`·`http`·`protocol`(wire 위반)·`chunk`(아일랜드 로드)·`server`(error 프레임)를
+  구분한다. 첫 결과 이후의 실패도 관찰 가능하며 예상 밖 오류는 `reportError`로도 전달한다(8.3).
+- **동시성**(DC-11 결정): 같은 이름의 액션이 다시 실행되거나 **대상 슬롯(targets)이 겹치는** 액션이 시작되면
+  이전 요청을 abort한다. 대상이 겹치지 않는 액션은 동시에 진행한다(예: 검색 중 좋아요). 액션별로
+  `mode: 'queue'`를 선언하면 같은 이름의 요청을 순서대로 실행한다. 기존 전역 abort-previous를 대체한다(AG-08).
+  대상 슬롯 정보는 서버 등록 정보에서 빌드 manifest로 내려받는다.
+- **pending 표시**: 요청 ID별로 관리한다. 대상 슬롯 앵커의 `data-pending`은 요청 완료(done·error·abort)까지 유지하고
+  첫 결과 도착은 `data-has-result`로 표시한다. 이전 요청의 종료 처리가 새 요청의 pending을 해제하지 않는다.
+  `data-pending-targets`는 표시 대상만 좁힌다.
+- **이벤트 우선순위**: 컴포넌트 핸들러가 `preventDefault()`를 호출한 이벤트에는 `data-action` 위임이 실행되지 않는다.
+  한 이벤트에서 액션은 한 번만 실행한다. submit은 submitter의 name·value와 복수 값 필드를 포함해 폼 값을
+  이벤트 시점에 snapshot한다(V-13).
 
 ## 8. Capability·UI·입력 안전성
 
@@ -1104,8 +1132,11 @@ const response: Response = await handler.fetch(request, platform);
       op ③ 혼합 프레임은 patch 하나로 ④ server 렌더는 슬롯별 첫 갱신 즉시·이후 최대 33ms 1회·done/error 전 최종 렌더
       ⑤ 고빈도 누적은 client 모드 권장 + dev 경고 ⑥ append op는 후속. 근거: stateless 서버로 런타임 이식성을
       유지하고, 실수로 server 슬롯에 토큰을 흘려도 렌더 비용을 제한한다. 6.1. V-02/V-07/V-08.
-- [ ] DC-11: 컴포넌트 액션·pending·취소. context handle·요청 ID·기존 abort-previous 권고.
-      첫 결과/완료·이벤트 우선순위·Promise 결과·renderer 실패를 정한다. V-04/V-08/V-13/V-18.
+- [x] DC-11 (2026-10-14 결정): 컴포넌트 액션·pending·취소. ① `useAction(renew, name)` 상태 핸들(pending·hasResult·
+      error·aborted, 변경 시 renew), `run()`은 throw 없는 결과 Promise ② `data-action`과 같은 런타임 공유 ③ 동시성은 같은
+      이름·겹치는 targets만 abort, 나머지는 병렬, 액션별 `mode:'queue'` 선택 ④ `data-pending`은 완료까지, 첫 결과는
+      `data-has-result` ⑤ `error.kind`로 오류 구분, reportError 전달 ⑥ preventDefault 시 위임 생략·1회 실행·submitter 포함
+      snapshot. 근거: 보일러플레이트 없이 pending UI를 만들고, 무관한 액션이 서로 취소하지 않게 한다. 7장. V-04/V-08/V-13/V-18.
 - [x] DC-12 (2026-10-14 결정): 플러그인 선언·지연 lifecycle. ① 페이지·레이아웃 `export const plugins`, 플러그인별
       청크로 선언 페이지에서만 로드(전역 설정 없음) ② `definePlugin({ slots, load, attach→cleanup, update })`,
       replace는 cleanup→attach, morph·client 갱신은 update, 제거·페이지 이동은 cleanup ③ 기본 `idle` 로드,
@@ -1246,7 +1277,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
