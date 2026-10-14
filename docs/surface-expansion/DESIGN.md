@@ -5,8 +5,8 @@
 상태: Draft / Review — 구현 전 검토 초안
 
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md)를 따른다. 사용자와 합의한 목표,
-현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `.surface`, `Surface`,
-`definePage`, `Slot`과 신규 프레임 필드는 제안이며 현재 공개 API가 아니다.
+현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `Slot`, 지시자와 신규 프레임 필드는
+제안이며 현재 공개 API가 아니다.
 `ClientRouter`, `transition:persist`, `server:defer`, `defineAction`, `defineCollection`,
 `Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다. 11장의 `createHandler`, `SurfaceContext`와
 어댑터 패키지 이름도 가칭이다.
@@ -17,7 +17,7 @@
 | 경계                | 현재 코드                                                                                   | 재사용·변경 방향                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | 페이지 계약         | [routeModule.ts](../../engine/shared/routeModule.ts): `layout(stateScript): string`         | 기존 계약을 유지하면서 서버 페이지 렌더 함수와 메타데이터를 추가한다.              |
-| 라우트 발견         | [routeScanner.ts](../../engine/server/routeScanner.ts): `.ts`만 route로 인정                | `.tsx`와 전용 파일의 발견·dev 로드·production 생성 모듈을 연결한다.                |
+| 라우트 발견         | [routeScanner.ts](../../engine/server/routeScanner.ts): `.ts`만 route로 인정                | `.tsx` 페이지의 발견·dev 로드·production 생성 모듈을 연결한다.                     |
 | JSX·SSR             | [tsconfig.json](../../tsconfig.json), [ssrRenderer.ts](../../engine/server/ssrRenderer.ts)  | Lithent JSX와 `renderToString()`으로 페이지 트리를 렌더링한다.                     |
 | 슬롯 채움           | [ssr.ts](../../engine/server/ssr.ts): 문자열의 h-state를 정규식으로 채움                    | 새 트리는 렌더 과정에서 슬롯을 처리하고 정규식 문자열 채움 경로는 제거한다(AG-08). |
 | 컴포넌트 레지스트리 | [templateRegistry.ts](../../engine/shared/templateRegistry.ts): 이름과 TagFunction          | 슬롯 인스턴스·컴포넌트·모드·capability를 분리한다.                                 |
@@ -42,111 +42,100 @@ SSR의 UI 클래스 문자열에 따옴표를 넣으면 추가 HTML 속성이 �
 
 ## 2. 작성 경험
 
-### 2.1 최종 목표: 서버 스크립트와 템플릿을 한 파일에 작성
+### 2.1 최종 형식: async 컴포넌트 `.tsx` 페이지 (DC-07 결정)
 
-다음은 가칭 `routes/article/[id].surface`의 작성 예시다. ArticleBody는 서버에서 갱신하고
-ArticleEditor는 화면에 들어올 때 활성화한다. LikeButton은 서버 갱신이 없는 독립 아일랜드다.
-일반 마크업에는 클라이언트 컴포넌트 코드가 없다.
-
-```astro
----
-import Layout from '../../layouts/Layout.surface';
-import ArticleBody from '../../components/ArticleBody';
-import ArticleEditor from '../../components/ArticleEditor';
-import LikeButton from '../../components/LikeButton';
-import { getArticle } from '../../server/articles';
-
-const article = await getArticle(Surface.params.id);
----
-
-<Layout title={article.title}>
-  <main>
-    <h1>{article.title}</h1>
-
-    <Slot name="article:body" mode="server">
-      <ArticleBody article={article} />
-    </Slot>
-
-    <Slot name="article:editor" client:visible fallback={<EditorSkeleton />}>
-      <ArticleEditor articleId={article.id} />
-    </Slot>
-
-    <LikeButton count={article.likes} client:idle />
-  </main>
-</Layout>
-```
-
-Slot 문법은 DC-01에서 결정했다. 확장자와 단일 파일 문법은 DC-07에서 정한다.
-
-- **두 가지 선언**: 서버 transition이 갱신하는 경계는 `<Slot>`으로 감싼다. 갱신 없는 독립 아일랜드는
-  컴포넌트에 직접 지시자를 붙인다(`<LikeButton client:idle />`). 둘 다 같은 내부 SlotDefinition으로 정규화한다.
-- **단일 자식 엘리먼트**: `<Slot>`의 자식은 컴포넌트 엘리먼트 정확히 1개다. 그 props가 슬롯 상태이며
-  transition 프레임은 같은 props 모양을 보낸다(`states: { 'article:body': { article } }`). JSX 타입 검사가
-  props와 상태 모양을 함께 검증한다. 자식이 0개·2개 이상·텍스트·Fragment·조건식이면 컴파일러가 진단한다.
-  Astro처럼 컴포넌트 props로 데이터를 넘긴다는 점은 같고, 이름 붙은 갱신 경계를 둔다는 점이 다르다.
-- **ID**: `<Slot>`의 `name`은 필수이며 transition이 겨냥하는 안정 식별자다. 직접 지시자 아일랜드는
-  컴파일러가 자동 ID를 부여하고 프레임 대상이 될 수 없다. 프레임이나 액션 `targets`가 자동 ID를 가리키면
-  진단한다. ID 형식·중복·반복 규칙은 4.3(DC-08)을 따른다.
-- **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다. `<Slot>`과 직접
-  지시자 모두 같은 prop을 지원한다(Astro의 `slot="fallback"` 자식 방식은 쓰지 않는다).
-- **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
-  `fallback`, `capability`, `resetKey`. 자식 props와 엔진 속성이 섞이지 않는다.
-- 예시의 Surface와 Slot은 컴파일러가 제공하는 컨텍스트·내장 경계 후보이며 가져오기 방식은 DC-07에서 정한다.
-
-### 2.2 선행 검증: 단일 `.tsx` 페이지
-
-TypeScript와 Lithent의 기존 도구로 내부 계약을 먼저 검증하는 후보다.
-최종 서버 스크립트·템플릿 형식의 완료 조건을 대체하지 않는다.
+전용 확장자(`.surface`) 없이 **`.tsx` 한 파일**이 최종 작성 형식이다. 함수 본문이 Astro의 `---` 영역
+(요청마다 실행되는 서버 스크립트), `return`의 JSX가 템플릿 영역에 해당한다. TypeScript·Prettier·ESLint·
+에디터·AI 도구를 추가 개발 없이 그대로 사용한다. 다음은 `routes/article/[id].tsx` 예시다. ArticleBody는
+서버에서 갱신하고 ArticleEditor는 화면에 들어올 때 활성화하며 LikeButton은 서버 갱신이 없는 독립 아일랜드다.
 
 ```tsx
-import { definePage, Slot } from 'state-surface';
+import type { SurfaceContext } from 'state-surface/server';
+import { Slot } from 'state-surface';
 import Layout from '../../layouts/Layout';
 import ArticleBody from '../../components/ArticleBody';
 import ArticleEditor from '../../components/ArticleEditor';
+import EditorSkeleton from '../../components/EditorSkeleton';
+import LikeButton from '../../components/LikeButton';
 import { getArticle } from '../../server/articles';
+import s from './article.module.css';
 
-export default definePage({
-  load: async ({ params }) => getArticle(params.id),
-  render: article => (
+export const prerender = false;
+
+export default async function Page(ctx: SurfaceContext) {
+  const article = await getArticle(ctx.params.id); // ← 서버 스크립트 영역
+
+  return (
     <Layout title={article.title}>
-      <main>
+      <main class={s.main}>
         <h1>{article.title}</h1>
+
         <Slot name="article:body" mode="server">
           <ArticleBody article={article} />
         </Slot>
+
         <Slot name="article:editor" client:visible fallback={<EditorSkeleton />}>
           <ArticleEditor articleId={article.id} />
         </Slot>
+
         <LikeButton count={article.likes} client:idle />
       </main>
     </Layout>
-  ),
-});
+  );
+}
 ```
 
-두 형식을 같은 PageDefinition으로 정규화해 모드·props·액션·SSR 계약을 공유한다.
-라우트 안의 보조 파일을 잘못 발견하지 않는 규칙과 같은 URL의 `.ts`/`.tsx`/전용 파일
-충돌 진단이 필요하다. 첫 범위는 client 컴포넌트를 별도 `.tsx`에서 import하는 방식을 권고한다.
-서버 영역의 임의 클로저를 client 코드로 추출·복원하는 기능은 제공하지 않는다.
+- **페이지 계약**(DC-07 결정): `default export`는 `async (ctx: SurfaceContext) => JSX`다. 페이지 옵션은
+  named export로 선언한다(`prerender`, `getStaticPaths`, 필요 시 `transition`·`boot` 등 후속 DC에서 확정).
+  `definePage({ load, render })` 형태는 사용하지 않는다.
+- **레이아웃**: 일반 컴포넌트(`Layout`)로 작성하며 props와 children을 받는다. 레이아웃도 async일 수 있고
+  같은 `ctx`가 필요하면 props로 넘긴다(암묵적 컨텍스트 없음, DC-27).
+- **Slot 문법**(DC-01 결정): 서버 transition이 갱신하는 경계는 `<Slot>`으로 감싸고, 갱신 없는 독립 아일랜드는
+  컴포넌트에 직접 지시자를 붙인다(`<LikeButton client:idle />`). 둘 다 같은 내부 SlotDefinition으로 정규화한다.
+- **단일 자식 엘리먼트**: `<Slot>`의 자식은 컴포넌트 엘리먼트 정확히 1개다. 그 props가 슬롯 상태이며
+  transition 프레임은 같은 props 모양을 보낸다(`states: { 'article:body': { article } }`). JSX 타입 검사가
+  props와 상태 모양을 함께 검증한다. 자식이 0개·2개 이상·텍스트·Fragment·조건식이면 빌드 플러그인이 진단한다.
+  Astro처럼 컴포넌트 props로 데이터를 넘긴다는 점은 같고, 이름 붙은 갱신 경계를 둔다는 점이 다르다.
+- **ID**: `<Slot>`의 `name`은 필수이며 transition이 겨냥하는 안정 식별자다. 직접 지시자 아일랜드는
+  자동 ID를 받고 프레임 대상이 될 수 없다. 형식·중복·반복 규칙은 4.3(DC-08)을 따른다.
+- **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다(`<Slot>`과 직접
+  지시자 공통).
+- **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
+  `fallback`, `capability`, `resetKey`. 자식 props와 엔진 속성이 섞이지 않는다.
+- **지시자 표기**: `client:visible` 같은 namespaced JSX 속성을 사용한다. TypeScript는 5.1부터 namespaced
+  JSX 속성의 타입 검사를 지원한다. esbuild·Vite 변환 통과 여부를 2단계 시작 시 spike로 확인하고,
+  막히면 대체 표기(예: `clientVisible`)를 정한다. `Slot`·지시자 타입은 `state-surface`가 JSX 타입 선언으로 제공한다.
+
+### 2.2 전용 파일 형식을 두지 않는 이유
+
+Astro식 `.surface` + `---` 형식을 검토했으나 채택하지 않았다(DC-07, 2026-10-14). 전용 확장자는
+TextMate·tree-sitter 문법, Volar 기반 언어 서버·VS Code 확장, `surface check` CLI, Prettier 플러그인·
+ESLint 프로세서를 별도로 만들고 TypeScript 버전에 맞춰 계속 유지해야 하며, 그 전까지는 `.tsx`보다 작성
+경험이 나쁘다. async 컴포넌트 `.tsx`는 AG-03의 "한 파일의 자연스러운 트리" 목표를 그대로 충족한다.
+잃는 것은 `---` 외형과 파일 안 `<style>`이며, scoped CSS는 CSS Modules로 제공한다(10.6, DC-23).
+전용 형식은 비목표이며 향후 재검토가 필요하면 `.surface → 가상 .tsx` 변환 + Volar 방식을 출발점으로 한다.
 
 ### 2.3 요청 시 실행과 데이터 전달
 
-- frontmatter의 요청 데이터 처리는 요청별 async 렌더 함수로 변환한다. 모듈 초기화 시점의
-  `await`로 변환해 요청 데이터를 공유하지 않는다. import와 안전한 정의는 모듈에서 관리할 수 있다.
+- 페이지 함수 본문이 요청마다 실행되는 서버 스크립트다. 모듈 최상위 `await`로 요청 데이터를 준비하지 않으며
+  요청 데이터를 모듈 전역에 저장하지 않는다. import와 안전한 정의는 모듈에서 관리할 수 있다.
 - Context는 params, 요청 정보, 인증된 사용자 등을 서버에서 제공한다. 웹 표준 `Request` 기반
   `SurfaceContext`(11.2)를 명시적 인자로 받는다(DC-27 결정).
 - 레이아웃도 같은 서버 렌더 계약으로 props와 children을 받는다. 일반 마크업·조건·반복은
-  서버에서 평가한다. 비동기 데이터는 스크립트 영역에서 준비하는 범위부터 시작한다.
-- client의 `data`는 명시적으로 공개할 props다. 함수·Request·비밀 값을 자동 직렬화하지 않는다.
+  서버에서 평가한다. 비동기 데이터는 페이지·레이아웃 함수 본문에서 준비한다.
+- client 아일랜드의 props는 명시적으로 공개할 값이다. 함수·Request·비밀 값을 자동 직렬화하지 않는다.
   JSON 변환 불가능한 값은 조용히 누락하지 않고 진단한다. Date/BigInt 등의 추가 codec은 TBD다.
-- 스타일·이벤트·scoped CSS 문법은 DC-07/DC-16에서 지원 범위를 결정한다. 지원하지 않는
-  문법은 원본 위치와 함께 진단한다. 초기 편집기 지원이 없으면 그 제약을 명시한다.
+- 서버 영역의 임의 클로저를 client 코드로 추출·복원하는 기능은 제공하지 않는다. client 컴포넌트는 별도
+  모듈에서 import한다. 라우트 안 보조 파일을 페이지로 잘못 발견하지 않는 규칙과 URL 충돌 진단이 필요하다(DC-16).
 
-## 3. 컴파일러와 빌드의 경계
+## 3. 빌드 플러그인의 경계
+
+전용 컴파일러는 두지 않는다(DC-07). `.tsx` 변환은 TypeScript/esbuild와 Lithent JSX가 맡고, StateSurface의
+Vite 플러그인은 Slot·지시자 선언 분석, 진단, manifest·가상 모듈 생성만 담당한다.
 
 ```text
-단일 파일 / JSX 페이지
-        ↓ 구문 분석·선언 검증
+.tsx 페이지·레이아웃·컴포넌트
+        ↓ AST 분석·선언 검증 (Vite 플러그인)
 PageDefinition + SlotDefinition
         ├─ 서버: 요청 렌더 함수, 등록 렌더러, action과 권한
         ├─ 브라우저 메타데이터: slotId, mode, activation, 공개 props
@@ -155,10 +144,10 @@ PageDefinition + SlotDefinition
                    Vite 청크와 manifest
 ```
 
-Vite 플러그인과 가상 모듈 방식을 권고한다(DC-02). 구문 분석·선언 정규화·코드 생성은
+Vite 플러그인과 가상 모듈 방식을 권고한다(DC-02). 선언 분석·정규화·코드 생성은
 플러그인 내부에서 분리하고 dev와 production에서 같은 처리를 호출한다. 가상 모듈에는
 client 컴포넌트만 import한다. 이름 조사에 전체 템플릿의 브라우저 import를 사용하지 않는다.
-AST parser 재사용과 전용 문법 parser 선택은 TBD다.
+AST 분석은 기존 TS/JS parser를 재사용하며 구체적인 선택은 DC-02에서 정한다.
 
 빌드 manifest는 페이지에서 도달 가능한 컴포넌트 목록과 loader를 만들고, 요청 SSR은 실제
 출력한 슬롯 인스턴스·공개 props만 bootstrap에 넣는다. 레이아웃·서버 컴포넌트 안의 선언도
@@ -166,8 +155,8 @@ AST parser 재사용과 전용 문법 parser 선택은 TBD다.
 컴포넌트·ID를 어디까지 허용할지는 DC-02/DC-08에서 정한다. 빌드의 컴포넌트 목록과 요청별
 슬롯 인스턴스 목록을 같은 정보로 취급하지 않는다.
 
-새 책임의 배치 후보는 `engine/compiler/`, `engine/build/`다. 공개 패키지·플러그인 entry는
-DC-07에서 결정한다. `engine/shared/`에 Node 전용 의존성을 섞지 않는다.
+새 책임의 배치 후보는 `engine/build/`(Vite 플러그인 `state-surface/vite`)다. 공개 entry는 DC-28의 단일 패키지
+subpath를 따른다. `engine/shared/`에 Node 전용 의존성을 섞지 않는다.
 
 - `.tsx`의 정적 import·Slot 선언에서 module ID를 해석한다. 분석할 수 없는 컴포넌트 선택은
   명시 registry를 요구하거나 진단하는 안이다. 정확한 지원 범위는 DC-02/DC-08에서 결정한다.
@@ -175,12 +164,11 @@ DC-07에서 결정한다. `engine/shared/`에 Node 전용 의존성을 섞지 �
   제외됐다고 판정하지 않고 client의 전이 의존성도 검사한다.
 - server-only 모듈 표시 방법으로 module marker나 import 규칙을 검토한다. 파일명만으로
   비밀 코드가 없다고 보장하지 않는다. V-05에서는 client 출력 전체에 sentinel이 없는지 검사한다.
-- CSS 추출·로딩을 client 청크에 연결한다. 활성화 전후 CSS 누락과 CLS, 전용 확장자의 Tailwind
-  source 탐색, runtime UI 클래스 허용 토큰의 생성·포함을 검증한다.
-- 현재 tsx 동적 import에 전용 파일을 직접 전달할 수 없다. dev 라우트 로딩은 Vite의 서버 모듈
-  로드 등 transform이 적용되는 경로를 만들어야 한다.
-- production은 컴파일된 route registry를 사용하는 방향을 권고한다. 배포된 Node가 원본
-  전용 파일을 직접 해석할 수 있다고 가정하지 않는다.
+- CSS 추출·로딩을 client 청크에 연결한다. 활성화 전후 CSS 누락과 CLS, Tailwind source 탐색,
+  runtime UI 클래스 허용 토큰의 생성·포함을 검증한다.
+- dev 라우트 로딩은 Vite의 서버 모듈 로드 등 플러그인 transform이 적용되는 경로를 사용한다. tsx 직접
+  import만으로는 Slot 분석·지시자 변환이 적용되지 않는다.
+- production은 빌드가 생성한 route registry를 사용한다(11.4).
 - BASE_PATH, asset manifest, 동적 청크 CSS, 소스맵과 scaffold overrides에 같은 설정을 반영한다.
   기존 `resolveAssetCss()`에도 동적 import의 관련 CSS를 처리하는 계약이 필요하다.
 
@@ -229,7 +217,7 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
 
 - server replace는 내부 HTML과 관련 플러그인 cleanup을 대상으로 한다. 입력·선택·포커스
   보존이 필요한 복잡한 UI는 client로 작성하거나 명시적인 morph 계약을 추가한다(DC-03).
-- **Slot-in-Slot 금지**(DC-08 결정): `<Slot>`의 자식 컴포넌트 트리 안에 다시 `<Slot>`을 두면 컴파일러가
+- **Slot-in-Slot 금지**(DC-08 결정): `<Slot>`의 자식 컴포넌트 트리 안에 다시 `<Slot>`을 두면 빌드 플러그인이
   진단한다. 정적 Layout·페이지 마크업 안에 여러 `<Slot>`을 나란히 두는 것은 허용한다.
 - **server 슬롯 안 아일랜드는 재생성**(DC-08 결정): server 슬롯 컴포넌트 안의 직접 지시자 아일랜드는
   허용한다. 부모 슬롯이 교체되면 기존 아일랜드를 dispose하고 새 HTML의 아일랜드를 다시 활성화한다.
@@ -244,7 +232,7 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
 - **반복**(DC-08 결정): 직접 지시자 아일랜드와 `server:defer`는 Astro처럼 루프 안에서 자유롭게 반복할 수
   있다(자동 ID, 프레임 대상 아님). transition 대상 `<Slot>`은 1차에서 정적 이름만 허용하며 목록은 슬롯
   하나가 목록 컴포넌트를 갖고 partial·accumulate로 갱신한다. key 반복 `<Slot>`은 후속 범위다.
-- **componentId**: 컴파일러가 모듈 경로 + export 이름으로 생성한다. 같은 컴포넌트를 여러 슬롯·아일랜드에서
+- **componentId**: 빌드 플러그인이 모듈 경로 + export 이름으로 생성한다. 같은 컴포넌트를 여러 슬롯·아일랜드에서
   써도 인스턴스는 slotId(자동 ID 포함)별로 독립이다.
 - 알 수 없는 슬롯·중복 slotId·미지원 동적 선언은 적용 전에 진단한다.
   기존 전체 anchor 탐색과 정규식 치환만으로 중첩 보존을 보장하지 않는다.
@@ -449,15 +437,15 @@ V-14에서 검증한다. MPA와 동일 문서 전환의 차이는
 외부 사용자가 없으므로 legacy 경로·shim·deprecation 기간을 두지 않는다. 각 구현 단계는 새 API를
 도입하면서 대응하는 구 API를 같은 단계에서 제거하고 데모·scaffold·문서를 함께 전환한다.
 
-| 구 API·구조                                                                   | 대체                                                   | 전환 단계 |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------ | --------- |
-| Express `createApp`, `req` 기반 route API, `TransitionHooks`                  | `createHandler`·어댑터, `SurfaceContext`, `onRequest`  | 1         |
-| 문자열 `layout(stateScript)`, `stateSlots`/`joinSurface`, `fillHState` 정규식 | PageDefinition(JSX) + `<Slot>`, 렌더 중 슬롯 처리      | 2         |
-| `defineTemplate` 이름 registry, `auto.ts` eager glob                          | componentId registry, 빌드 manifest·동적 청크          | 2~3       |
-| 구 StateFrame 의미, `__STATE__`/`__UI__`/`__BOOT__`                           | versioned wire(DC-09), 새 bootstrap                    | 4         |
-| 첫 프레임 해제 `data-pending`                                                 | 요청 완료 pending + 첫 결과 상태                       | 5         |
-| `shared/content.ts` 가이드 데이터                                             | 콘텐츠 컬렉션                                          | 7         |
-| JSX 페이지                                                                    | 단일 파일(.tsx는 내부 계약 검증용으로 유지 여부 DC-07) | 8         |
+| 구 API·구조                                                                   | 대체                                                  | 전환 단계 |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- | --------- |
+| Express `createApp`, `req` 기반 route API, `TransitionHooks`                  | `createHandler`·어댑터, `SurfaceContext`, `onRequest` | 1         |
+| 문자열 `layout(stateScript)`, `stateSlots`/`joinSurface`, `fillHState` 정규식 | PageDefinition(JSX) + `<Slot>`, 렌더 중 슬롯 처리     | 2         |
+| `defineTemplate` 이름 registry, `auto.ts` eager glob                          | componentId registry, 빌드 manifest·동적 청크         | 2~3       |
+| 구 StateFrame 의미, `__STATE__`/`__UI__`/`__BOOT__`                           | versioned wire(DC-09), 새 bootstrap                   | 4         |
+| 첫 프레임 해제 `data-pending`                                                 | 요청 완료 pending + 첫 결과 상태                      | 5         |
+| `shared/content.ts` 가이드 데이터                                             | 콘텐츠 컬렉션                                         | 7         |
+| (전용 컴파일러 없음)                                                          | `.tsx` 페이지가 최종 형식(DC-07)                      | —         |
 
 1. 각 단계 종료 시 저장소에 구 API의 import·사용처가 남지 않아야 한다(타입 검사·검색으로 확인).
 2. 새 manifest만 사용하므로 eager 번들 비용이 성능 결과에 섞이지 않는다.
@@ -543,7 +531,7 @@ page-load  (문서 로드에서도 동일하게 발생)
 
 ### 10.2 persist (R-18)
 
-- 교체 전 이전 문서와 새 문서에서 같은 persist ID(가칭 `transition:persist="player"`, 미지정 시 컴파일러가
+- 교체 전 이전 문서와 새 문서에서 같은 persist ID(가칭 `transition:persist="player"`, 미지정 시 빌드 플러그인이
   안정적 ID 생성)를 찾는다. 짝이 있으면 이전 DOM 노드를 새 위치로 옮기고 새 노드는 버린다.
   짝이 없으면 일반 dispose한다.
 - client 아일랜드는 Lithent 인스턴스와 DataProxy를 유지하고 새 페이지 SSR의 props를 DataProxy에 반영한다.
@@ -620,17 +608,19 @@ export default defineAction({
 
 ### 10.6 scoped CSS (R-22)
 
-- 단일 파일·컴포넌트의 `<style>`은 컴파일 시 컴포넌트별 해시 클래스(가칭 `ss-<hash>`)를 선택자와 마크업에
-  추가하는 방식을 권고한다. 속성 선택자 방식과의 선택은 DC-23이다. `:global()`·`is:global`로 탈출한다.
-- 같은 표식이 SSR HTML, server HTML 교체 결과, client 렌더 결과에 일관되게 들어가야 한다. 따라서 표식은
-  런타임이 아니라 컴파일러가 JSX 출력에 넣는다. 슬롯 자식 컴포넌트에는 부모 범위가 적용되지 않는다.
+- 전용 파일의 `<style>`이 없으므로(DC-07) 컴포넌트 범위 CSS는 **CSS Modules**(`*.module.css`)로 제공한다.
+  Vite 기본 기능이라 추가 컴파일러가 없고 클래스 이름이 해시로 범위 지정된다. 전역은 `:global()`로 탈출한다.
+  같은 파일에 스타일을 두는 `css` 태그드 템플릿(Vite 플러그인 컴파일)은 후속 선택지로 DC-23에서 검토한다.
+- 모듈 클래스 이름은 SSR·server HTML 교체·client 렌더가 같은 CSS 모듈을 import해 얻으므로 런타임 표식이
+  필요 없다. 서버와 클라이언트 빌드가 같은 해시 규칙을 쓰는지 검증한다(V-25). 다른 컴포넌트의 모듈 클래스는
+  적용되지 않는다.
 - CSS는 컴포넌트가 속한 청크의 CSS로 추출한다. static/server 컴포넌트의 CSS는 페이지 CSS로 출력하고,
   클라이언트 이동 시 head 병합(10.1)으로 로드한다. Tailwind 유틸리티와 같은 요소에 함께 쓸 수 있으며
-  `@apply` 지원 범위를 정한다. 1차 범위는 단일 파일이며 `.tsx` 컴포넌트는 CSS Modules를 권고한다.
+  `@apply` 지원 범위를 정한다. SSR·server HTML·client 렌더 모두 같은 모듈 클래스 이름을 쓰므로 범위가 일치한다.
 
 ### 10.7 prerender와 하이브리드 출력 (R-23)
 
-- 페이지 선언(가칭 `export const prerender = true`, 단일 파일에서는 frontmatter)으로 페이지별로 고른다.
+- 페이지 named export(가칭 `export const prerender = true`)로 페이지별로 고른다.
   기본값은 기존과 같은 요청 시 SSR이다. 동적 라우트는 `getStaticPaths()`(가칭)로 params 목록을 제공한다.
 - 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력하고, 어댑터
   (11.3)는 정적 파일을 SSR보다 먼저 서빙한다. BASE_PATH는 빌드 시 고정되며 다른 값으로 실행하면 진단한다.
@@ -794,6 +784,7 @@ const response: Response = await handler.fetch(request, platform);
 - [x] AG-02: Vite·Lithent 기반 유지(R-03/R-05, V-03/V-05). 서버는 AG-07에 따라 Express 고정에서
       웹 표준 코어 + 어댑터로 바꾸고 Express는 호환 어댑터로 유지한다.
 - [x] AG-03: 서버 스크립트·마크업·레이아웃·아일랜드를 한 파일의 자연스러운 트리로 작성(R-11, V-11).
+      형식은 async 컴포넌트 `.tsx`로 충족한다(DC-07).
 - [x] AG-04: 새 작성 모델의 static 기본값과 client 로컬 UI 상태 공존(R-01/R-12, V-01/V-12).
 - [x] AG-05: RSC/Flight·임의 클로저 직렬화·전체 SPA(클라이언트 VDOM 라우터)는 비목표(R-11, V-05/V-11).
       서버 HTML 교체 방식의 선택형 클라이언트 라우터는 이 비목표에 해당하지 않는다(AG-06).
@@ -823,7 +814,12 @@ const response: Response = await handler.fetch(request, platform);
       후 최신 props 반영안을 검증하고 선택한다. V-03/V-04/V-12.
 - [ ] DC-06: MPA·인페이지 전환. CSS opt-in 유지·명시적 상태 복원·고속 스트림 애니메이션 억제안.
       브라우저·reduced motion 범위를 정한다. V-08/V-14.
-- [ ] DC-07: 단일 파일 문법·컴파일러. .surface와 ---는 후보. JSX 내부 계약을 먼저 검증하는 안.
+- [x] DC-07 (2026-10-14 결정): 페이지 파일 형식·컴파일러. ① 전용 확장자(.surface) 없이 async 컴포넌트
+      `.tsx`가 최종 형식 ② `default export async (ctx) => JSX`, 페이지 옵션은 named export(`definePage` 미사용)
+      ③ 요청 컨텍스트 이름은 `ctx`(DC-27과 동일) ④ 전용 컴파일러 대신 Vite 플러그인이 Slot·지시자 분석·진단·
+      manifest를 담당 ⑤ scoped CSS는 CSS Modules ⑥ namespaced 지시자의 esbuild 통과를 2단계 spike로 확인.
+      근거: 전용 형식은 문법·언어 서버·포매터·린터 도구를 별도로 개발·유지해야 하고, async `.tsx`가 AG-03을
+      그대로 충족하며 기존 TS 도구를 모두 쓴다. 2.1/2.2. V-11/V-16.
       parser·서버 context·CSS 범위·공개 entry와 최종 문법을 결정한다. V-05/V-11/V-16.
 - [x] DC-08 (2026-10-13 결정): slotId/componentId·동적 ID·children·중첩. ① 이름은
       `[a-z0-9-]+(:[a-z0-9-]+)*` 리터럴, 페이지 단위 단일 구역, `#` 예약 ② 반복 아일랜드·`server:defer`는
@@ -847,7 +843,7 @@ const response: Response = await handler.fetch(request, platform);
 - [x] DC-15 (2026-10-13 결정): 전환 범위·기본값. legacy adapter·shim·지원 기간 없이 새 모델을 유일한
       모델로 하고 구 API는 단계별로 제거한다(AG-08, 9.2). 근거: 외부 사용자가 없는 0.x 단계에서 호환 계층의
       설계·번들·테스트 비용이 이득보다 크다. V-01/V-08/V-18.
-- [ ] DC-16: 진단·편집기·dev/prod·scaffold. 원본 오류 위치·전용 문법 타입 검사·소스맵·URL 충돌·
+- [ ] DC-16: 진단·편집기·dev/prod·scaffold. 원본 오류 위치·Slot/지시자 JSX 타입·소스맵·URL 충돌·
       생성 프로젝트와 CSS 계약을 정한다. V-05/V-11/V-16/V-18.
 - [ ] DC-17: 초기 JS·응답·실행 시간·INP/CLS·첫 액션. 대표 페이지·환경·통과 수치를 고정해
       NFR-01의 70% 감소와 사용 경험을 함께 판정한다. 클라이언트 이동 지연·반복 이동 메모리(NFR-04)도
@@ -855,7 +851,7 @@ const response: Response = await handler.fetch(request, platform);
 - [ ] DC-18: 클라이언트 라우터. 레이아웃 head 선언·문서/페이지 수명 분리·head 병합·module script 1회 실행·
       build ID 불일치 시 문서 로드 권고. 오류 응답 표시, inline script 판정 키, 라이프사이클 이벤트 이름·
       payload, GET 폼 가로채기 범위를 정한다. V-19/V-20.
-- [ ] DC-19: persist. 컴파일러 안정 ID·componentId 일치 조건·props 반영 기본·`moveBefore()` 우선 권고.
+- [ ] DC-19: persist. 빌드 플러그인 안정 ID·componentId 일치 조건·props 반영 기본·`moveBefore()` 우선 권고.
       server/스트리밍 슬롯 persist 금지 여부와 iframe 재로드 허용을 정한다. V-21.
 - [ ] DC-20: prefetch. 링크 기본 전략(hover/tap)·지연 시간·HTML 캐시 크기/TTL·back/forward 재사용·
       Speculation Rules 사용 범위·Save-Data 정책과 액션 후 무효화를 정한다. V-22.
@@ -863,7 +859,7 @@ const response: Response = await handler.fetch(request, platform);
       transition revision 우선 규칙을 정한다. V-23.
 - [ ] DC-22: 타입 지정 액션. Standard Schema 호환 인터페이스 권고. 액션 URL·no-JS 303/flash 저장소·
       CSRF 방식·결과 타입·기존 data-action과의 정규화를 정한다. V-24.
-- [ ] DC-23: scoped CSS. 해시 클래스 vs 속성 선택자, `:global`/`is:global` 문법, `.tsx`의 CSS Modules,
+- [ ] DC-23: scoped CSS. CSS Modules 기본(DC-07에서 확정). 같은 파일 `css` 태그드 템플릿의 후속 도입 여부,
       Tailwind `@apply` 범위와 CSS 청크 배치를 정한다. V-25.
 - [ ] DC-24: prerender. 선언 방식·`getStaticPaths` 계약·정적 파일 우선 서빙·BASE_PATH 고정·
       i18n(언어별 경로 vs 기본 언어+transition)과 요청 의존 코드 진단을 정한다. V-26.
@@ -906,12 +902,12 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | V-08 | R-08/R-02      | partial/accumulate first·done 후·깨진 JSON·누락 delta·EOF·한도·취소·병합 순서에 잘못 적용하지 않음.                                                                                |
 | V-09 | R-09           | UI-only에서 renderer 미호출. full/partial/null/removed와 SSR/hydration 일치, reset·원래 값 처리 검증.                                                                              |
 | V-10 | R-10/NFR-03    | SSR 속성 breakout·script/event URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단.                                                                            |
-| V-11 | R-11           | JSX/전용 파일의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                                                          |
+| V-11 | R-11           | `.tsx` 페이지의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                                                          |
 | V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                                                                |
 | V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                                                       |
 | V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                                                           |
 | V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                                                            |
-| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·전용 파일 일치.                                                                                         |
+| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·지시자 변환 일치.                                                                                       |
 | V-17 | NFR-01         | 고정 조건에서 총 초기 gzip JS 70% 감소. HTML/JSON/SSR·첫 액션·INP/CLS가 결정된 예산 충족.                                                                                          |
 | V-18 | NFR-02         | 전환 후 데모 전 페이지의 언어 전환·boot·abort·스트리밍·UI·액션·BASE_PATH·plugin 동등, 생성 scaffold 동작, 구 API 사용처 0, 버전 불일치 reload.                                     |
 | V-19 | R-17/NFR-04    | 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 동일. 100회 이동 후 리스너·인스턴스 누적 없음.                                                                 |
@@ -941,7 +937,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | 5. 활성화·액션·pending     | DC-04/DC-05/DC-11/DC-22       | bridge/abort/action baseline과 V-04/V-12/V-13/V-24. 로드 경쟁·로컬 상태·no-JS 액션.                                           |
 | 6. 라우터·persist·prefetch | DC-18/DC-19/DC-20             | runtime 수명 분리 후 전체 baseline 유지와 V-19~V-22. 반복 이동 누수·fallback 실증.                                            |
 | 7. 콘텐츠·이미지·prerender | DC-24/DC-25/DC-26             | 가이드 parity baseline과 V-26/V-27. 정적 출력·i18n 경로·`content.ts` 일괄 전환.                                               |
-| 8. 단일 파일 컴파일러      | DC-07/DC-16/DC-23             | baseline·compiler fixture·V-05/V-11/V-16/V-18/V-25. 최종 문법·scoped CSS의 dev/prod/scaffold.                                 |
+| 8. 빌드 플러그인·진단 완성 | DC-16/DC-23                   | baseline·plugin fixture·V-05/V-11/V-16/V-18/V-25. 진단·소스맵·CSS Modules의 dev/prod/scaffold.                                |
 | 9. Test Hardening          | 확정 계약·한도                | 전체 baseline과 이상 frame·악성 입력·지연 로드·동시 요청·취소·이동 경쟁 회귀. V-08/V-10/V-13/V-20.                            |
 | 10. Integration Test       | DC-06/DC-17·브라우저 범위     | production·BASE_PATH·생성 앱·5개 어댑터 E2E. V-14/V-17/V-18/V-19/V-26/V-29 판정.                                              |
 
@@ -960,7 +956,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
