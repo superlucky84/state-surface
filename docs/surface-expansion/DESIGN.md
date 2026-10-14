@@ -10,7 +10,7 @@
 `ClientRouter`, `transition:persist`, `server:defer`, `defineTransition`, `defineCollection`,
 `Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다. 11장의 `createHandler`, `SurfaceContext`와
 어댑터 패키지 이름도 가칭이다.
-이번 작업은 두 문서까지다. `IMPLEMENT.md`와 `MANUAL_TEST_CHECKLIST.md`는 검토 후 작성한다.
+단계별 실행 계획은 [IMPLEMENT.md](./IMPLEMENT.md)가 정본이다. `MANUAL_TEST_CHECKLIST.md`는 후속 작성한다.
 
 ## 1. 현재 기반과 설계의 출발점
 
@@ -1710,8 +1710,10 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 
 ## 14. 후속 구현 순서와 게이트
 
-실행용 IMPLEMENT.md는 아직 작성하지 않았다. 상세 작업·entry/exit·실행 기록은 검토 후
-구체화하며 다음은 순서 후보다. 관련 DC가 미결정이면 해당 단계의 진입 조건을 충족하지 않는다.
+단계별 작업·Entry/Exit·baseline 테스트·구현 선택(IC)·실행 기록은 [IMPLEMENT.md](./IMPLEMENT.md)가 정본이고, 아래 표는
+단계와 선행 결정의 요약이다. IMPLEMENT.md는 CSRF 검사(DC-22 ④)를 코어 공통으로 단계 1에, 앱 엔트리(DC-18 ①)를
+단계 3에, 인페이지 View Transition(DC-06)을 단계 4에, 컴파일 배포(DC-28 ③)를 단계 8에 배치하고 단계 6과 7을 병렬로
+진행할 수 있게 했다. 단계 2는 Lithent 속성 이스케이프 보강을 진입 조건으로 둔다.
 
 | 단계                       | 선행 결정                           | baseline과 종료 확인                                                                                                                                                                           |
 | -------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1749,8 +1751,9 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   DC-29~DC-32를 추가했다. DC-29는 페이지 함수만 async + server 슬롯 `defineServerComponent` load 단계로, DC-30은
   targets 생략 시 모든 슬롯과 겹침으로, DC-31은 JSX `<Boot>`로(2.5), DC-32는 prerender HTML도 코어·미들웨어
   통과로 결정해 DC-01~DC-32를 모두 결정했다.
-- 다음: IMPLEMENT.md(0~10단계의 작업·baseline test·entry/exit·검증 ID)와 MANUAL_TEST_CHECKLIST.md를 작성하고
-  검증 ID·단계별 기록을 연결한다.
+  이어서 [IMPLEMENT.md](./IMPLEMENT.md)에 단계 0~10의 작업·Entry/Exit·baseline 테스트·검증 ID 매핑과 IC-01~IC-10을
+  작성했다.
+- 다음: MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID와 연결한다. 이후 IMPLEMENT.md 단계 0을 시작한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
   공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
 - 현재 기준 커밋: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
