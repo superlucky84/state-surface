@@ -673,7 +673,7 @@ iframe, 위젯 노드를 head·body에 동적으로 추가한다. 이를 통제�
 | Datadog RUM(npm·CDN 비동기 스니펫)   | `fetch`/XHR 감시, `history` 기반 view, MutationObserver session replay       | 위와 같음, 라우터 이동이 view 변경으로 관측됨      |
 | 서버 SDK(`@sentry/node`·dd-trace 등) | 요청 단위 오류·트레이스 수집                                                 | 서버 오류 훅과 미들웨어 연결                       |
 
-1. **앱 클라이언트 엔트리**: 선택형 `client/entry.ts`(가칭, 이름·위치는 DC-18과 함께 확정)가 있으면 모든 페이지에서
+1. **앱 클라이언트 엔트리**(DC-18 결정): 규칙 파일 `client/entry.ts`가 있으면(경로는 `surface({ clientEntry })`로 변경 가능) 모든 페이지에서
    엔진 시작 전에 한 번 로드·실행한다. SDK `init` 위치이며 크기는 초기 JS 예산에 앱 코드로 포함해 측정한다.
    클라이언트 라우터 이동에서는 다시 실행하지 않는다. DC-12의 페이지별 플러그인과 별개다.
 2. **오류 전달**: transition·hydration·플러그인·아일랜드 로드의 예상 밖 오류는 화면 처리(오류 슬롯) 후
@@ -790,11 +790,20 @@ page-load  (문서 로드에서도 동일하게 발생)
   stylesheet·modulepreload는 URL 기준으로 유지·추가하며 새 CSS 로드 완료 후 교체해 FOUC를 막는다. 마커 밖에
   서드파티가 추가한 태그는 건드리지 않는다. `__SURFACE__` bootstrap은 새 문서에서 다시 읽는다.
 - **script 정책**: 엔진 엔트리와 이미 실행한 module script는 다시 실행하지 않는다. 새 페이지에만 있는
-  module script는 한 번 실행한다. inline script 재실행은 명시적 표식(가칭 `data-surface-rerun`)이 있을 때만
-  허용하는 안이다. 정확한 판정 키는 DC-18에서 정한다.
-- **fallback 조건**: View Transition 미지원이면 애니메이션 없이 교체한다(fetch·swap은 유지). 응답 build ID가
-  현재와 다르거나 라우터 opt-in이 없는 페이지, 4xx/5xx(오류 페이지 표시 정책은 DC-18), 리다이렉트로 다른
-  origin에 도달한 경우는 문서 로드로 넘긴다. JS가 없으면 모든 링크가 일반 이동이다.
+  module script는 한 번 실행한다. inline script는 기본적으로 다시 실행하지 않고
+  `data-surface-rerun`이 붙은 것만 이동마다 실행한다. module script의 판정 키는 해석된 `src` URL이며, 마커 밖에
+  서드파티가 추가한 script는 대상이 아니다(DC-18).
+- **오류 응답·fallback**(DC-18 결정): 4xx·5xx라도 응답이 라우터를 선언한 레이아웃의 HTML이면 일반 페이지처럼
+  교체하고 URL도 갱신한다(문서 로드와 같은 결과). 네트워크 실패, HTML이 아닌 응답, 라우터 없는 페이지(오류 페이지
+  포함), build ID 불일치, 리다이렉트로 다른 origin에 도달한 경우는 문서 로드로 넘긴다. View Transition 미지원이면
+  애니메이션 없이 교체한다. JS가 없으면 모든 링크가 일반 이동이다.
+- **가로채기 범위**(DC-18 결정): 같은 origin·BASE_PATH 안의 `<a>` 클릭과 `method="get"` 폼 제출(쿼리를 붙인 URL로
+  이동)을 처리한다. `data-action` 폼·POST 폼(액션 경로, 10.5), `target`·`download`·수정 키 클릭, 해시만 바뀌는 링크,
+  `data-surface-reload`가 붙은 링크·폼은 브라우저 기본 동작을 따른다.
+- **이벤트**(DC-18 결정): `document`에 `surface:before-preparation`(취소 가능) → `surface:after-preparation` →
+  `surface:before-swap`(교체 함수 대체 가능) → `surface:after-swap` → `surface:page-load` 순으로 발생한다.
+  `surface:page-load`는 문서 로드에서도 발생한다. payload는 `{ from: URL, to: URL, direction: 'forward'|'back'|'replace',
+trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용 `navigate(url, { replace? })`(가칭)을 제공한다.
 - **history·scroll**: `history.state`에 이동 ID와 스크롤 위치를 저장하고 `scrollRestoration = 'manual'`로
   복원한다. back/forward는 popstate에서 같은 파이프라인을 사용하며 캐시된 HTML 재사용 여부는 DC-20이다.
   해시는 교체 후 대상 요소로 스크롤한다. BFCache 복귀(pageshow persisted)와 충돌하지 않게 한다.
@@ -803,8 +812,10 @@ page-load  (문서 로드에서도 동일하게 발생)
 - **상태 연계**: 이동 시작 시 `AbortController`로 진행 중 transition과 이전 이동 fetch를 취소한다(기존
   abort-previous와 같은 generation 모델). 언어 cookie 등 서버 상태는 다음 HTML 요청에 그대로 반영된다.
   POST 폼은 라우터가 가로채지 않고 액션 경로(10.5)로 처리한다.
-- **선언 위치**: 레이아웃 head에 `<ClientRouter />`(가칭) 하나를 두는 방식을 권고한다. 같은 레이아웃을
-  쓰는 페이지 사이에서만 클라이언트 이동하고, 라우터 선언이 없는 페이지로는 문서 로드로 이동한다.
+- **선언 위치**(DC-18 결정): 레이아웃 head에 `<ClientRouter />`를 둔다. 이 컴포넌트를 렌더한 페이지 사이에서만
+  클라이언트 이동하고 라우터가 없는 페이지로는 문서 로드로 이동한다. prefetch 기본 전략 등 라우터 옵션은 이
+  컴포넌트의 props로 받는다(`<ClientRouter prefetch="hover" />`, DC-20). 라우터 런타임 청크는 이 컴포넌트가 있는
+  페이지에서만 로드한다(NFR-04).
 
 ### 10.2 persist (R-18)
 
@@ -1187,9 +1198,13 @@ const response: Response = await handler.fetch(request, platform);
 - [ ] DC-17: 초기 JS·응답·실행 시간·INP/CLS·첫 액션. 대표 페이지·환경·통과 수치를 고정해
       NFR-01의 70% 감소와 사용 경험을 함께 판정한다. 클라이언트 이동 지연·반복 이동 메모리(NFR-04)도
       같은 조건에서 고정한다. V-17/V-19.
-- [ ] DC-18: 클라이언트 라우터. 레이아웃 head 선언·문서/페이지 수명 분리·head 병합·module script 1회 실행·
-      build ID 불일치 시 문서 로드 권고. 오류 응답 표시, inline script 판정 키, 라이프사이클 이벤트 이름·
-      payload, GET 폼 가로채기 범위, 앱 클라이언트 엔트리(`client/entry.ts` 가칭, 8.3) 이름·위치를 정한다. V-19/V-20/V-31.
+- [x] DC-18 (2026-10-14 결정): 클라이언트 라우터. ① 레이아웃 head `<ClientRouter />`로 opt-in, 옵션은 props, 런타임은
+      해당 페이지만 로드 ② 라우터 있는 레이아웃의 HTML 오류 페이지(4xx·5xx)는 교체, 네트워크 실패·비 HTML·라우터 없는
+      페이지·build ID 불일치·다른 origin은 문서 로드 ③ 같은 origin 링크와 GET 폼 가로채기, data-action·POST 폼·
+      `data-surface-reload` 제외 ④ 이벤트 `surface:before-preparation`→`after-preparation`→`before-swap`→`after-swap`→
+      `page-load`, payload `{from,to,direction,trigger,signal}`, `navigate()` API ⑤ inline script는 `data-surface-rerun`만
+      재실행, module script는 src URL 기준 1회 ⑥ 앱 엔트리는 규칙 파일 `client/entry.ts`. 근거: Astro와 같은 사용 경험,
+      오류 페이지에서도 매끄러운 이동, 검색 폼 등 일반 패턴 지원, SDK init 위치의 단순한 규칙. 10.1·8.3. V-19/V-20/V-31.
 - [ ] DC-19: persist. 빌드 플러그인 안정 ID·componentId 일치 조건·props 반영 기본·`moveBefore()` 우선 권고.
       server/스트리밍 슬롯 persist 금지 여부와 iframe 재로드 허용을 정한다. V-21.
 - [ ] DC-20: prefetch. 링크 기본 전략(hover/tap)·지연 시간·HTML 캐시 크기/TTL·back/forward 재사용·
@@ -1300,7 +1315,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
