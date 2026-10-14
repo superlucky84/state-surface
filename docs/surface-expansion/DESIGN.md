@@ -965,17 +965,41 @@ export default defineTransition({
   클라이언트 이동 시 head 병합(10.1)으로 로드한다. Tailwind 유틸리티와 같은 요소에 함께 쓸 수 있으며
   `@apply` 지원 범위를 정한다. SSR·server HTML·client 렌더 모두 같은 모듈 클래스 이름을 쓰므로 범위가 일치한다.
 
-### 10.7 prerender와 하이브리드 출력 (R-23)
+### 10.7 prerender와 하이브리드 출력 (R-23, DC-24 결정)
 
-- 페이지 named export(가칭 `export const prerender = true`)로 페이지별로 고른다.
-  기본값은 기존과 같은 요청 시 SSR이다. 동적 라우트는 `getStaticPaths()`(가칭)로 params 목록을 제공한다.
-- 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력하고, 어댑터
-  (11.3)는 정적 파일을 SSR보다 먼저 서빙한다. BASE_PATH는 빌드 시 고정되며 다른 값으로 실행하면 진단한다.
-- prerender에서는 요청 객체가 없다. cookie·header·인증을 읽으면 빌드 오류로 진단한다. 현재 쿠키 기반
-  언어 선택은 prerender와 양립하지 않으므로 언어별 경로(`/en/...`, `/ko/...`) 생성, 또는 기본 언어
-  prerender + 클라이언트 언어 전환 시 transition 사용 중에서 DC-24로 정한다.
-- prerender 페이지의 server/client 슬롯, `data-action` transition, 지연 server 슬롯(10.4)은 그대로 동작한다.
-  개인화가 필요한 부분은 지연 슬롯으로 분리하는 것을 권고 패턴으로 한다.
+```tsx
+// routes/[lang]/guide/[slug].tsx
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const slugs = await listGuideSlugs();
+  return ['en', 'ko'].flatMap(lang => slugs.map(slug => ({ lang, slug })));
+}
+
+export default async function Page(ctx: SurfaceContext) {
+  const { lang, slug } = ctx.params;
+  ...
+}
+```
+
+- **선언**: 기본은 요청 시 SSR이고 페이지가 `export const prerender = true`로 opt-in한다. `surface({ prerender: true })`로
+  기본을 뒤집으면 모든 페이지가 prerender되고 페이지가 `prerender = false`로 opt-out한다. 모든 페이지가 prerender이고
+  transition·액션·지연 슬롯을 쓰지 않으면 서버 없이 정적 호스팅할 수 있다.
+- **동적 라우트**: `getStaticPaths()`가 생성할 params 목록을 돌려준다. prerender 동적 라우트에 이 함수가 없으면
+  빌드 오류다. 목록에 없는 params로 요청이 오면 404다.
+- **요청 의존 코드 진단**: prerender 중의 `ctx`는 제한 모드다. `ctx.cookies`·`ctx.request` 헤더·`ctx.locals`·`ctx.flash`·
+  `ctx.nonce`를 읽으면 원본 위치와 함께 빌드 오류다. 개인화는 지연 슬롯(10.4)으로 분리한다.
+- **출력·서빙**: 빌드는 production 서버 번들로 각 경로를 렌더링해 `dist/client/<path>/index.html`로 출력한다. 어댑터는
+  정적 파일을 SSR보다 먼저 서빙하고(Workers는 Static Assets) 기본 `Cache-Control: public, max-age=0, must-revalidate`와
+  ETag를 붙인다. BASE_PATH는 빌드 시 고정되며 실행 환경 값과 다르면 시작 시 진단한다. CSP nonce가 필요한 페이지는
+  prerender할 수 없다(요청별 값).
+- **i18n**(DC-24 결정): 언어를 URL에 넣는다(`routes/[lang]/…` → `/en/…`, `/ko/…`). 언어별로 prerender하고 각 페이지에
+  `hreflang` 대체 링크를 출력한다. 언어가 없는 경로(`/`, `/guide/x`)는 `lang` 쿠키 → `Accept-Language` → 기본 언어
+  순으로 골라 302로 해당 언어 경로에 보낸다. 언어 전환은 같은 페이지의 다른 언어 경로로 이동하며(라우터가 매끄럽게
+  처리) 선택값은 쿠키에 기록한다. 데모의 `switch-lang` transition과 쿠키 기반 SSR 언어 선택은 이 방식으로 대체한다(AG-08).
+- prerender 페이지의 server/client 슬롯, `data-action` transition, 지연 server 슬롯은 그대로 동작한다.
+- **ISR**: 주기적 재생성(증분 재생성)은 1차 범위가 아니다. 자주 바뀌는 페이지는 SSR + `Cache-Control`
+  (`s-maxage`, `stale-while-revalidate`)로 CDN에 맡기도록 가이드한다.
 
 ### 10.8 콘텐츠 컬렉션 (R-24)
 
@@ -1055,8 +1079,8 @@ const response: Response = await handler.fetch(request, platform);
 - **cookie 쓰기 시점**(DC-27 결정): 페이지 SSR과 액션은 Response 생성 전까지 언제든 허용한다.
   transition 스트림은 **첫 프레임 yield 전까지** 허용한다. 엔진은 첫 프레임(full baseline)을 받은 뒤
   `Set-Cookie`를 포함한 Response를 만든다. 이후 `ctx.cookies.set`/`delete`는 반영하지 않고 dev에서
-  경고와 trace를 남긴다. 첫 프레임 전 오류는 쿠키 없이 오류 응답한다. 이 규칙으로 `switch-lang`은 훅 없이
-  transition 안에서 쿠키를 쓴다.
+  경고와 trace를 남긴다. 첫 프레임 전 오류는 쿠키 없이 오류 응답한다. 이 규칙으로 transition 안에서
+  훅 없이 쿠키를 쓸 수 있다(언어 전환은 DC-24에서 경로 이동으로 바뀜).
 - **하위 호환 없음**(DC-27 결정): 사용자가 아직 없으므로 Express `req` shim·legacy 어댑터를 두지 않는다.
   `RouteModule`의 `initial(req)`·`params(req)`·`boot.params(req)`, `TransitionHooks`
   (`onBeforeTransition`/`onAfterTransition`), `shared/i18n.ts`의 `getLang(req)`, `routes/_shared/hooks.ts`를
@@ -1266,8 +1290,11 @@ const response: Response = await handler.fetch(request, platform);
       새로고침 재제출 없는 PRG, 캐시 페이지와 호환되는 토큰 없는 CSRF, 서버 코드 없는 타입 안전성. 10.5. V-24.
 - [ ] DC-23: scoped CSS. CSS Modules 기본(DC-07에서 확정). 같은 파일 `css` 태그드 템플릿의 후속 도입 여부,
       Tailwind `@apply` 범위와 CSS 청크 배치를 정한다. V-25.
-- [ ] DC-24: prerender. 선언 방식·`getStaticPaths` 계약·정적 파일 우선 서빙·BASE_PATH 고정·
-      i18n(언어별 경로 vs 기본 언어+transition)과 요청 의존 코드 진단을 정한다. V-26.
+- [x] DC-24 (2026-10-14 결정): prerender. ① 기본 SSR, 페이지 `export const prerender = true`, `surface({ prerender: true })`로
+      기본 반전 ② 동적 라우트는 `getStaticPaths()` 필수 ③ 제한 ctx로 요청 의존 코드는 빌드 오류 ④ 정적 파일 우선 서빙,
+      BASE_PATH 빌드 고정 ⑤ i18n은 언어별 경로 `/en/…`·`/ko/…`(hreflang, 언어 없는 경로는 쿠키·Accept-Language로 302,
+      전환은 경로 이동) ⑥ ISR 제외. 근거: 언어별 정적 HTML과 SEO·CDN 캐시를 함께 얻고, 기존 SSR 기본 동작을 유지한다.
+      10.7. V-26.
 - [ ] DC-25: 콘텐츠 컬렉션. 디렉터리·config 위치, loader 범위, Markdown 블록 확장 문법, parity 유틸리티,
       `shared/content.ts` 전환 방식을 정한다. V-27.
 - [ ] DC-26: 이미지. 변환 엔진·포맷·srcset 폭 목록·dev 캐시 위치·원격 허용 목록·`<Picture>`와
@@ -1363,7 +1390,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
