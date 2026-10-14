@@ -10,14 +10,14 @@
 
 이 문서는 페이지의 서버 데이터 준비, 레이아웃, 슬롯과 아일랜드를 하나의 자연스러운 트리로 작성하고, 기존 스트리밍 커널을 유지하면서 초기 JavaScript를 줄이는 확장의 요구사항이다. 2026-10-13 개정에서 선택형 클라이언트 라우터와 prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지 최적화를 1차 범위에 추가했다. 같은 날 개정에서 Express 의존을 걷어 낸 런타임 중립 서버 코어와 어댑터(Node 자체 서버·Express 호환·Bun·Deno·Cloudflare Workers)를 1차 범위에 추가했다. 외부 사용자가 없는 0.x 단계이므로 2.0 전체에서 하위 호환을 고려하지 않고 기존 API를 새 모델로 일괄 전환한다(AG-08). `docs/idea/`와 `NEXT_IDEA.md`의 방향을 계승하며, Astro의 단일 파일 작성 경험을 목표로 삼는다. Astro 전체 기능과의 동등성을 릴리스 기준으로 삼지는 않는다.
 
-이번 작업 범위는 이 문서 개정과 `DESIGN.md`·`IMPLEMENT.md` 작성까지다. 수동 검증 문서와 런타임 구현은 후속 범위이며, 전체 계획이 완료됐다는 의미가 아니다. 1.x/2.0은 설계 세대를 뜻하며 현재 패키지 버전은 `0.1.0`이다.
+이번 작업 범위는 이 문서 개정과 `DESIGN.md`·`IMPLEMENT.md`·`MANUAL_TEST_CHECKLIST.md` 작성까지다. 런타임 구현은 후속 범위이며, 네 문서는 구현 전 계획이고 실행 결과가 아니다. 1.x/2.0은 설계 세대를 뜻하며 현재 패키지 버전은 `0.1.0`이다.
 
-| 문서                                     | 상태      | 역할                                                         |
-| :--------------------------------------- | :-------- | :----------------------------------------------------------- |
-| **[REQUIREMENTS.md](./REQUIREMENTS.md)** | 검토 초안 | 목표, 기능/비기능 요구사항, 제약사항, 전환 범위              |
-| **[DESIGN.md](./DESIGN.md)**             | 검토 초안 | 작성 예시, 아키텍처, 계약 후보, 결정 체크리스트, 검증 기준   |
-| **[IMPLEMENT.md](./IMPLEMENT.md)**       | 초안      | 단계별 작업, baseline test, Test Hardening, Integration Test |
-| `MANUAL_TEST_CHECKLIST.md`               | 후속 작성 | 브라우저 동작, 배포 호환, 성능의 수동 판정                   |
+| 문서                                                       | 상태      | 역할                                                         |
+| :--------------------------------------------------------- | :-------- | :----------------------------------------------------------- |
+| **[REQUIREMENTS.md](./REQUIREMENTS.md)**                   | 검토 초안 | 목표, 기능/비기능 요구사항, 제약사항, 전환 범위              |
+| **[DESIGN.md](./DESIGN.md)**                               | 검토 초안 | 작성 예시, 아키텍처, 계약 후보, 결정 체크리스트, 검증 기준   |
+| **[IMPLEMENT.md](./IMPLEMENT.md)**                         | 초안      | 단계별 작업, baseline test, Test Hardening, Integration Test |
+| **[MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)** | 초안      | 브라우저 동작, 배포 호환, 성능의 수동 판정                   |
 
 ### 관련 코드 베이스
 
@@ -289,7 +289,7 @@ R-26은 2026-10-13 사용자 합의(AG-07)로 1차 범위에 포함한다.
 ## 8. 진행 상태 및 Handoff (Status & Next Steps)
 
 - **완료**: 현재 코드의 지원 범위를 반영하고 R-11을 단일 파일 페이지·레이아웃 모델로 확장했다. 검증 가능한 상태·보안·성능 범위를 보정하고 DESIGN.md 검토 초안을 작성했다. 사용자 합의(AG-06)에 따라 클라이언트 라우터·persist·prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지 최적화(R-17~R-25, NFR-04)를 1차 범위에 추가하고 R-14·제약·비목표를 정합화했다. 사용자 합의(AG-07)에 따라 런타임 중립 서버 코어와 어댑터(R-26, NFR-05)를 추가하고 제약 3·비목표 5를 정합화했다. 사용자 합의(AG-08)에 따라 2.0 전체에서 하위 호환을 고려하지 않도록 NFR-02·R-01·R-08·비목표 6을 개정했다. DC-07 결정에 따라 R-11·R-22를 `.tsx` 최종 형식과 CSS Modules 기준으로 바꾸고 비목표 7을 추가했다. DC-01~DC-28을 결정했고 외부 SDK·태그 매니저 기본 설치 호환(R-27, AG-09)을 1차 범위에 추가했다. 2026-10-14 최종 검토에서 Lithent SSR 제약(동기 즉시 실행, 속성 미이스케이프)을 확인해 R-04·R-08·R-11·R-14·R-17·R-20·R-21·R-23·R-26·NFR-01·NFR-03~05·비목표 보충 문장을 정합화하고 DC-29~DC-32를 추가했다.
-- **다음**: MANUAL_TEST_CHECKLIST.md를 작성하고 IMPLEMENT.md 단계 0을 시작한다. 최종 검토에서 추가한 DC-29(페이지 함수만 async + server 슬롯 `load`), DC-30(targets 생략 시 모든 슬롯과 겹침), DC-31(JSX `<Boot>`), DC-32(prerender HTML도 코어·미들웨어 통과)를 결정했고 IMPLEMENT.md에 단계 0~10을 작성했다.
+- **다음**: IMPLEMENT.md 단계 0(기준선 고정)을 시작한다. 네 문서(REQUIREMENTS·DESIGN·IMPLEMENT·MANUAL_TEST_CHECKLIST)를 갖췄다. 최종 검토에서 추가한 DC-29(페이지 함수만 async + server 슬롯 `load`), DC-30(targets 생략 시 모든 슬롯과 겹침), DC-31(JSX `<Boot>`), DC-32(prerender HTML도 코어·미들웨어 통과)를 결정했고 IMPLEMENT.md에 단계 0~10을 작성했다.
 - **블로커**: 문서 작성의 외부 블로커는 없다. 새 SSR 경로(DESIGN 14장 2단계) 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
 - **현재 기준 커밋**: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
 - **기존 코드 검토의 검증 기록**: 코드 기준 `6742026cb91bd06b030ce503da387701f6e1fb6e`, `pnpm test` 34개 파일/458개 테스트 통과, `pnpm exec vite build` 성공. 공통 JS 98.52kB / gzip 추정 28.21kB, Node 22.12.0 / pnpm 10.13.1 / Vite 7.3.1. 현재 기준 커밋은 문서·에이전트 설정만 추가했다.

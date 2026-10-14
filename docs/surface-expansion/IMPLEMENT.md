@@ -8,7 +8,7 @@
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
 구현 중 결정이 바뀌어야 하면 먼저 DESIGN.md의 DC를 개정하고 이 문서를 따라 고친다.
 
-읽기 순서: REQUIREMENTS.md → DESIGN.md → **이 문서** → MANUAL_TEST_CHECKLIST.md(후속 작성).
+읽기 순서: REQUIREMENTS.md → DESIGN.md → **이 문서** → [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md).
 
 ---
 
@@ -139,7 +139,7 @@ layout이지만 사용자 API는 `ctx` 기반으로 일괄 전환한다. DESIGN 
 #### 코어
 
 - [ ] `engine/server/core/`(가칭)에 `createHandler({ manifest, basePath, security, bodyLimit, logger, onError,
-    middleware })` → `{ fetch(request, platform) }`를 만든다.
+  middleware })` → `{ fetch(request, platform) }`를 만든다.
 - [ ] 라우팅: 빌드 manifest의 경로 패턴으로 페이지 GET·`POST /transition/:name`·404를 처리한다. 지연 슬롯·액션·
       prerender 경로는 단계 4·5·7에서 추가한다.
 - [ ] `SurfaceContext`: `request`·`url`·`params`·`cookies`(get/set/delete → `Set-Cookie`)·`locals`·`env`·`signal`
@@ -648,7 +648,7 @@ DESIGN 10.7~10.9.
 
 production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성능 게이트와 수동 체크리스트로 릴리스를 판정한다.
 
-**Entry**: 단계 9 Exit. IC-10 결정. MANUAL_TEST_CHECKLIST.md 작성 완료.
+**Entry**: 단계 9 Exit. IC-10 결정. [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md) 최신화(각 MT의 선행 실행 결과 반영).
 **Exit**: 아래 검증 ID가 모두 통과하고 MANUAL_TEST_CHECKLIST 전 항목이 판정·기록됐다.
 
 #### 작업
@@ -660,7 +660,8 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - [ ] View Transition(V-14): 문서 로드·라우터 이동·인페이지, 미지원 브라우저, reduced motion, 뒤로/앞으로·BFCache.
 - [ ] 외부 SDK(V-31): 실제 GTM·Sentry(npm·Loader)·Datadog RUM(npm·CDN) 기본 설치로 문서 로드와 이동 20회, 오류 수집·
       page_view/view 수·트레이스 헤더·서버 오류 훅·노드 보존·CSP 위반 0(IC-10).
-- [ ] MANUAL_TEST_CHECKLIST 전 항목 실행·기록.
+- [ ] MANUAL_TEST_CHECKLIST MT-01~MT-18 전 항목 실행·기록과 4장 릴리스 판정. 각 단계 종료 시 해당 MT의 선행 실행 결과도
+      그 문서 5장에 기록한다.
 - [ ] 문서 정본 갱신: README, CLAUDE.md(아키텍처·폴더 구조·명령), PROTOCOL.md, 공개 guide, scaffold README, 릴리스 노트.
 
 **검증 ID**: V-14, V-17, V-18, V-19, V-26, V-29, V-30, V-31(릴리스 판정).
@@ -717,7 +718,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 ### 상태
 
 - **완료**: DESIGN의 DC-01~DC-32와 구현 단계 0~10을 실행 체크리스트로 옮겼다. 구현 선택 IC-01~IC-10과 외부 선행 작업
-  (Lithent 속성 이스케이프)을 정리했다.
-- **다음**: MANUAL_TEST_CHECKLIST.md를 작성한다. 이후 단계 0(기준선 고정)을 시작한다.
+  (Lithent 속성 이스케이프)을 정리했다. 수동 판정 항목은 MANUAL_TEST_CHECKLIST.md(MT-01~MT-18)에 작성했다.
+- **다음**: 단계 0(기준선 고정)을 시작한다.
 - **블로커**: 단계 2 진입 전에 Lithent `renderToString` 속성 이스케이프 보강 릴리스가 필요하다(3.1). 단계 0·1은 영향 없다.
 - **기준 커밋**: `69cafc1` (DC-32 결정 반영 시점).

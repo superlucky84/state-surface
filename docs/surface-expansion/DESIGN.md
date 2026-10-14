@@ -10,7 +10,8 @@
 `ClientRouter`, `transition:persist`, `server:defer`, `defineTransition`, `defineCollection`,
 `Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다. 11장의 `createHandler`, `SurfaceContext`와
 어댑터 패키지 이름도 가칭이다.
-단계별 실행 계획은 [IMPLEMENT.md](./IMPLEMENT.md)가 정본이다. `MANUAL_TEST_CHECKLIST.md`는 후속 작성한다.
+단계별 실행 계획은 [IMPLEMENT.md](./IMPLEMENT.md), 릴리스 수동 판정은 [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)가
+정본이다.
 
 ## 1. 현재 기반과 설계의 출발점
 
@@ -1672,7 +1673,8 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 
 ## 13. 검증 매트릭스
 
-후속 IMPLEMENT.md·MANUAL_TEST_CHECKLIST.md의 입력이며 실행된 결과가 아니다.
+[IMPLEMENT.md](./IMPLEMENT.md) 5장(구현·판정 단계)과 [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md) 3장(수동 항목)의
+입력이며 실행된 결과가 아니다.
 
 | ID   | 대상           | 시나리오와 통과 기준                                                                                                                                                                                                                                                                                                                      |
 | ---- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1752,8 +1754,9 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   targets 생략 시 모든 슬롯과 겹침으로, DC-31은 JSX `<Boot>`로(2.5), DC-32는 prerender HTML도 코어·미들웨어
   통과로 결정해 DC-01~DC-32를 모두 결정했다.
   이어서 [IMPLEMENT.md](./IMPLEMENT.md)에 단계 0~10의 작업·Entry/Exit·baseline 테스트·검증 ID 매핑과 IC-01~IC-10을
-  작성했다.
-- 다음: MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID와 연결한다. 이후 IMPLEMENT.md 단계 0을 시작한다.
+  작성했다. [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)에 MT-01~MT-18과 릴리스 판정 규칙을 작성해 네 문서를
+  갖췄다.
+- 다음: IMPLEMENT.md 단계 0(기준선 고정)을 시작한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
   공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
 - 현재 기준 커밋: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
