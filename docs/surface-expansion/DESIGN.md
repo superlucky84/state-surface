@@ -276,9 +276,53 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
 | 지연 client 활성화              | 작은 scheduler와 metadata. 필요한 시점에 Lithent·대상 청크 로드 |
 | client:load                     | 시작 시 대상 청크와 공유 Lithent 로드                           |
 
-Prism·목차·chat scroll·debug는 선언한 페이지와 슬롯에 제한한다(DC-12).
-플러그인을 늦게 등록해도 이미 표시된 슬롯을 알려야 하며 server replace 전후 cleanup과
-보강을 처리해야 한다. 플러그인과 Lithent가 같은 내부 DOM을 중복 소유하지 않도록 한다.
+#### 클라이언트 플러그인 (DC-12 결정)
+
+현재는 `client/main.ts`가 Prism·목차·채팅 스크롤 플러그인을 모든 페이지에 로드하고, 훅
+(`onMount/onUpdate/onUnmount`)이 client 렌더 기준이라 server 교체·morph·라우터 이동 시점이 정의되지 않았다.
+
+```ts
+// client/plugins/chatScroll.ts
+export const chatScroll = definePlugin({
+  name: 'chat-scroll',
+  slots: ['chat:messages'], // 대상 슬롯(생략 시 페이지의 모든 슬롯)
+  load: 'idle', // 'load' | 'idle'(기본) | 'visible'
+  attach(el, { slot, mode }) {
+    const ro = new ResizeObserver(() => (el.scrollTop = el.scrollHeight));
+    ro.observe(el);
+    return () => ro.disconnect(); // 교체·제거·페이지 이동 직전
+  },
+  update(el) {
+    el.scrollTop = el.scrollHeight; // 같은 DOM이 유지되는 갱신
+  },
+});
+
+// routes/examples/chat.tsx
+export const plugins = [chatScroll];
+```
+
+- **서버 우선 원칙**(권고): 코드 하이라이트처럼 서버에서 할 수 있는 DOM 보강은 SSR·server 렌더에서 처리해
+  클라이언트 JS를 0으로 만든다. Prism은 서버 하이라이트로 옮기는 것을 우선 검토한다. 클라이언트 플러그인은
+  스크롤·관찰자·목차 하이라이트처럼 브라우저에서만 가능한 일에 사용한다.
+- **선언 위치**: 페이지·레이아웃의 `export const plugins`. 빌드 플러그인이 수집해 플러그인별 청크로 만들고
+  선언한 페이지(레이아웃 선언 시 그 레이아웃을 쓰는 페이지)에서만 로드한다. 전역 플러그인 설정은 두지 않는다.
+- **훅 계약**: `attach(el, info)`는 슬롯 DOM이 준비될 때 호출되고 반환한 cleanup은 그 DOM이 사라지기 직전에
+  호출된다. `update(el, info)`는 같은 DOM이 유지되는 갱신에 호출된다. 모드별 호출 시점은 다음과 같다.
+
+  | 상황                                    | 호출                                              |
+  | --------------------------------------- | ------------------------------------------------- |
+  | SSR 표시·client 활성화·지연 슬롯 채움   | `attach`                                          |
+  | server `swap="replace"`                 | cleanup → (교체) → `attach`                       |
+  | server `swap="morph"`·client props 갱신 | `update`                                          |
+  | removed·라우터 페이지 교체·dispose      | cleanup                                           |
+  | 라우터 persist 요소(10.2)               | 유지(cleanup·attach 없음), 새 페이지에서 `update` |
+
+- **로드 시점과 늦은 등록**: 기본 `idle`, 필요하면 `load`·`visible`. 플러그인이 로드되는 순간 이미 표시된 대상
+  슬롯 전부에 `attach`를 호출해 늦게 와도 놓치지 않는다. 로드 전에 사라진 슬롯에는 호출하지 않는다.
+- **전역 이벤트**: 액션 시작·종료 같은 페이지 수준 이벤트는 `onPage({ signal })`·`onAction` 훅(가칭)으로
+  받는다. 기존 `onInit`·`onTransitionStart/End`는 제거하고 이 훅으로 대체한다(AG-08).
+- **DOM 소유권**: 플러그인은 슬롯 DOM을 보강(속성·리스너·관찰자)만 하고 구조를 바꾸지 않는다. client 아일랜드
+  내부 DOM은 Lithent 소유이므로 플러그인은 아일랜드 경계 안을 수정하지 않는다. 위반은 dev에서 경고한다.
 
 ### 5.2 활성화 상태
 
@@ -869,8 +913,12 @@ const response: Response = await handler.fetch(request, platform);
       혼합 프레임의 projection을 정한다. V-02/V-07/V-08.
 - [ ] DC-11: 컴포넌트 액션·pending·취소. context handle·요청 ID·기존 abort-previous 권고.
       첫 결과/완료·이벤트 우선순위·Promise 결과·renderer 실패를 정한다. V-04/V-08/V-13/V-18.
-- [ ] DC-12: 플러그인 선언·지연 lifecycle. 페이지·슬롯 의존성을 명시하고 지연 등록 때도 mount 통지.
-      server replace cleanup과 DOM 소유권을 정한다. V-02/V-06/V-15/V-18.
+- [x] DC-12 (2026-10-14 결정): 플러그인 선언·지연 lifecycle. ① 페이지·레이아웃 `export const plugins`, 플러그인별
+      청크로 선언 페이지에서만 로드(전역 설정 없음) ② `definePlugin({ slots, load, attach→cleanup, update })`,
+      replace는 cleanup→attach, morph·client 갱신은 update, 제거·페이지 이동은 cleanup ③ 기본 `idle` 로드,
+      로드 시 이미 표시된 대상 슬롯에 즉시 attach ④ 서버에서 가능한 보강(Prism)은 서버 우선 권고 ⑤ 플러그인은
+      아일랜드 내부 DOM을 수정하지 않음. 근거: 모든 모드·라우터에 하나의 수명 규칙, 정리 누락 방지, 페이지별 JS
+      최소화. 5.1. V-02/V-06/V-15/V-18.
 - [ ] DC-13: schema·capability·HTML 안전성. strict 기본·rich allowlist·unsafe opt-in 권고.
       sanitizer·CSS 규칙·unsafe의 script/iframe·UI reset 의미를 결정한다. V-09/V-10/V-15.
 - [ ] DC-14: validator·한도·복구. state 위반은 중단, UI 국소 위반은 skip+trace 후보.
@@ -991,7 +1039,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-12·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
