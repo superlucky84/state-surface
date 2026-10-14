@@ -577,6 +577,36 @@ iframe, 위젯 노드를 head·body에 동적으로 추가한다. 이를 통제�
 - **슬롯 HTML 안의 임베드 스크립트**(트위터·유튜브 등)는 실행하지 않으므로 클라이언트 플러그인(DC-12)으로 로드하거나
   `capability="unsafe" sandbox="iframe"`으로 격리한다.
 
+### 8.3 외부 SDK·태그 매니저 호환 (R-27, AG-09)
+
+목표는 업체 기본 설치법을 그대로 따랐을 때 동작하는 것이다. 대표 도구가 기대는 지점과 프레임워크의 약속은 다음과 같다.
+
+| 도구(기본 설치)                      | 기대는 것                                                                    | 프레임워크의 약속                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| GTM·gtag(head 스니펫)                | head에 스크립트 동적 주입, `pushState` 래핑으로 History Change 감지          | 마커 밖 노드 보존(8.2), 아래 전역 API 규칙         |
+| Sentry(npm `Sentry.init`·CDN Loader) | `onerror`·`unhandledrejection`·`fetch`·`history` 래핑, 트레이스 헤더, 소스맵 | 오류 전달, 패치된 전역 API 사용, 헤더 허용, 소스맵 |
+| Datadog RUM(npm·CDN 비동기 스니펫)   | `fetch`/XHR 감시, `history` 기반 view, MutationObserver session replay       | 위와 같음, 라우터 이동이 view 변경으로 관측됨      |
+| 서버 SDK(`@sentry/node`·dd-trace 등) | 요청 단위 오류·트레이스 수집                                                 | 서버 오류 훅과 미들웨어 연결                       |
+
+1. **앱 클라이언트 엔트리**: 선택형 `client/entry.ts`(가칭, 이름·위치는 DC-18과 함께 확정)가 있으면 모든 페이지에서
+   엔진 시작 전에 한 번 로드·실행한다. SDK `init` 위치이며 크기는 초기 JS 예산에 앱 코드로 포함해 측정한다.
+   클라이언트 라우터 이동에서는 다시 실행하지 않는다. DC-12의 페이지별 플러그인과 별개다.
+2. **오류 전달**: transition·hydration·플러그인·아일랜드 로드의 예상 밖 오류는 화면 처리(오류 슬롯) 후
+   `reportError()`로 전역 핸들러에 다시 전달한다. 사용자 abort와 abort-previous 취소는 오류로 보내지 않는다.
+   trace 훅은 별도로 유지한다.
+3. **전역 API 사용 규칙**: 라우터·transition·prefetch는 `history.pushState`·`replaceState`·`fetch`를 호출할 때마다
+   전역에서 조회한다. 모듈 로드 시점에 참조를 캐시하지 않아 나중에 로드된 도구의 래핑을 우회하지 않는다.
+   이를 단위 테스트로 고정한다.
+4. **헤더 관대성**: transition·액션·지연 슬롯·라우터 요청 엔드포인트는 모르는 요청 헤더를 거부하지 않는다.
+   응답은 `Server-Timing` 등 표준 헤더와 공존한다.
+5. **서버 오류 훅**: `createHandler({ onError(err, ctx) })`를 제공하고 SSR·transition 스트림 중간·액션·지연 슬롯
+   오류를 모두 전달한다. 트레이스 컨텍스트는 미들웨어(`onRequest`)에서 연결한다.
+6. **소스맵**: production 빌드에 `hidden` 소스맵 생성 옵션을 두고 업로드 가이드를 제공한다(DC-16 소스맵과 동일 원본).
+7. **스크립트 순서**: 엔진 스크립트는 `type="module"`(defer 의미)로 출력해 head의 업체 스니펫·로더가 먼저 실행되게 한다.
+   엔진은 업체 스니펫보다 먼저 실행되어야 한다는 가정을 하지 않는다.
+8. **지표 구분**: static 페이지의 "실행 JS 0바이트"(R-01·NFR-01)는 엔진 기준이며 앱이 추가한 서드파티·앱 엔트리는
+   별도 항목으로 기록한다.
+
 ## 9. MPA·전환·성능
 
 ### 9.1 페이지 전환
@@ -958,6 +988,8 @@ const response: Response = await handler.fetch(request, platform);
 - [x] AG-08 (2026-10-13): 외부 사용자가 없는 0.x 단계이므로 2.0 전체에서 하위 호환을 고려하지 않는다.
       legacy 경로·shim·deprecation 기간 없이 구 API를 새 모델로 일괄 전환하고 데모·scaffold·문서를 함께
       바꾼다(NFR-02, DC-15, 9.2, V-18).
+- [x] AG-09 (2026-10-14): GTM·Sentry·Datadog 등 외부 SDK·태그 매니저는 업체 기본 설치법 그대로 문서 로드·클라이언트
+      이동 모두에서 동작해야 한다(R-27, 8.3, V-31).
 
 ### 12.2 구현 방식: 전 항목 TBD, 아래는 권고안
 
@@ -1038,7 +1070,7 @@ const response: Response = await handler.fetch(request, platform);
       같은 조건에서 고정한다. V-17/V-19.
 - [ ] DC-18: 클라이언트 라우터. 레이아웃 head 선언·문서/페이지 수명 분리·head 병합·module script 1회 실행·
       build ID 불일치 시 문서 로드 권고. 오류 응답 표시, inline script 판정 키, 라이프사이클 이벤트 이름·
-      payload, GET 폼 가로채기 범위를 정한다. V-19/V-20.
+      payload, GET 폼 가로채기 범위, 앱 클라이언트 엔트리(`client/entry.ts` 가칭, 8.3) 이름·위치를 정한다. V-19/V-20/V-31.
 - [ ] DC-19: persist. 빌드 플러그인 안정 ID·componentId 일치 조건·props 반영 기본·`moveBefore()` 우선 권고.
       server/스트리밍 슬롯 persist 금지 여부와 iframe 재로드 허용을 정한다. V-21.
 - [ ] DC-20: prefetch. 링크 기본 전략(hover/tap)·지연 시간·HTML 캐시 크기/TTL·back/forward 재사용·
@@ -1078,38 +1110,39 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 
 후속 IMPLEMENT.md·MANUAL_TEST_CHECKLIST.md의 입력이며 실행된 결과가 아니다.
 
-| ID   | 대상           | 시나리오와 통과 기준                                                                                                                                                               |
-| ---- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V-01 | R-01           | static에 프레임을 보내도 콘텐츠 유지. action/boot/plugin 없는 페이지는 실행 JS 요청 0건.                                                                                           |
-| V-02 | R-02           | server SSR·업데이트 HTML 일치. 단건/스트림·언어 전환·제거 처리, client 템플릿 배제.                                                                                                |
-| V-03 | R-03           | 복수 아일랜드의 독립 hydrate/mount/unmount. 같은 컴포넌트의 인스턴스끼리 간섭 없음.                                                                                                |
-| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영.                                                                                         |
-| V-05 | R-01/R-05/R-11 | 전체 client 산출물에 static/server 전용 모듈·비밀 sentinel 없음. 필요한 컴포넌트·CSS만 로드.                                                                                       |
-| V-06 | R-06           | 페이지별 불필요한 plugin/debug 로딩 없음. client 아일랜드 없는 페이지에서 Lithent 배제.                                                                                            |
-| V-07 | R-07           | JSON/NDJSON 최종 DOM·state·UI 일치. async handler·실패·빈 결과·Content-Type 규약 준수.                                                                                             |
-| V-08 | R-08/R-02      | partial/accumulate first·done 후·깨진 JSON·누락 delta·EOF·한도·취소·병합 순서에 잘못 적용하지 않음.                                                                                |
-| V-09 | R-09           | UI-only에서 renderer 미호출. full/partial/null/removed와 SSR/hydration 일치, reset·원래 값 처리 검증.                                                                              |
-| V-10 | R-10/NFR-03    | SSR 속성 breakout·script/event URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단.                                                                            |
-| V-11 | R-11           | `.tsx` 페이지의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                                                          |
-| V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                                                                |
-| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                                                       |
-| V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                                                           |
-| V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                                                            |
-| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·지시자 변환 일치.                                                                                       |
-| V-17 | NFR-01         | 고정 조건에서 총 초기 gzip JS 70% 감소. HTML/JSON/SSR·첫 액션·INP/CLS가 결정된 예산 충족.                                                                                          |
-| V-18 | NFR-02         | 전환 후 데모 전 페이지의 언어 전환·boot·abort·스트리밍·UI·액션·BASE_PATH·plugin 동등, 생성 scaffold 동작, 구 API 사용처 0, 버전 불일치 reload.                                     |
-| V-19 | R-17/NFR-04    | 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 동일. 100회 이동 후 리스너·인스턴스 누적 없음.                                                                 |
-| V-20 | R-17           | 진행 중 스트림 abort, head 병합·CSS 선로드, script 1회 실행, opt-out·외부·수정 키·오류·build ID 불일치 fallback, scroll·hash·focus·announce.                                       |
-| V-21 | R-18           | persist 아일랜드의 로컬 상태·포커스·재생 유지와 새 props 반영/유지 옵션. 짝 없는 요소 cleanup, 미지원 대상 진단.                                                                   |
-| V-22 | R-19           | 전략별 trigger 1회 요청, 적중 시 추가 네트워크 없이 교체, Save-Data 생략, 캐시 TTL·액션 후 무효화, 부작용 URL 제외.                                                                |
-| V-23 | R-20           | 셸 즉시 응답·fallback 후 교체, 토큰 변조·권한 밖 거부, 실패 시 fallback 유지, 선행 transition 우선, prerender 셸에서 동작.                                                         |
-| V-24 | R-21           | 스키마 위반 필드 오류, JS 없음 POST→303→결과 반영, JS 있음 동일 결과, CSRF 거부, handler 코드 client 미포함.                                                                       |
-| V-25 | R-22           | SSR·server 교체·client 렌더에서 범위 일치, 다른 컴포넌트·슬롯 자식 비적용, global 탈출, 이동 시 CSS 로드.                                                                          |
-| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작.                                                                      |
-| V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                                                               |
-| V-28 | R-26/NFR-02    | 공통 적합성 테스트(SSR·transition 스트림·abort·지연 슬롯·액션·404·BASE_PATH·cookie)가 전환 전 Express 결과와 동일. 첫 yield 후 cookie 무시·dev 경고, 미들웨어 조기 반환·응답 가공. |
-| V-29 | R-26/NFR-05    | 5개 어댑터에서 V-28 통과. 코어 번들에 `node:*`·Express import 없음, 실행 중 fs 접근 없음, Workers 제약 기능 진단, 콜드 스타트·번들 크기 기록.                                      |
-| V-30 | R-17/NFR-03    | GTM식 fixture가 head·body에 인라인·외부 script·iframe을 동적 주입한 상태에서 클라이언트 이동 20회 후 노드 보존, page_view 20회, CSP 위반 0.                                        |
+| ID   | 대상           | 시나리오와 통과 기준                                                                                                                                                                                                 |
+| ---- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V-01 | R-01           | static에 프레임을 보내도 콘텐츠 유지. action/boot/plugin 없는 페이지는 실행 JS 요청 0건.                                                                                                                             |
+| V-02 | R-02           | server SSR·업데이트 HTML 일치. 단건/스트림·언어 전환·제거 처리, client 템플릿 배제.                                                                                                                                  |
+| V-03 | R-03           | 복수 아일랜드의 독립 hydrate/mount/unmount. 같은 컴포넌트의 인스턴스끼리 간섭 없음.                                                                                                                                  |
+| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영.                                                                                                                           |
+| V-05 | R-01/R-05/R-11 | 전체 client 산출물에 static/server 전용 모듈·비밀 sentinel 없음. 필요한 컴포넌트·CSS만 로드.                                                                                                                         |
+| V-06 | R-06           | 페이지별 불필요한 plugin/debug 로딩 없음. client 아일랜드 없는 페이지에서 Lithent 배제.                                                                                                                              |
+| V-07 | R-07           | JSON/NDJSON 최종 DOM·state·UI 일치. async handler·실패·빈 결과·Content-Type 규약 준수.                                                                                                                               |
+| V-08 | R-08/R-02      | partial/accumulate first·done 후·깨진 JSON·누락 delta·EOF·한도·취소·병합 순서에 잘못 적용하지 않음.                                                                                                                  |
+| V-09 | R-09           | UI-only에서 renderer 미호출. full/partial/null/removed와 SSR/hydration 일치, reset·원래 값 처리 검증.                                                                                                                |
+| V-10 | R-10/NFR-03    | SSR 속성 breakout·script/event URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단.                                                                                                              |
+| V-11 | R-11           | `.tsx` 페이지의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청 사이 데이터 유출 없음.                                                                                                                            |
+| V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                                                                                                  |
+| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                                                                                         |
+| V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                                                                                             |
+| V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                                                                                              |
+| V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·지시자 변환 일치.                                                                                                                         |
+| V-17 | NFR-01         | 고정 조건에서 총 초기 gzip JS 70% 감소. HTML/JSON/SSR·첫 액션·INP/CLS가 결정된 예산 충족.                                                                                                                            |
+| V-18 | NFR-02         | 전환 후 데모 전 페이지의 언어 전환·boot·abort·스트리밍·UI·액션·BASE_PATH·plugin 동등, 생성 scaffold 동작, 구 API 사용처 0, 버전 불일치 reload.                                                                       |
+| V-19 | R-17/NFR-04    | 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 동일. 100회 이동 후 리스너·인스턴스 누적 없음.                                                                                                   |
+| V-20 | R-17           | 진행 중 스트림 abort, head 병합·CSS 선로드, script 1회 실행, opt-out·외부·수정 키·오류·build ID 불일치 fallback, scroll·hash·focus·announce.                                                                         |
+| V-21 | R-18           | persist 아일랜드의 로컬 상태·포커스·재생 유지와 새 props 반영/유지 옵션. 짝 없는 요소 cleanup, 미지원 대상 진단.                                                                                                     |
+| V-22 | R-19           | 전략별 trigger 1회 요청, 적중 시 추가 네트워크 없이 교체, Save-Data 생략, 캐시 TTL·액션 후 무효화, 부작용 URL 제외.                                                                                                  |
+| V-23 | R-20           | 셸 즉시 응답·fallback 후 교체, 토큰 변조·권한 밖 거부, 실패 시 fallback 유지, 선행 transition 우선, prerender 셸에서 동작.                                                                                           |
+| V-24 | R-21           | 스키마 위반 필드 오류, JS 없음 POST→303→결과 반영, JS 있음 동일 결과, CSRF 거부, handler 코드 client 미포함.                                                                                                         |
+| V-25 | R-22           | SSR·server 교체·client 렌더에서 범위 일치, 다른 컴포넌트·슬롯 자식 비적용, global 탈출, 이동 시 CSS 로드.                                                                                                            |
+| V-26 | R-23           | prerender HTML과 SSR 결과 일치, 정적 우선 서빙·BASE_PATH, 요청 의존 코드 빌드 진단, 슬롯·액션·지연 슬롯 동작.                                                                                                        |
+| V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                                                                                                 |
+| V-28 | R-26/NFR-02    | 공통 적합성 테스트(SSR·transition 스트림·abort·지연 슬롯·액션·404·BASE_PATH·cookie)가 전환 전 Express 결과와 동일. 첫 yield 후 cookie 무시·dev 경고, 미들웨어 조기 반환·응답 가공.                                   |
+| V-29 | R-26/NFR-05    | 5개 어댑터에서 V-28 통과. 코어 번들에 `node:*`·Express import 없음, 실행 중 fs 접근 없음, Workers 제약 기능 진단, 콜드 스타트·번들 크기 기록.                                                                        |
+| V-30 | R-17/NFR-03    | GTM식 fixture가 head·body에 인라인·외부 script·iframe을 동적 주입한 상태에서 클라이언트 이동 20회 후 노드 보존, page_view 20회, CSP 위반 0.                                                                          |
+| V-31 | R-27/AG-09     | 실제 GTM·Sentry(npm·Loader)·Datadog RUM(npm·CDN) 기본 설치로 문서 로드와 클라이언트 이동 20회에서 오류 수집·page_view/view 수·fetch 트레이스 헤더·서버 오류 훅·노드 보존·CSP 위반 0, 전역 API 캐시 금지 단위 테스트. |
 
 ## 14. 후속 구현 순서와 게이트
 
@@ -1128,7 +1161,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | 7. 콘텐츠·이미지·prerender | DC-24/DC-25/DC-26             | 가이드 parity baseline과 V-26/V-27. 정적 출력·i18n 경로·`content.ts` 일괄 전환.                                               |
 | 8. 빌드 플러그인·진단 완성 | DC-16/DC-23                   | baseline·plugin fixture·V-05/V-11/V-16/V-18/V-25. 진단·소스맵·CSS Modules의 dev/prod/scaffold.                                |
 | 9. Test Hardening          | 확정 계약·한도                | 전체 baseline과 이상 frame·악성 입력·지연 로드·동시 요청·취소·이동 경쟁 회귀. V-08/V-10/V-13/V-20.                            |
-| 10. Integration Test       | DC-06/DC-17·브라우저 범위     | production·BASE_PATH·생성 앱·5개 어댑터 E2E. V-14/V-17/V-18/V-19/V-26/V-29 판정.                                              |
+| 10. Integration Test       | DC-06/DC-17·브라우저 범위     | production·BASE_PATH·생성 앱·5개 어댑터 E2E. V-14/V-17/V-18/V-19/V-26/V-29~V-31 판정.                                         |
 
 안전성과 버전 계약은 새로운 HTML·외부 입력 경로를 도입하는 시점에 필요하다.
 hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·overrides에 반영하고 생성물을
@@ -1145,7 +1178,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
