@@ -144,26 +144,43 @@ PageDefinition + SlotDefinition
                    Vite 청크와 manifest
 ```
 
-Vite 플러그인과 가상 모듈 방식을 권고한다(DC-02). 선언 분석·정규화·코드 생성은
+Vite 플러그인과 가상 모듈 방식을 사용한다(DC-02 결정). 선언 분석·정규화·코드 생성은
 플러그인 내부에서 분리하고 dev와 production에서 같은 처리를 호출한다. 가상 모듈에는
-client 컴포넌트만 import한다. 이름 조사에 전체 템플릿의 브라우저 import를 사용하지 않는다.
-AST 분석은 기존 TS/JS parser를 재사용하며 구체적인 선택은 DC-02에서 정한다.
+client 컴포넌트만 import한다. 이름 조사에 전체 템플릿의 브라우저 import를 사용하지 않으며
+`engine/client/templates/auto.ts`의 eager glob은 제거한다(AG-08).
+
+- **파서**(DC-02 결정): `oxc-parser`로 원본 TSX를 `transform` 훅(`enforce: 'pre'`)에서 분석한다. JSX 변환
+  이전의 AST에서 `<Slot>`·지시자 속성·import 선언을 읽는다. 빌드 시에만 쓰므로 런타임 번들에 포함되지 않는다.
+- **아일랜드 식별**(DC-02 결정): client 지시자가 붙은 엘리먼트와 client 모드 `<Slot>`의 자식 엘리먼트는
+  **정적 import로 가져온 식별자**여야 한다. 플러그인이 import 소스를 해석해 componentId(모듈 경로+export
+  이름)를 확정한다. 변수·조건식·멤버 접근 등으로 계산한 컴포넌트(`const C = a ? A : B; <C client:load />`)는
+  원본 위치와 함께 빌드 오류로 보고한다. 조건 분기는 각 분기에 지시자를 쓴 엘리먼트로 작성한다. 명시 registry는 두지 않는다.
+- **분석 범위**: 페이지에서 import 그래프를 따라 레이아웃·서버 컴포넌트 안의 선언까지 수집한다. 같은
+  컴포넌트가 여러 페이지에서 쓰여도 componentId 하나로 합친다.
+- **청크 단위**(DC-02 결정): 아일랜드 컴포넌트마다 동적 `import()` 청크를 만든다. Lithent·엔진 런타임 등 공유
+  의존은 Vite/Rollup이 공통 청크로 분리한다. 가상 모듈 `virtual:state-surface/islands`가 componentId →
+  loader 맵을 제공하고, 빌드 manifest가 각 청크의 CSS·preload 목록을 연결한다.
+- **요청별 수집**: SSR 중 `<Slot>`·아일랜드 래퍼가 요청 스코프 수집기에 실제 렌더된 인스턴스(slotId,
+  componentId, 활성화 조건, 공개 props)를 기록하고 bootstrap에는 이것만 넣는다. 조건 때문에 렌더되지 않은
+  아일랜드는 로드하지 않는다. `client:load` 청크만 modulepreload 대상이다.
 
 빌드 manifest는 페이지에서 도달 가능한 컴포넌트 목록과 loader를 만들고, 요청 SSR은 실제
 출력한 슬롯 인스턴스·공개 props만 bootstrap에 넣는다. 레이아웃·서버 컴포넌트 안의 선언도
 분석해야 하며 조건 때문에 출력되지 않은 아일랜드를 초기 로드하지 않는다. 동적으로 계산한
-컴포넌트·ID를 어디까지 허용할지는 DC-02/DC-08에서 정한다. 빌드의 컴포넌트 목록과 요청별
+컴포넌트는 허용하지 않는다(DC-02). 빌드의 컴포넌트 목록과 요청별
 슬롯 인스턴스 목록을 같은 정보로 취급하지 않는다.
 
 새 책임의 배치 후보는 `engine/build/`(Vite 플러그인 `state-surface/vite`)다. 공개 entry는 DC-28의 단일 패키지
 subpath를 따른다. `engine/shared/`에 Node 전용 의존성을 섞지 않는다.
 
-- `.tsx`의 정적 import·Slot 선언에서 module ID를 해석한다. 분석할 수 없는 컴포넌트 선택은
-  명시 registry를 요구하거나 진단하는 안이다. 정확한 지원 범위는 DC-02/DC-08에서 결정한다.
 - static/server 전용 코드는 서버 의존성 그래프에 둔다. lazy import만으로 client 출력에서
   제외됐다고 판정하지 않고 client의 전이 의존성도 검사한다.
-- server-only 모듈 표시 방법으로 module marker나 import 규칙을 검토한다. 파일명만으로
-  비밀 코드가 없다고 보장하지 않는다. V-05에서는 client 출력 전체에 sentinel이 없는지 검사한다.
+- **서버 전용 보호**(DC-02 결정): 모듈이 `import 'state-surface/server-only'` 마커를 갖거나 파일명이
+  `*.server.ts(x)`이면 서버 전용이다. `node:*` 모듈도 같은 규칙을 적용한다. client 청크의 전이 의존성에
+  서버 전용 모듈이 들어오면 빌드를 실패시키고 import 경로 체인을 보여 준다
+  (`components/Chart.tsx → lib/fmt.ts → server/db.ts`). 마커 모듈 자체는 client 번들에서 import되면 throw한다.
+  파일명·마커만으로 비밀 코드가 없다고 보장하지 않으므로 V-05는 client 출력 전체에 sentinel 문자열이 없는지
+  교차 검사한다.
 - CSS 추출·로딩을 client 청크에 연결한다. 활성화 전후 CSS 누락과 CLS, Tailwind source 탐색,
   runtime UI 클래스 허용 토큰의 생성·포함을 검증한다.
 - dev 라우트 로딩은 Vite의 서버 모듈 로드 등 플러그인 transform이 적용되는 경로를 사용한다. tsx 직접
@@ -804,8 +821,12 @@ const response: Response = await handler.fetch(request, platform);
       슬롯 상태(Astro식 props 전달) ③ `<Slot name>` 필수, 직접 지시자는 자동 ID이며 프레임 대상 불가
       ④ fallback은 `fallback` prop. 근거: transition이 겨냥할 이름 붙은 경계는 필수이고, props=상태로 JSX 타입
       검사를 그대로 쓰며, 작은 아일랜드의 이름 부담을 없앤다. 2.1. V-11/V-15/V-18.
-- [ ] DC-02: AST 선언 분석·Vite 가상 모듈. 이름 조사용 eager import를 제거하고 dev/build에 같은
-      manifest 생성을 사용한다. 분석 불가능할 때의 명시 registry도 결정한다. V-05/V-16.
+- [x] DC-02 (2026-10-14 결정): 선언 분석·Vite 가상 모듈. ① `oxc-parser`로 원본 TSX를 pre transform에서 분석
+      ② 아일랜드는 정적 import 식별자만 허용, 계산된 컴포넌트는 빌드 오류(명시 registry 없음) ③ 컴포넌트별
+      동적 청크 + 공유 의존 공통 청크, `virtual:state-surface/islands` loader 맵 ④ `state-surface/server-only`
+      마커·`*.server.ts`·`node:*`가 client 전이 의존성에 들어오면 경로 체인과 함께 빌드 실패, sentinel 스캔으로
+      교차 확인 ⑤ eager glob 제거, dev/build 동일 manifest. 근거: 빌드에서 아일랜드를 모두 확정해 진단·preload·
+      보안 검사가 단순하고, 지연 활성화와 페이지 간 캐시에 유리하며 Astro와 같은 제약이다. 3장. V-05/V-16.
 - [ ] DC-03: server HTML 적용. 평탄한 슬롯 replace·플러그인 cleanup부터 시작하는 안.
       morph와 입력 보존 범위를 별도로 결정한다. V-02/V-12/V-15.
 - [ ] DC-04: 로더 예산·timing·첫 이벤트. gzip 1~2kB는 후보이며 fallback·only 조합·폼 snapshot·
@@ -956,7 +977,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
