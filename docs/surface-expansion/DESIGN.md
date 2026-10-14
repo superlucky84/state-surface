@@ -997,17 +997,38 @@ export default defineTransition({
   파일 변경 시 갱신). `useAction(renew, 'comment/add')`의 params가 자동으로 타입 지정되고 없는 이름은 타입 오류다.
   타입만 참조하므로 handler 코드는 client 산출물에 포함되지 않는다(V-05).
 
-### 10.6 scoped CSS (R-22)
+### 10.6 scoped CSS (R-22, DC-23 결정)
 
-- 전용 파일의 `<style>`이 없으므로(DC-07) 컴포넌트 범위 CSS는 **CSS Modules**(`*.module.css`)로 제공한다.
-  Vite 기본 기능이라 추가 컴파일러가 없고 클래스 이름이 해시로 범위 지정된다. 전역은 `:global()`로 탈출한다.
-  같은 파일에 스타일을 두는 `css` 태그드 템플릿(Vite 플러그인 컴파일)은 후속 선택지로 DC-23에서 검토한다.
-- 모듈 클래스 이름은 SSR·server HTML 교체·client 렌더가 같은 CSS 모듈을 import해 얻으므로 런타임 표식이
-  필요 없다. 서버와 클라이언트 빌드가 같은 해시 규칙을 쓰는지 검증한다(V-25). 다른 컴포넌트의 모듈 클래스는
-  적용되지 않는다.
-- CSS는 컴포넌트가 속한 청크의 CSS로 추출한다. static/server 컴포넌트의 CSS는 페이지 CSS로 출력하고,
-  클라이언트 이동 시 head 병합(10.1)으로 로드한다. Tailwind 유틸리티와 같은 요소에 함께 쓸 수 있으며
-  `@apply` 지원 범위를 정한다. SSR·server HTML·client 렌더 모두 같은 모듈 클래스 이름을 쓰므로 범위가 일치한다.
+```tsx
+// components/Card.tsx
+import s from './Card.module.css';
+
+<div class={`${s.card} p-4 rounded-lg`}>…</div>;
+```
+
+```css
+/* components/Card.module.css */
+@reference "../client/styles.css"; /* @apply 사용 시 */
+
+.card {
+  container-type: inline-size;
+  @apply shadow-sm;
+}
+```
+
+- **역할 분담**(DC-23 결정): 일반 스타일은 Tailwind 유틸리티를 마크업에 쓰고, 유틸리티로 표현하기 어려운 컴포넌트
+  범위 스타일(container query·복잡한 선택자·keyframes 등)은 옆 파일 **CSS Modules**(`*.module.css`)에 쓴다. Vite 기본
+  기능이라 추가 컴파일러·에디터 플러그인이 없고 클래스 이름이 해시로 범위 지정된다. 전역은 `:global()`로 탈출한다.
+- **같은 파일 CSS**: `.tsx` 안의 `css` 태그드 템플릿 등은 1차 범위에서 제공하지 않는다(DC-23). 수요가 확인되면 빌드 시
+  추출(런타임 0) 방식으로 후속 검토한다.
+- **`@apply`**: CSS Modules 안에서 허용한다. Tailwind v4는 모듈 CSS에서 테마·유틸리티를 참조하려면
+  `@reference "<앱 CSS 엔트리>"`가 필요하므로 가이드와 scaffold 예시에 포함한다. 남용을 막기 위해 유틸리티는 마크업에,
+  모듈 CSS는 유틸리티로 어려운 것에 쓰도록 권장한다.
+- **범위 일치**: 모듈 클래스 이름은 SSR·server HTML 교체·client 렌더가 같은 CSS 모듈을 import해 얻으므로 런타임 표식이
+  필요 없다. 서버·클라이언트 빌드가 같은 해시 규칙을 쓰는지 검증한다(V-25).
+- **청크 배치**: client 아일랜드 컴포넌트의 모듈 CSS는 그 아일랜드 청크의 CSS로 추출해 활성화 전에 로드한다(manifest의
+  청크 CSS, 활성화 전 CSS 누락으로 인한 CLS 방지). static·server 컴포넌트의 모듈 CSS는 페이지 CSS로 출력해 SSR `<head>`에
+  넣는다. 클라이언트 라우터 이동 시에는 head 병합(10.1)으로 필요한 CSS만 추가 로드한다.
 
 ### 10.7 prerender와 하이브리드 출력 (R-23, DC-24 결정)
 
@@ -1388,8 +1409,10 @@ const response: Response = await handler.fetch(request, platform);
       `/_surface/action/:name` POST → 실행 → 303 + 서명된 flash 쿠키, 페이지는 `ctx.flash()` ④ CSRF는 Origin·Sec-Fetch-Site
       검사 기본 ⑤ 빌드가 `.state-surface/actions.d.ts` 타입 맵 생성. 근거: 개념 하나로 세 호출 경로를 지원하고,
       새로고침 재제출 없는 PRG, 캐시 페이지와 호환되는 토큰 없는 CSRF, 서버 코드 없는 타입 안전성. 10.5. V-24.
-- [ ] DC-23: scoped CSS. CSS Modules 기본(DC-07에서 확정). 같은 파일 `css` 태그드 템플릿의 후속 도입 여부,
-      Tailwind `@apply` 범위와 CSS 청크 배치를 정한다. V-25.
+- [x] DC-23 (2026-10-14 결정): scoped CSS. ① Tailwind 유틸리티 + 컴포넌트 범위는 CSS Modules ② 같은 파일 `css` 태그드
+      템플릿은 1차 제외(수요 확인 후 빌드 추출 방식 검토) ③ 모듈 CSS의 `@apply` 허용, `@reference` 가이드·scaffold 포함
+      ④ 아일랜드 모듈 CSS는 청크 CSS로 활성화 전 로드, static·server는 페이지 CSS. 근거: 추가 도구 없이 기존 Tailwind 흐름을
+      유지하고 CSS 누락으로 인한 CLS를 막는다. 10.6. V-25.
 - [x] DC-24 (2026-10-14 결정): prerender. ① 기본 SSR, 페이지 `export const prerender = true`, `surface({ prerender: true })`로
       기본 반전 ② 동적 라우트는 `getStaticPaths()` 필수 ③ 제한 ctx로 요청 의존 코드는 빌드 오류 ④ 정적 파일 우선 서빙,
       BASE_PATH 빌드 고정 ⑤ i18n은 언어별 경로 `/en/…`·`/ko/…`(hreflang, 언어 없는 경로는 쿠키·Accept-Language로 302,
@@ -1496,7 +1519,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01~DC-22·DC-24~DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01~DC-28 전 항목을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
