@@ -870,26 +870,42 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   저장한 스크롤 위치를 복원한다. HTTP 캐시 헤더는 그대로 존중한다. BFCache로 복귀한 경우(`pageshow` persisted)는
   브라우저 동작을 따른다.
 
-### 10.4 지연 server 슬롯 (R-20)
+### 10.4 지연 server 슬롯 (R-20, DC-21 결정)
 
 ```text
-페이지 SSR: <h-state name="cart" data-defer> fallback HTML </h-state> + 서명된 props 토큰
+페이지 SSR: <h-state name="cart" data-defer> fallback HTML </h-state> + 암호화된 props 토큰
    ↓ 페이지 응답 즉시 완료 (prerender/CDN 캐시 가능)
-브라우저 로더: GET {BASE_PATH}/_surface/island/:componentId?p=<token>
-   ↓ 서버: 토큰 검증 → 쿠키·권한 재확인 → 등록 renderer 실행 → HTML
-슬롯 HTML 교체 (server 모드 적용 경로 재사용)
+브라우저 로더: GET {BASE_PATH}/_surface/island/:componentId?p=<token>   (토큰 2KB 초과 시 POST)
+   ↓ 서버: 토큰 복호화·검증 → 쿠키·권한 재확인 → 등록 renderer 실행 → HTML
+슬롯 HTML 적용 (server 모드 swap 경로 재사용, DC-03)
 ```
 
-- 선언은 `<Slot name="..." mode="server" server:defer fallback={...}>`이다(DC-01). props는 서버가 서명 또는
-  암호화한 토큰으로만 전달한다. 클라이언트가 componentId·props를 바꿔 다른 renderer를 실행할 수 없다.
-- GET 요청으로 CDN 캐시를 허용할지, 개인화 응답의 `Cache-Control: private` 기본값은 DC-21에서 정한다.
-  키 회전과 토큰 크기 한도(초과 시 POST)도 함께 정한다.
-- 지연 응답이 오기 전에 같은 슬롯을 대상으로 한 transition 프레임이 적용되면 지연 응답을 버리는
-  revision 규칙을 적용한다(5.3 generation 모델 재사용). 실패하면 fallback을 유지하고 재시도 정책을 따른다.
-- 같은 페이지의 여러 지연 슬롯은 병렬로 요청한다. 묶음 요청은 후속 최적화다. JS가 없으면 fallback이
-  남으므로 fallback은 의미 있는 콘텐츠나 안내여야 한다.
-- 기존 boot transition과 비교해 지연 슬롯은 슬롯 단위·캐시 가능한 GET·스트림 없음이 차이다.
-  둘 다 지원하며 선택 기준을 가이드에 둔다.
+```tsx
+<Slot name="cart" mode="server" server:defer fallback={<CartSkeleton />}>
+  <Cart userId={user.id} />
+</Slot>
+
+<Slot name="weather" mode="server" server:defer cache="public, max-age=60" fallback={<p>…</p>}>
+  <Weather city="Seoul" />
+</Slot>
+```
+
+- **props 보호**: props는 AES-GCM(Web Crypto)으로 암호화한 토큰으로만 전달한다. 내용이 URL·프록시 로그에 노출되지
+  않고 변조하면 복호화가 실패한다. 토큰에는 componentId·slotId·buildId를 함께 넣어 다른 renderer 실행이나 다른
+  빌드에서의 재사용을 막는다. 클라이언트는 componentId·props를 바꿀 수 없다.
+- **키 관리**: 키는 빌드 시 자동 생성해 서버 번들에 포함한다. `SURFACE_SECRET` 환경 변수가 있으면 그것을 쓰며,
+  다중 인스턴스·키 교체 시 설정한다(이전 키를 `SURFACE_SECRET_PREVIOUS`로 함께 두면 교체 기간에 두 키로 복호화).
+  같은 키로 DC-22 flash 쿠키도 서명한다. 모든 어댑터에서 Web Crypto로 동작한다.
+- **캐시**: 기본 응답은 `Cache-Control: private, no-store`다. 개인화가 아닌 슬롯은 `cache="public, max-age=…"`로 CDN
+  캐시를 허용한다. 토큰이 2KB를 넘으면 POST로 자동 전환하며 이때는 캐시되지 않는다.
+- **순서**: 지연 응답이 오기 전에 같은 슬롯을 대상으로 한 transition 프레임이 적용되었으면 늦게 온 지연 응답을 버린다
+  (revision 비교, 5.3 generation 모델 재사용).
+- **실패**: 1초 뒤 한 번 재시도하고 그래도 실패하면 fallback을 유지한 채 `reportError`로 보고한다(8.3).
+- **요청 방식**: 같은 페이지의 여러 지연 슬롯은 병렬로 요청한다. 묶음 요청(batching)은 후속 최적화다. 클라이언트
+  라우터 이동 시에는 교체 직후 새 페이지의 지연 슬롯을 요청한다. JS가 없으면 fallback이 남으므로 fallback은 의미 있는
+  콘텐츠나 안내여야 한다.
+- 기존 boot transition과 비교해 지연 슬롯은 슬롯 단위·캐시 가능한 GET·스트림 없음이 차이다. 둘 다 지원하며 선택
+  기준을 가이드에 둔다.
 
 ### 10.5 타입 지정 transition과 progressive enhancement (R-21, DC-22 결정)
 
@@ -1238,8 +1254,11 @@ const response: Response = await handler.fetch(request, platform);
       link prefetch), prerender는 opt-in ④ Save-Data·2G 이하는 tap만 ⑤ back/forward는 최신 HTML 재요청 + 스크롤 복원
       ⑥ 다른 origin·POST·reload 링크 제외, `Sec-Purpose: prefetch` 헤더. 근거: 체감 속도 이득이 크면서 낭비가 적고, 로그인·
       언어 전환 뒤 오래된 화면을 보이지 않는다. 10.3. V-22.
-- [ ] DC-21: 지연 server 슬롯. 서명/암호화 방식·키 회전·토큰 한도·GET/POST·캐시 헤더·재시도와
-      transition revision 우선 규칙을 정한다. V-23.
+- [x] DC-21 (2026-10-14 결정): 지연 server 슬롯. ① props는 AES-GCM 암호화 토큰(componentId·slotId·buildId 포함)
+      ② 키는 빌드 자동 생성, `SURFACE_SECRET`(+`_PREVIOUS`)로 교체, flash 쿠키와 공유 ③ 기본 `private, no-store`, 슬롯별
+      `cache="public, …"` opt-in, 토큰 2KB 초과 시 POST ④ 선행 transition이 있으면 지연 응답 폐기 ⑤ 1회 재시도 후 fallback
+      유지·reportError ⑥ 병렬 요청, 라우터 이동 후 즉시 요청. 근거: 개인정보가 URL에 노출되지 않고, 개인화 응답이 공유
+      캐시에 남지 않으며, 공용 슬롯은 CDN 이득을 얻는다. 10.4. V-23.
 - [x] DC-22 (2026-10-14 결정): 타입 지정 액션. ① 별도 액션 개념 없이 `defineTransition({ input, targets, mode, handler })`로
       통합(`actions/` 디렉터리 없음) ② Standard Schema, 검증 실패는 handler 미실행·`validation` fieldErrors ③ JS 없는 폼은
       `/_surface/action/:name` POST → 실행 → 303 + 서명된 flash 쿠키, 페이지는 `ctx.flash()` ④ CSRF는 Origin·Sec-Fetch-Site
@@ -1344,7 +1363,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
