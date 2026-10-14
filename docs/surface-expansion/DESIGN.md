@@ -760,21 +760,35 @@ export default defineTransition({ viewTransition: true, handler: … });
 BASE_PATH·초기 UI·boot·abort·플러그인·scaffold의 기능 동등성을 전환 검증에 포함한다(V-18).
 프로토콜과 공개 API 구현 단계에서 PROTOCOL.md와 공개 guide를 갱신한다.
 
-### 9.3 측정 조건
+### 9.3 측정 조건 (DC-17 결정)
 
-기존 공통 JS gzip 추정 28.21kB에서 70%를 줄이면 약 8.46kB가 된다. 현재의 단순 환산이며
-HTTP 전송 측정이나 새 runtime의 보장값이 아니다.
+기존 공통 JS gzip 추정 28.21kB에서 70%를 줄이면 약 8.46kB가 된다. 0단계에서 같은 조건으로 실제 기준선을 다시 측정해
+고정하고 이후 비교는 그 값을 기준으로 한다.
 
-- home·guide·server 액션·지연 client를 따로 측정한다. 언어 전환·하이라이트 등의 기능을
-  보존하고 compression·cache·네트워크·기기를 동일하게 맞춘다.
-- 로더 1~2kB는 gzip 기준 후보다. 관찰자·이벤트 수집·metadata 읽기를 포함하고 protocol runtime과
-  Lithent는 별도 크기로 기록하되 총 초기 JS에는 모두 합산한다. 최종 예산은 DC-04다.
-- JS·HTML/JSON·CSS·실행 시간·SSR 비용·첫 액션 응답까지를 나눠 기록한다.
-- INP 200ms 이하, CLS 0.1 이하를 목표 후보로 둔다. 실제 사용자 p75와 lab의 대리 측정을 구분하고
-  짧은 테스트를 field INP 합격으로 판정하지 않는다. 환경·첫 액션 예산은 DC-17에서 정한다.
-  지표 정의는 [Web Vitals](https://web.dev/articles/vitals)를 참조한다.
-- 클라이언트 라우터 이동은 클릭부터 새 페이지 준비 완료까지의 시간을 문서 로드 이동과 같은
-  조건에서 비교한다. prefetch 적중·미적중, 반복 이동 후 heap·리스너 수를 함께 기록한다(NFR-04).
+- **대표 페이지**: 홈(static 위주), 가이드 quickstart(콘텐츠·prerender), 검색 예제(server 슬롯 액션), 채팅 예제
+  (client 스트리밍). 언어 전환·하이라이트 등 기존 기능을 보존한 상태로 측정한다.
+- **환경**: CI에서 production 빌드를 Node 어댑터로 실행하고 Playwright(Chromium)로 측정한다. CPU 4배 스로틀과 Fast 4G
+  네트워크 에뮬레이션, 압축·캐시 조건을 고정하고 각 시나리오 5회 중앙값을 쓴다. 실제 사용자(field) p75는 보조 지표이며
+  짧은 랩 측정을 field INP 합격으로 판정하지 않는다. Workers 콜드 스타트는 wrangler(workerd) 실행으로 측정한다(DC-28).
+- **기록 항목**: 초기 실행 JS(로더·프로토콜 런타임·Lithent·라우터·morph·앱 엔트리·서드파티를 구분하되 엔진 기준 총합을
+  판정에 사용, 8.3), HTML/JSON·CSS 전송량, 실행 시간, SSR 시간, 첫 액션 응답, 라우터 이동 시간, 반복 이동 후 heap·리스너 수.
+- **CI 게이트**(실패 시 CI 실패, 릴리스 게이트 V-17):
+  1. 홈·가이드의 엔진 초기 실행 JS gzip이 기준선 대비 70% 이상 감소. 액션·boot·플러그인 없는 순수 static 페이지는
+     실행 JS 0바이트.
+  2. 대표 페이지 CLS ≤ 0.1(아일랜드 활성화·지연 슬롯·이미지 포함).
+  3. 라우터 100회 반복 이동 후 리스너·Lithent 인스턴스·옵저버 누적 없음, heap 증가가 첫 10회 이후 수렴.
+- **보고 지표**(PR에 추이 보고, 게이트 아님 — 랩 편차가 커서 게이트로 쓰면 불안정):
+
+  | 지표                            | 목표값                                |
+  | ------------------------------- | ------------------------------------- |
+  | 랩 INP(클릭 → 다음 paint)       | ≤ 200ms                               |
+  | 첫 액션(클릭 → 첫 patch 반영)   | ≤ 서버 처리 시간 + 100ms              |
+  | 라우터 이동, prefetch 적중      | ≤ 100ms                               |
+  | 라우터 이동, prefetch 미적중    | 같은 조건 문서 로드보다 30% 이상 빠름 |
+  | Workers 콜드 스타트 / 서버 번들 | ≤ 50ms / ≤ 1MB gzip                   |
+  | 로더 / 라우터 런타임 gzip       | ≤ 2KB(DC-04) / ≤ 4KB                  |
+
+- 지표 정의는 [Web Vitals](https://web.dev/articles/vitals)를 참조한다.
 
 ## 10. 페이지 이동·로딩·콘텐츠 확장 (Astro 참고)
 
@@ -1342,9 +1356,11 @@ const response: Response = await handler.fetch(request, platform);
       `transitions/**/*.ts` 자동 등록(경로 = 이름) ④ dev/prod가 같은 분석 함수를 쓰고 V-28을 양쪽에 실행 ⑤ scaffold는
       최소 스타터 기본 + `--template demo`, 어댑터 프롬프트, CI에서 생성·빌드·테스트. 근거: 규칙 구현을 한 곳으로
       모으고, Astro식 탐색 규칙과 공유 가능한 transition 위치, 새 사용자의 시작 비용 최소화. 3.1. V-05/V-11/V-16/V-18.
-- [ ] DC-17: 초기 JS·응답·실행 시간·INP/CLS·첫 액션. 대표 페이지·환경·통과 수치를 고정해
-      NFR-01의 70% 감소와 사용 경험을 함께 판정한다. 클라이언트 이동 지연·반복 이동 메모리(NFR-04)도
-      같은 조건에서 고정한다. V-17/V-19.
+- [x] DC-17 (2026-10-14 결정): 성능 측정. ① 대표 페이지 홈·가이드 quickstart·검색·채팅 ② production 빌드 + Playwright
+      랩 측정(CPU 4x·Fast 4G·5회 중앙값), 0단계 기준선 재측정 ③ CI 게이트는 초기 JS 70% 감소·static 0바이트, CLS ≤0.1, 라우터
+      반복 이동 누수 없음 ④ 랩 INP ≤200ms·첫 액션 ≤서버+100ms·prefetch 이동 ≤100ms·미적중 30% 단축·콜드 스타트 ≤50ms·
+      번들 ≤1MB·로더 2KB·라우터 4KB는 보고 지표. 근거: 핵심 목표는 확실히 지키고 편차가 큰 랩 지표로 CI가 흔들리지 않게 한다.
+      9.3. V-17/V-19.
 - [x] DC-18 (2026-10-14 결정): 클라이언트 라우터. ① 레이아웃 head `<ClientRouter />`로 opt-in, 옵션은 props, 런타임은
       해당 페이지만 로드 ② 라우터 있는 레이아웃의 HTML 오류 페이지(4xx·5xx)는 교체, 네트워크 실패·비 HTML·라우터 없는
       페이지·build ID 불일치·다른 origin은 문서 로드 ③ 같은 origin 링크와 GET 폼 가로채기, data-action·POST 폼·
@@ -1480,7 +1496,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01~DC-16(DC-15 포함)·DC-18~DC-22·DC-24~DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01~DC-22·DC-24~DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
