@@ -372,18 +372,27 @@ SSR 표시 / only fallback
         disposed
 ```
 
-- load는 시작, idle은 requestIdleCallback과 fallback, visible은 IntersectionObserver,
-  media는 matchMedia를 사용하는 안이다. threshold·timeout·미지원 동작은 DC-04에서 정한다.
-- only는 ssr=false로 정규화하고 단독 사용은 load, 다른 timing과 조합 가능하게 하는 안을
-  권고한다. 모드·timing 모순과 여러 timing 동시 지정은 진단한다.
+- **시점**(DC-04 결정): `load`는 로더 시작 즉시. `idle`은 `requestIdleCallback`(timeout 2초), 미지원 브라우저는
+  `load` 이벤트 후 200ms. `visible`은 `IntersectionObserver`(rootMargin 200px), `media`는 `matchMedia` 일치 시점.
+  IntersectionObserver·matchMedia가 없으면 `idle`로 대체한다.
+- **조합**: `client:only`는 ssr=false로 정규화하고 단독이면 `load`, 다른 시점 지시자와 조합할 수 있으며 그동안
+  `fallback`을 표시한다. 시점 지시자를 둘 이상 붙이거나 모드와 모순되면 빌드 오류다.
+- **청크 선로드**: `client:load` 청크만 modulepreload한다. 나머지는 트리거 시 요청한다(라우터 prefetch는 DC-20).
+- **로드 실패**(DC-04 결정): 1초 뒤 한 번 재시도한다. 그래도 실패하면 SSR HTML을 유지하고(`client:only`는
+  fallback 유지) `reportError`로 관측 도구에 전달한다(8.3). 실패 원인이 배포 교체(buildId 불일치)면 다음 사용자
+  조작 시 문서를 다시 로드한다.
+- **로더 예산**(DC-04 결정): 로더(스케줄러·관찰자·첫 이벤트 수집·`__SURFACE__` 읽기)는 gzip 2KB를 **목표**로
+  측정·보고한다(CI 강제 없음). Lithent·프로토콜 런타임·morph는 필요할 때 별도 청크로 로드하며 크기를 따로 기록한다.
 - 모듈 로드 promise는 componentId로 공유하고 인스턴스는 slotId별로 유지한다.
   제거·reset으로 generation이 바뀌면 이전 로드가 완료돼도 mount하지 않는다.
 - 휴면 상태에서도 검증된 프레임을 순서대로 reducer에 적용한다. accumulate delta를 먼저
   병합해 최신 props·revision을 보관한다. UI-only 패치는 슬롯 root에 적용할 수 있다.
 - SSR DOM과 최신 props가 다르면 SSR snapshot으로 hydrate한 뒤 최신 props를 갱신하는 안을
   권고한다. 최신 props로 바로 hydrate해 일치한다고 가정하지 않는다. snapshot 수명은 DC-05다.
-- 활성화 전 입력 가능한 UI는 DOM 초안 수집·활성화 앞당김·fallback 중 정책이 필요하다.
-  단순 hydration만으로 사용자의 첫 입력까지 보존된다고 가정하지 않는다.
+- **활성화 전 조작**(DC-04 결정): 로더는 휴면 아일랜드 경계 안의 `pointerdown`·`focusin`·`keydown`을 감지하면
+  예정 시점과 무관하게 즉시 활성화를 시작한다. hydration은 기존 SSR DOM 노드를 재사용하므로 그 사이 입력한
+  값·커서·포커스를 덮어쓰지 않아야 한다(Lithent hydration이 사용자 입력 value를 SSR 값으로 되돌리지 않는지
+  검증, V-04). 활성화 전 클릭 자체는 재생하지 않는다. 첫 클릭부터 반드시 동작해야 하는 UI는 `client:load`를 쓰도록 가이드한다.
 - data-action의 첫 click/submit을 공통 로더에서 잡고 폼 값을 즉시 snapshot해 한 번 실행하는 안이다.
   임의 이벤트·trusted user activation의 재현은 지원하지 않는다. clipboard/fullscreen 등은
   eager 활성화나 다음 명시적 조작을 사용한다. 정확한 범위는 DC-04/DC-11에서 결정한다.
@@ -1034,8 +1043,12 @@ const response: Response = await handler.fetch(request, platform);
       opt-in `swap="morph"`는 idiomorph(버전 고정, 해당 페이지에서만 로드) ④ 적용 HTML의 `<script>` 미실행.
       근거: server 페이지 기본 JS를 최소로 유지하면서 입력 보존이 필요한 슬롯만 검증된 morph를 쓴다.
       브라우저는 병합 없이 HTML만 적용한다(서버 측 병합 방식은 DC-10). 4.3. V-02/V-12/V-15.
-- [ ] DC-04: 로더 예산·timing·첫 이벤트. gzip 1~2kB는 후보이며 fallback·only 조합·폼 snapshot·
-      prefetch·입력 가능한 SSR 정책을 정한다. V-04/V-06/V-13/V-17.
+- [x] DC-04 (2026-10-14 결정): 로더·시점·첫 이벤트. ① idle=rIC(2초)/미지원 시 load+200ms, visible=rootMargin 200px,
+      media=matchMedia, 미지원 시 idle ② only 단독=load, 시점 조합 허용·fallback 표시, 다중 시점은 빌드 오류
+      ③ 활성화 전 pointerdown·focusin·keydown 감지 시 즉시 활성화, SSR DOM 재사용으로 입력값 보존, 클릭 재생 없음
+      ④ 청크 실패는 1회 재시도 후 SSR 유지·reportError ⑤ `client:load`만 modulepreload ⑥ 로더 gzip 2KB는 목표·보고
+      (CI 강제 없음) ⑦ data-action 첫 click/submit은 로더가 잡아 폼 snapshot 후 1회 실행. 근거: 지연 활성화의 이득을
+      지키면서 첫 입력 유실을 막고, 일시 오류에도 SSR 화면을 유지한다. 5.2. V-04/V-06/V-13/V-17.
 - [ ] DC-05: 로컬 상태·SSR snapshot. DataProxy 재사용, 슬롯·컴포넌트·reset 식별, snapshot hydration
       후 최신 props 반영안을 검증하고 선택한다. V-03/V-04/V-12.
 - [ ] DC-06: MPA·인페이지 전환. CSS opt-in 유지·명시적 상태 복원·고속 스트림 애니메이션 억제안.
@@ -1207,7 +1220,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
