@@ -101,7 +101,7 @@ export default async function Page(ctx: SurfaceContext) {
 - **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다(`<Slot>`과 직접
   지시자 공통).
 - **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
-  `fallback`, `capability`, `resetKey`. 자식 props와 엔진 속성이 섞이지 않는다.
+  `fallback`, `capability`, `resetKey`, `swap`(server 모드 HTML 적용 방식, 4.3). 자식 props와 엔진 속성이 섞이지 않는다.
 - **지시자 표기**: `client:visible` 같은 namespaced JSX 속성을 사용한다. TypeScript는 5.1부터 namespaced
   JSX 속성의 타입 검사를 지원한다. esbuild·Vite 변환 통과 여부를 2단계 시작 시 spike로 확인하고,
   막히면 대체 표기(예: `clientVisible`)를 정한다. `Slot`·지시자 타입은 `state-surface`가 JSX 타입 선언으로 제공한다.
@@ -232,8 +232,19 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
 최초 구현은 평탄한 갱신 슬롯과 명시적인 DOM 소유자부터 시작하는 안을 권고한다.
 정적 Layout 안에 여러 슬롯을 배치하는 것은 이 제한과 양립한다.
 
-- server replace는 내부 HTML과 관련 플러그인 cleanup을 대상으로 한다. 입력·선택·포커스
-  보존이 필요한 복잡한 UI는 client로 작성하거나 명시적인 morph 계약을 추가한다(DC-03).
+- **server HTML 적용**(DC-03 결정): server 슬롯은 transition이 보낸 서버 렌더 HTML로 갱신된다. 상태
+  병합(full·partial·accumulate·removed)은 서버가 요청 단위로 처리하고 브라우저는 결과 HTML만 적용한다(6.1).
+  - **기본 `swap="replace"`**: 슬롯 내부 HTML을 통째로 교체한다. 교체 전 플러그인 cleanup과 내부 아일랜드
+    dispose, 교체 후 플러그인 재적용과 아일랜드 재활성화를 수행한다(DC-08·DC-12).
+  - **포커스·스크롤 best-effort 복원**: 교체 전 슬롯 안 포커스 요소의 `id`·선택 범위와 슬롯 내부 스크롤
+    컨테이너(`id` 기준)의 위치를 기록하고, 새 HTML에 같은 `id`가 있으면 복원한다. 없으면 복원하지 않는다.
+  - **opt-in `swap="morph"`**: 입력·포커스·펼침·미디어 상태를 유지해야 하는 슬롯은 기존 DOM과 새 HTML을
+    비교해 변경분만 적용한다. 구현은 **idiomorph**(htmx·Turbo가 사용하는 DOM morph 라이브러리, id 기반 매칭)를
+    사용하고 버전을 고정한다. morph 코드는 `swap="morph"` 슬롯이 있는 페이지에서만 로드하며 크기를 NFR-01
+    예산에 포함해 측정한다. morph 중에도 내부 아일랜드 경계는 morph 대상에서 제외하고 DC-08 수명 규칙을 따른다.
+  - **script 미실행**: 적용하는 HTML 안의 `<script>`는 실행하지 않으며 dev에서 경고한다. 이벤트 핸들러
+    속성 등 HTML 안전성은 capability 정책(8장)을 따른다.
+  - 입력 보존이 필요하면서 상호작용 로직도 큰 UI는 client 아일랜드로 작성하도록 가이드한다.
 - **Slot-in-Slot 금지**(DC-08 결정): `<Slot>`의 자식 컴포넌트 트리 안에 다시 `<Slot>`을 두면 빌드 플러그인이
   진단한다. 정적 Layout·페이지 마크업 안에 여러 `<Slot>`을 나란히 두는 것은 허용한다.
 - **server 슬롯 안 아일랜드는 재생성**(DC-08 결정): server 슬롯 컴포넌트 안의 직접 지시자 아일랜드는
@@ -827,8 +838,11 @@ const response: Response = await handler.fetch(request, platform);
       마커·`*.server.ts`·`node:*`가 client 전이 의존성에 들어오면 경로 체인과 함께 빌드 실패, sentinel 스캔으로
       교차 확인 ⑤ eager glob 제거, dev/build 동일 manifest. 근거: 빌드에서 아일랜드를 모두 확정해 진단·preload·
       보안 검사가 단순하고, 지연 활성화와 페이지 간 캐시에 유리하며 Astro와 같은 제약이다. 3장. V-05/V-16.
-- [ ] DC-03: server HTML 적용. 평탄한 슬롯 replace·플러그인 cleanup부터 시작하는 안.
-      morph와 입력 보존 범위를 별도로 결정한다. V-02/V-12/V-15.
+- [x] DC-03 (2026-10-14 결정): server HTML 적용. ① 기본 `swap="replace"`(내부 HTML 통째 교체, 플러그인
+      cleanup·아일랜드 dispose/재활성화) ② replace 시 `id` 기반 포커스·선택·스크롤 best-effort 복원 ③ 슬롯별
+      opt-in `swap="morph"`는 idiomorph(버전 고정, 해당 페이지에서만 로드) ④ 적용 HTML의 `<script>` 미실행.
+      근거: server 페이지 기본 JS를 최소로 유지하면서 입력 보존이 필요한 슬롯만 검증된 morph를 쓴다.
+      브라우저는 병합 없이 HTML만 적용한다(서버 측 병합 방식은 DC-10). 4.3. V-02/V-12/V-15.
 - [ ] DC-04: 로더 예산·timing·첫 이벤트. gzip 1~2kB는 후보이며 fallback·only 조합·폼 snapshot·
       prefetch·입력 가능한 SSR 정책을 정한다. V-04/V-06/V-13/V-17.
 - [ ] DC-05: 로컬 상태·SSR snapshot. DataProxy 재사용, 슬롯·컴포넌트·reset 식별, snapshot hydration
@@ -977,7 +991,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
