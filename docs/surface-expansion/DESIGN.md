@@ -422,66 +422,75 @@ server accumulate는 요청 내 full baseline에 순서대로 merge하고 그 �
 요청 간 baseline은 DB 등 서버 소스에서 다시 읽는다. 세션 상태가 필요하면 저장소·revision·
 권한을 별도로 정의하며 클라이언트의 임의 snapshot을 신뢰하지 않는다.
 
-### 6.2 혼합 모드 wire 후보
+### 6.2 두 층 계약: 작성 프레임과 전송 op (DC-09 결정)
 
-기존 StateFrame에 HTML만 추가해 호환된다고 가정하지 않는다. 다음은 DC-09에서 검토할
-versioned envelope 예시이며 v2는 프로토콜 후보명이다.
-
-```json
-{
-  "version": 2,
-  "type": "state",
-  "targets": ["article:body", "article:editor"],
-  "full": true,
-  "states": {
-    "article:editor": { "articleId": "42", "saved": true }
-  },
-  "html": {
-    "article:body": "<article>Server-rendered content</article>"
-  }
-}
+```text
+① 작성 층 (개발자 transition이 yield, 사용자 API)
+   { type:'state', full|partial(changed·removed)|accumulate, states, ui }
+        ↓ 서버: 검증 → 요청 reducer → 슬롯 모드별 투영(server는 HTML 렌더)
+② 전송 층 (서버 → 브라우저, 엔진 내부 계약)
+   { type:'patch', reset?, ops:[ {slot, html|props|merge|remove|ui} ... ] }
 ```
 
-| 규칙 후보     | 검토 내용                                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| targets       | 요청에 등록한 쓰기 대상. 첫 baseline에서 고정하고 프레임으로 확장하지 않는다.                                                        |
-| full          | targets의 활성 갱신 집합을 전체 교체한다. 대상 밖과 static 콘텐츠는 유지한다.                                                        |
-| states / html | client props / server 렌더 결과. 활성 슬롯은 두 키 집합의 합집합이며 같은 슬롯을 양쪽에 넣지 않는다.                                 |
-| partial       | changed가 props/HTML에 존재하고 removed와 충돌하지 않는다. UI-only도 유효하다.                                                       |
-| removed       | 대상 슬롯 cleanup·비활성화와 UI 제거. 등록 anchor 자체의 수명은 별도로 관리한다.                                                     |
-| accumulate    | 논리 delta는 기존 merge를 사용한다. server는 완성 HTML로, client는 검증된 delta로 변환한다. 혼합 결과의 분리 전송은 TBD다.           |
-| UI            | full의 대상 안에서 교체, partial의 uiChanged로 갱신, removed 우선. 대상 밖 UI는 유지한다. static root UI 허용은 registry에서 정한다. |
+- 작성 층은 기존 논리 프레임 모델(full·partial·accumulate·removed·ui)을 유지한다. 외부 agent 입력도
+  작성 층으로만 받아 서버 validator를 통과시킨다. 전송 층은 공개 입력 경로가 아니다.
+- 전송 층은 슬롯별 op 리스트다. 브라우저 런타임은 병합 규칙을 해석하지 않고 op를 배열 순서대로 실행한다.
 
-server state를 bootstrap에서 제외하기 때문에 states만으로 활성 집합을 판정하면 안 된다.
-기존 전체 교체 의미는 새 targets 규약으로 대체한다. 구 wire 버전은 지원하지 않는다(AG-08).
-version·page/build ID의 전달과 협상, bootstrap, 빈 성공 결과·targets 통지 위치는 TBD다.
-지원하지 않는 version은 적용을 멈추고 갱신 안내를 표시하는 방식을 권고한다.
+```json
+{"type":"patch","reset":true,"ops":[
+  {"slot":"article:body","html":"<article>…</article>"},
+  {"slot":"article:editor","props":{"articleId":"42"}},
+  {"slot":"chat:messages","merge":{"items":[{"id":7,"text":"…"}]}},
+  {"slot":"ad","remove":true},
+  {"slot":"article:body","ui":{"classAdd":["is-new"]}}
+]}
+{"type":"done"}
+{"type":"error","message":"…","slot":"system:error"}
+```
 
-서버 등록 renderer의 HTML과 외부 agent가 만든 raw HTML 입력 경로를 구분한다.
-payload의 trusted=true 같은 자기 선언으로 HTML을 허용하지 않는다. 서버 권한·렌더 경로와
-접속 소스의 계약을 신뢰 근거로 삼고 외부 프레임은 capability에 맞는 데이터 경로에서 처리한다.
+| op/필드       | 대상        | 의미                                                                              |
+| ------------- | ----------- | --------------------------------------------------------------------------------- |
+| `html`        | server 슬롯 | 서버 렌더 HTML 적용. 슬롯의 `swap`(replace/morph, DC-03)을 따른다.                |
+| `props`       | client 슬롯 | props 전체 교체. Lithent 갱신.                                                    |
+| `merge`       | client 슬롯 | accumulate 규칙(배열 concat·문자열 연결·객체 shallow merge·스칼라 교체)으로 누적. |
+| `remove`      | 모든 슬롯   | 비활성화·cleanup·UI 제거. 앵커 자체의 수명은 별도.                                |
+| `ui`          | 모든 슬롯   | `classAdd`·`classRemove`·`cssVars`·`null`(초기화). 콘텐츠 갱신 후 적용.           |
+| `reset: true` | 프레임      | 작성 층 full에 대응. 요청 대상 슬롯 중 이 프레임에 op가 없는 슬롯은 비운다.       |
+
+- **대상 집합**: 요청 대상 슬롯은 서버 등록 정보(액션 targets)로 정하고 첫 `reset` 프레임에서 고정한다.
+  op가 대상 밖 슬롯을 가리키면 서버에서 거부한다. 대상 밖과 static 콘텐츠는 유지한다.
+- **모드 일치**: `html`은 server 슬롯에만, `props`·`merge`는 client 슬롯에만 허용한다. 한 슬롯에 대한 여러 op는
+  순서대로 실행한다(콘텐츠 op 후 `ui`를 권고 순서로 생성).
+- **coalesce**: 브라우저 프레임 큐는 슬롯별로 마지막 `html`/`props`만 남기고 그 사이 `merge`는 합친다.
+  `remove` 이후의 같은 슬롯 op는 재등장으로 처리한다.
+- **확장**: 새 기능은 op 종류 추가로 표현한다. 후속 후보는 `append`(목록 끝 HTML 조각, DC-10), key 반복 슬롯,
+  `title`·`redirect`·`flush`다. 모르는 op는 버전 불일치로 간주한다.
+- **bootstrap**: `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`를 `<script type="application/json"
+id="__SURFACE__">` 하나로 통합한다. 내용은 `{ buildId, basePath, slots:[{ id, component, mode, activation,
+props }], ui, boot }`이며 실제 렌더된 슬롯만 담는다. server 슬롯은 props 없이 존재·모드만 기록한다.
+- **버전**: 브라우저는 transition·라우터·지연 슬롯 요청에 `X-Surface-Build` 헤더로 buildId를 보낸다. 서버의
+  buildId와 다르면 409를 응답하고 브라우저는 현재 URL을 문서 로드로 다시 연다. 프레임에는 버전 필드를 두지 않는다.
+- **HTML 신뢰 경계**: `html` op는 서버 등록 renderer의 결과만 담는다. 외부 agent가 만든 raw HTML은 작성 층의
+  capability 경로(8장)를 거치며 payload의 자기 선언(trusted=true 등)으로 허용하지 않는다.
 
 ### 6.3 스트림과 단건
 
 | 상태                         | 허용 전이                                                       |
 | ---------------------------- | --------------------------------------------------------------- |
-| awaiting-baseline            | full state → active. error → failed. partial/accumulate 거부.   |
-| active                       | 검증된 state → active. done → completed. 치명적 error → failed. |
-| completed / failed / aborted | 추가 state 적용 없음. 요청별 cleanup·trace만 수행.              |
+| awaiting-baseline            | `reset` patch → active. error → failed. reset 없는 patch 거부.  |
+| active                       | 검증된 patch → active. done → completed. 치명적 error → failed. |
+| completed / failed / aborted | 추가 patch 적용 없음. 요청별 cleanup·trace만 수행.              |
 
-새 wire에서 `full`은 생략할 수 없는 명시 필드로 두는 안을 권고한다(DC-09). accumulate를 full baseline으로 오인하지 않는다.
-서버의 기존 done 종료를 유지하고 클라이언트도 후속 프레임을 거부한다. done은 승인된 큐의
-DOM 반영을 확정한다. done 없는 EOF 성공 처리 여부는 DC-09/DC-14의 결정 사항이다.
-
-- JSON은 Content-Type으로 읽고 후보 envelope `{ version, frames: [...] }`를 공통 pipeline에
-  전달한다. async 단건 handler의 논리 결과를 full+done으로 정규화하는 안이며 정확한 타입은 TBD다.
-- 무효 delta를 드롭하고 계속 병합하면 기준 상태가 깨질 수 있다. state/wire 위반은 요청 중단,
-  슬롯별 UI 위반은 해당 UI만 skip+trace하는 안이다. 재동기화와 frame bytes·개수·buffer·timeout
-  한도는 DC-14에서 정하며 미결정 상태를 외부 입력 릴리스의 통과로 보지 않는다.
-- 오류 표시는 대응하는 오류 슬롯으로 한정하는 안이다. 기존 error-as-full이 다른 슬롯을 제거하는
-  동작은 새 모델의 오류 표시 범위로 대체한다.
-- 취소는 대기 큐와 비동기 DOM 반영도 요청 generation으로 무효화한다. 확정된 결과를 자동
-  rollback하지 않는다. 모듈 로드 취소와 액션 실행 취소는 별도로 처리한다.
+- **done 필수**(DC-09 결정): `done` 없이 스트림이 끝나면(EOF) 오류로 처리해 액션을 error로 종료한다. 이미 적용한
+  patch는 되돌리지 않는다. done은 승인된 큐의 DOM 반영을 확정한다.
+- **빈 성공**: transition이 상태 없이 끝나도 성공이다. 서버는 `done`만 보내고 브라우저는 변경 없이 pending을 해제한다.
+- **단건 응답**(DC-09 결정): transition을 async generator로 쓰면 NDJSON 스트림, 일반 async 함수로 쓰면 반환값
+  (`{ states, ui }`)을 full + done으로 정규화해 `application/json` 한 번으로 응답한다(`{ frames:[patch, done] }`).
+  브라우저는 Content-Type으로 읽고 같은 적용 pipeline을 쓴다.
+- 무효 op·한도 초과의 처리(요청 중단 vs op skip+trace)와 frame bytes·개수·buffer·timeout 한도는 DC-14에서 정한다.
+- 오류 표시는 `error` 프레임의 `slot`이 가리키는 오류 슬롯으로 한정한다. 다른 슬롯을 제거하지 않는다.
+- 취소는 대기 큐와 비동기 DOM 반영도 요청 generation으로 무효화한다. 확정된 결과를 자동 rollback하지 않는다.
+  모듈 로드 취소와 액션 실행 취소는 별도로 처리한다.
 
 ## 7. 컴포넌트 액션과 Pending UI
 
@@ -943,8 +952,12 @@ const response: Response = await handler.fetch(request, platform);
       서버 렌더 정적 HTML로 전달 ⑤ componentId는 모듈 경로+export 이름. 근거: 갱신 대상을 빌드에서 모두
       알 수 있어 진단·권한·타입 검사가 단순하고, Astro 사용 경험을 유지하며, 상태 보존 중첩의 비용을
       후속으로 미룬다. 4.3. V-12/V-15/V-16.
-- [ ] DC-09: versioned wire·JSON envelope. targets·states·html의 범위별 full을 권고하나 협상·
-      bootstrap·빈 성공·done/EOF·async handler 타입은 미결정이다. V-02/V-07/V-08/V-18.
+- [x] DC-09 (2026-10-14 결정): wire 계약. ① 두 층 분리: 작성 층은 기존 논리 프레임(full·partial·accumulate·
+      removed·ui) 유지, 전송 층은 `patch` 슬롯별 op 리스트(`html`·`props`·`merge`·`remove`·`ui`, `reset`=full)
+      ② bootstrap은 `__SURFACE__` JSON 하나로 통합 ③ 버전은 `X-Surface-Build` 헤더 검사 → 409 → 문서 재로드,
+      프레임에 버전 필드 없음 ④ `done` 필수, done 없는 EOF는 오류 ⑤ async generator=NDJSON, async 함수=JSON 단건
+      자동 정규화 ⑥ 빈 성공 허용. 근거: 서버가 병합·투영을 끝내므로 브라우저는 op 실행만 하면 되어 런타임이 작고,
+      혼합 모드 교차 규칙이 없으며, 검증·coalesce·확장이 op 단위로 단순하다. 6.2/6.3. V-02/V-07/V-08/V-18.
 - [ ] DC-10: server accumulate. 요청 내 full 기준 reducer와 HTML 생성안. 요청 간 저장·revision과
       혼합 프레임의 projection을 정한다. V-02/V-07/V-08.
 - [ ] DC-11: 컴포넌트 액션·pending·취소. context handle·요청 ID·기존 abort-previous 권고.
@@ -1079,7 +1092,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
