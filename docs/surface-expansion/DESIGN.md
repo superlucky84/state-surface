@@ -805,7 +805,7 @@ page-load  (문서 로드에서도 동일하게 발생)
   `surface:page-load`는 문서 로드에서도 발생한다. payload는 `{ from: URL, to: URL, direction: 'forward'|'back'|'replace',
 trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용 `navigate(url, { replace? })`(가칭)을 제공한다.
 - **history·scroll**: `history.state`에 이동 ID와 스크롤 위치를 저장하고 `scrollRestoration = 'manual'`로
-  복원한다. back/forward는 popstate에서 같은 파이프라인을 사용하며 캐시된 HTML 재사용 여부는 DC-20이다.
+  복원한다. back/forward는 popstate에서 같은 파이프라인으로 최신 HTML을 다시 받는다(DC-20).
   해시는 교체 후 대상 요소로 스크롤한다. BFCache 복귀(pageshow persisted)와 충돌하지 않게 한다.
 - **접근성**: 교체 후 새 `<title>`을 live region으로 announce하고 포커스를 `<main>` 또는 지정 요소로
   이동한다. reduced motion이면 애니메이션 없이 교체한다.
@@ -845,22 +845,30 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   `insertBefore`로 대체한다. 이때 iframe 재로드·미디어 일시 정지가 생길 수 있음을 가이드에 명시한다.
 - view-transition-name과 persist는 독립이다. persist 요소에도 모핑 애니메이션을 지정할 수 있다.
 
-### 10.3 Prefetch (R-19)
+### 10.3 Prefetch (R-19, DC-20 결정)
 
-| 전략     | 트리거                                      | 기본 대상                         |
-| -------- | ------------------------------------------- | --------------------------------- |
-| hover    | pointerenter·focus 후 짧은 지연(값은 DC-20) | 라우터 opt-in 시 링크 기본값 후보 |
-| tap      | pointerdown·touchstart                      | 모바일 저비용 기본값 후보         |
-| viewport | IntersectionObserver                        | 명시한 링크만                     |
-| load     | 페이지 준비 후 idle                         | 명시한 링크만                     |
+| 전략     | 트리거                          | 기본 사용                                |
+| -------- | ------------------------------- | ---------------------------------------- |
+| hover    | pointerenter·focus 후 65ms 유지 | `<ClientRouter />` 기본값(마우스·키보드) |
+| tap      | pointerdown·touchstart          | hover 기본값일 때 터치 입력에 자동 적용  |
+| viewport | IntersectionObserver            | 링크별 `data-prefetch="viewport"`로 명시 |
+| load     | 페이지 준비 후 idle             | 링크별 `data-prefetch="load"`로 명시     |
 
-- 링크 속성(가칭 `data-prefetch="hover"`)과 전역 기본값으로 선언한다. `data-prefetch="false"`로 끈다.
-- 라우터가 있으면 fetch한 HTML을 URL 키의 메모리 캐시(크기·TTL은 DC-20)에 넣어 이동에 재사용하고,
-  HTML의 modulepreload·stylesheet도 미리 요청한다. 라우터가 없으면 Speculation Rules
-  (`prefetch`, 선택적으로 `prerender`)를 사용하고 미지원 시 `<link rel="prefetch">`로 대체한다.
-- `navigator.connection.saveData`·느린 유효 연결에서는 viewport/load 자동 prefetch를 생략한다.
-  cross-origin·POST·쿼리로 부작용을 일으키는 URL은 대상이 아니다. 인증 응답의 캐시 공유는 같은
-  탭 메모리로 제한하고, 로그아웃·언어 전환 같은 액션 후에는 캐시를 비운다.
+- **기본값**: `<ClientRouter prefetch="hover" />`가 기본이며 `prefetch={false}`로 끈다. 링크별
+  `data-prefetch="hover|tap|viewport|load|false"`가 우선한다.
+- **라우터 있는 페이지**: fetch한 HTML을 탭 메모리 캐시에 넣어 이동에 재사용하고 HTML의 modulepreload·stylesheet도
+  미리 요청한다. 캐시는 URL 키 **최대 20개(LRU)**, **TTL 30초**, 이동에 한 번 쓰면 제거한다. transition·폼 액션이
+  완료되면 캐시 전체를 비운다(로그인·언어 전환 뒤 오래된 페이지 방지). 모두 `<ClientRouter />` props로 조정한다.
+- **라우터 없는 페이지**: Speculation Rules `prefetch`를 쓰고 미지원 시 `<link rel="prefetch">`로 대체한다.
+  Speculation Rules `prerender`는 서드파티 스크립트가 미리 실행되는 부작용(8.2) 때문에 명시 opt-in일 때만 쓴다.
+- **절약 모드**: `navigator.connection.saveData`이거나 유효 연결이 2G 이하이면 hover·viewport·load 자동 prefetch를
+  생략하고 tap만 유지한다.
+- **제외 대상**: 다른 origin, POST, `data-surface-reload` 링크는 prefetch하지 않는다. 쿼리로 부작용을 일으킬 수 있는
+  URL(로그아웃 등)은 `data-prefetch="false"`로 끄도록 가이드한다. prefetch 요청은 `Sec-Purpose: prefetch` 헤더를
+  보내 서버가 구분할 수 있게 한다.
+- **back/forward**: 저장한 HTML 스냅샷을 재사용하지 않고 서버에서 최신 HTML을 다시 받아 교체한 뒤 `history.state`에
+  저장한 스크롤 위치를 복원한다. HTTP 캐시 헤더는 그대로 존중한다. BFCache로 복귀한 경우(`pageshow` persisted)는
+  브라우저 동작을 따른다.
 
 ### 10.4 지연 server 슬롯 (R-20)
 
@@ -1225,8 +1233,11 @@ const response: Response = await handler.fetch(request, platform);
       client Slot·정적 요소 허용, server 슬롯 금지 ④ 대상이 모두 persist인 진행 중 액션은 이동 후에도 유지, 그 외 abort
       ⑤ `moveBefore()` 우선, 미지원 시 insertBefore(iframe 재로드 가능 명시). 근거: 페이지마다 다른 위치에서도 확실히
       짝이 맞고, 채팅 위젯 같은 핵심 사례의 스트림이 이동으로 끊기지 않는다. 10.2. V-21.
-- [ ] DC-20: prefetch. 링크 기본 전략(hover/tap)·지연 시간·HTML 캐시 크기/TTL·back/forward 재사용·
-      Speculation Rules 사용 범위·Save-Data 정책과 액션 후 무효화를 정한다. V-22.
+- [x] DC-20 (2026-10-14 결정): prefetch. ① 라우터 기본 hover(65ms), 터치는 tap, viewport·load는 링크별 opt-in ② 메모리 캐시
+      최대 20개 LRU·TTL 30초·1회 사용 후 제거·액션 완료 시 전체 비움 ③ 라우터 없는 페이지는 Speculation Rules prefetch(미지원 시
+      link prefetch), prerender는 opt-in ④ Save-Data·2G 이하는 tap만 ⑤ back/forward는 최신 HTML 재요청 + 스크롤 복원
+      ⑥ 다른 origin·POST·reload 링크 제외, `Sec-Purpose: prefetch` 헤더. 근거: 체감 속도 이득이 크면서 낭비가 적고, 로그인·
+      언어 전환 뒤 오래된 화면을 보이지 않는다. 10.3. V-22.
 - [ ] DC-21: 지연 server 슬롯. 서명/암호화 방식·키 회전·토큰 한도·GET/POST·캐시 헤더·재시도와
       transition revision 우선 규칙을 정한다. V-23.
 - [x] DC-22 (2026-10-14 결정): 타입 지정 액션. ① 별도 액션 개념 없이 `defineTransition({ input, targets, mode, handler })`로
@@ -1333,7 +1344,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
