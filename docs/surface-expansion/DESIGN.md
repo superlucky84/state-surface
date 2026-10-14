@@ -7,7 +7,7 @@
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md)를 따른다. 사용자와 합의한 목표,
 현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `Slot`, 지시자와 신규 프레임 필드는
 제안이며 현재 공개 API가 아니다.
-`ClientRouter`, `transition:persist`, `server:defer`, `defineAction`, `defineCollection`,
+`ClientRouter`, `transition:persist`, `server:defer`, `defineTransition`, `defineCollection`,
 `Image` 등 10장의 이름도 Astro 개념을 가리키는 가칭이다. 11장의 `createHandler`, `SurfaceContext`와
 어댑터 패키지 이름도 가칭이다.
 이번 작업은 두 문서까지다. `IMPLEMENT.md`와 `MANUAL_TEST_CHECKLIST.md`는 검토 후 작성한다.
@@ -206,7 +206,7 @@ components/ layouts/ ...     위치 자유 (import로 참조)
   파일, default export가 없는 페이지 파일은 빌드 오류다. 동적 세그먼트는 기존 `[param]` 규칙을 유지한다.
 - **transition 등록**: 루트 `transitions/**/*.ts`를 빌드가 registry로 생성한다. 이름은 디렉터리 기준 상대
   경로(`transitions/chat/send.ts` → `'chat/send'`)이며 중복은 빌드 오류다. 기존 `routes/**/transitions/`
-  관례는 제거한다(AG-08). 서버 액션(R-21)도 같은 규칙의 `actions/` 디렉터리를 후보로 DC-22에서 정한다.
+  관례는 제거한다(AG-08). 서버 액션(R-21)은 별도 디렉터리 없이 transition에 통합한다(DC-22).
 - **진단 채널 3단**:
   1. **타입**: `state-surface`가 `<Slot>` 속성·지시자 값·`SurfaceContext`·`definePlugin`의 JSX/TS 타입을 제공해
      에디터에서 즉시 오류를 보인다. 페이지 default export 시그니처도 타입으로 검사한다.
@@ -857,31 +857,51 @@ page-load  (문서 로드에서도 동일하게 발생)
 - 기존 boot transition과 비교해 지연 슬롯은 슬롯 단위·캐시 가능한 GET·스트림 없음이 차이다.
   둘 다 지원하며 선택 기준을 가이드에 둔다.
 
-### 10.5 타입 지정 서버 액션과 progressive enhancement (R-21)
+### 10.5 타입 지정 transition과 progressive enhancement (R-21, DC-22 결정)
+
+별도 액션 개념을 두지 않고 **transition에 입력 스키마·대상을 선언**한다. 같은 파일 하나가 `data-action`,
+`useAction`(DC-11), JS 없는 폼 POST를 모두 처리한다.
 
 ```ts
-// routes/cart/actions/addItem.ts (가칭)
-export default defineAction({
-  input: schema({ productId: string(), qty: number().min(1) }),
-  accept: 'form', // 'json' | 'form'
-  targets: ['cart:summary'],
-  handler: async ({ productId, qty }, ctx) => {
-    /* 상태 프레임 yield 또는 결과 반환 */
+// transitions/comment/add.ts
+import { defineTransition } from 'state-surface/server';
+import * as z from 'zod';
+
+export default defineTransition({
+  input: z.object({ postId: z.string(), body: z.string().min(1) }), // Standard Schema
+  targets: ['comments:list'],
+  async *handler({ postId, body }, ctx) {
+    await db.addComment(postId, body, ctx.locals.user);
+    yield {
+      type: 'state',
+      full: false,
+      changed: ['comments:list'],
+      states: { 'comments:list': { items: await db.comments(postId) } },
+    };
+    yield { type: 'done' };
   },
 });
 ```
 
-- 스키마 라이브러리는 DC-22에서 정한다. 런타임 의존성 크기를 고려해 Standard Schema 호환 인터페이스로
-  zod·valibot 등을 받는 안을 권고한다. 서버 검증은 필수이고 클라이언트 사전 검증은 선택이다.
-- 검증 실패는 `{ ok: false, fieldErrors }` 결과로 반환하고, 폼에 연결된 오류 표시 슬롯 또는 client 컴포넌트가
-  이를 렌더링한다. 성공 결과는 기존 상태 프레임(targets 범위)이나 단건 결과로 정규화한다(6장).
-- `<form method="post" action={actions.addItem}>`(가칭)은 실제 URL(`{BASE_PATH}/_surface/action/:name`)을
-  가진다. JS가 없으면 서버가 액션을 실행한 뒤 원래 페이지로 303 리다이렉트하고 결과·오류를 일회성
-  flash로 SSR에 반영한다. JS가 있으면 액션 위임이 submit을 가로채 transition으로 실행한다.
-- CSRF 방어(origin 검사 또는 토큰)와 인증 확인은 액션 경계에서 수행한다(8장). 기존 `data-action` +
-  `/transition/:name`은 공개 작성 방식으로 유지하되 같은 등록 정보로 정규화한다(DC-11).
-- client 컴포넌트용 호출 API(`actions.addItem(input)` 가칭)는 입력·결과 타입을 서버 정의에서 추론한다.
-  타입만 공유하고 handler 코드는 client 산출물에 포함하지 않는다(V-05).
+- **선언 형태**: default export는 `defineTransition({ input?, targets?, mode?, handler })` 또는 기존처럼 generator·async
+  함수 자체(입력 검증 없음)다. `targets`는 DC-11 동시성·DC-09 대상 고정의 근거이며 생략하면 handler가 처음
+  `reset` 프레임에서 지정한 슬롯이 대상이 된다. `mode: 'queue'`는 DC-11 동시성 옵션이다.
+- **스키마**: Standard Schema 인터페이스로 받아 zod·valibot·arktype 등을 쓸 수 있고 엔진은 특정 라이브러리에
+  의존하지 않는다. 서버 검증은 필수, 클라이언트 사전 검증은 선택이다. 폼 입력(form-urlencoded·multipart)은 스키마에
+  넘기기 전에 객체로 변환한다(같은 이름 다중 값은 배열).
+- **검증 실패**: handler를 실행하지 않고 `{ kind: 'validation', fieldErrors }` 오류로 끝낸다. JS 경로에서는
+  `useAction` 핸들의 `error.fieldErrors`로, `data-action` 폼에서는 오류 프레임으로 전달된다.
+- **JS 없는 폼(PRG)**: `<form method="post" action={actionUrl('comment/add')}>`(가칭 헬퍼, 실제 URL
+  `{BASE_PATH}/_surface/action/comment/add`)는 JS 없이도 동작한다. 서버는 transition을 끝까지 실행하고(프레임은
+  버림) 원래 페이지(`Referer` 또는 폼의 `_redirect` 필드)로 **303** 리다이렉트한다. 검증 오류·결과·입력값은 서버가
+  서명한 일회성 쿠키(flash)로 넘기고 페이지는 `ctx.flash('comment/add')`로 읽어 SSR한다. 새로고침 시 재제출되지 않는다.
+  JS가 있으면 액션 위임이 submit을 가로채 transition 스트림으로 실행한다.
+- **CSRF**: transition·액션의 모든 POST에서 `Origin`(없으면 `Sec-Fetch-Site`)이 같은 origin인지 검사하고 다르면 403.
+  허용 origin 목록을 설정할 수 있다. 토큰이 필요 없어 prerender·CDN 캐시 페이지의 폼과도 호환된다. 세션 쿠키는
+  `SameSite=Lax`를 권고한다. 인증 확인은 미들웨어(11.2)·handler에서 한다.
+- **클라이언트 타입**: 빌드 플러그인이 `.state-surface/actions.d.ts`에 이름 → 입력·결과 타입 맵을 생성한다(dev에서는
+  파일 변경 시 갱신). `useAction(renew, 'comment/add')`의 params가 자동으로 타입 지정되고 없는 이름은 타입 오류다.
+  타입만 참조하므로 handler 코드는 client 산출물에 포함되지 않는다(V-05).
 
 ### 10.6 scoped CSS (R-22)
 
@@ -1176,8 +1196,11 @@ const response: Response = await handler.fetch(request, platform);
       Speculation Rules 사용 범위·Save-Data 정책과 액션 후 무효화를 정한다. V-22.
 - [ ] DC-21: 지연 server 슬롯. 서명/암호화 방식·키 회전·토큰 한도·GET/POST·캐시 헤더·재시도와
       transition revision 우선 규칙을 정한다. V-23.
-- [ ] DC-22: 타입 지정 액션. Standard Schema 호환 인터페이스 권고. 액션 URL·no-JS 303/flash 저장소·
-      CSRF 방식·결과 타입·기존 data-action과의 정규화를 정한다. V-24.
+- [x] DC-22 (2026-10-14 결정): 타입 지정 액션. ① 별도 액션 개념 없이 `defineTransition({ input, targets, mode, handler })`로
+      통합(`actions/` 디렉터리 없음) ② Standard Schema, 검증 실패는 handler 미실행·`validation` fieldErrors ③ JS 없는 폼은
+      `/_surface/action/:name` POST → 실행 → 303 + 서명된 flash 쿠키, 페이지는 `ctx.flash()` ④ CSRF는 Origin·Sec-Fetch-Site
+      검사 기본 ⑤ 빌드가 `.state-surface/actions.d.ts` 타입 맵 생성. 근거: 개념 하나로 세 호출 경로를 지원하고,
+      새로고침 재제출 없는 PRG, 캐시 페이지와 호환되는 토큰 없는 CSRF, 서버 코드 없는 타입 안전성. 10.5. V-24.
 - [ ] DC-23: scoped CSS. CSS Modules 기본(DC-07에서 확정). 같은 파일 `css` 태그드 템플릿의 후속 도입 여부,
       Tailwind `@apply` 범위와 CSS 청크 배치를 정한다. V-25.
 - [ ] DC-24: prerender. 선언 방식·`getStaticPaths` 계약·정적 파일 우선 서빙·BASE_PATH 고정·
@@ -1277,7 +1300,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
