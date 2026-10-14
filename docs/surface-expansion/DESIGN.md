@@ -99,8 +99,8 @@ export default async function Page(ctx: SurfaceContext) {
 ```
 
 - **페이지 계약**(DC-07 결정): `default export`는 `async (ctx: SurfaceContext) => JSX`다. 페이지 옵션은
-  named export로 선언한다(`prerender`, `getStaticPaths`, `plugins`). 자동 실행 transition(boot)의 문법은
-  DC-31에서 정한다. `definePage({ load, render })` 형태는 사용하지 않는다.
+  named export로 선언한다(`prerender`, `getStaticPaths`, `plugins`). 자동 실행 transition(boot)은 트리 안의
+  `<Boot>` 컴포넌트로 선언한다(2.5, DC-31). `definePage({ load, render })` 형태는 사용하지 않는다.
 - **async 범위**: async는 페이지 함수에만 둔다. 레이아웃과 그 밖의 컴포넌트는 동기 함수다. Lithent `h()`가
   컴포넌트를 즉시 동기 실행하므로 async 컴포넌트는 조용히 빈 출력이 된다(1장 Lithent 제약). 컴포넌트 단위
   비동기 데이터는 server 슬롯의 `load` 단계로만 기다린다(2.4, DC-29).
@@ -193,6 +193,43 @@ export default defineServerComponent({
 - **후속**: 서버 트리 어디서나 async 컴포넌트를 허용하는 방식(엔진 해결 또는 Lithent async SSR)은 수요 확인 후
   검토한다. `defineServerComponent`는 그때도 같은 의미로 유지한다.
 
+### 2.5 자동 실행 transition: `<Boot>` (DC-31 결정)
+
+페이지가 표시된 직후 클릭 없이 transition을 실행해야 하는 경우(진행 중 작업의 진행률, AI 응답 이어받기, 실시간 피드,
+client 슬롯 props의 로드 직후 갱신)는 트리 안에 `<Boot>`를 둔다. 지연 슬롯(10.4)은 server HTML 한 번이고 캐시 가능한
+GET이며, `<Boot>`는 여러 프레임 스트림과 client props를 다룬다는 점이 다르다.
+
+```tsx
+import { Boot, Slot } from 'state-surface';
+
+export default async function Page(ctx: SurfaceContext) {
+  const job = await getJob(ctx.params.id);
+  return (
+    <Layout>
+      <Slot name="job:progress" client:load>
+        <Progress job={job} />
+      </Slot>
+      {job.running && <Boot transition="job/watch" params={{ jobId: job.id }} />}
+    </Layout>
+  );
+}
+```
+
+- **선언**: `<Boot transition params? />`는 DOM을 출력하지 않는다. 페이지·레이아웃·서버 컴포넌트 트리 어디에나 둘 수
+  있고 조건·반복 안에서도 쓸 수 있다. 엔진은 슬롯과 같은 트리 순회(3장)로 실제 렌더된 `<Boot>`만 모아
+  `__SURFACE__.boot`(`[{ transition, params }]`, 문서 순서)에 넣는다. client 아일랜드 내부·client Slot 자식 트리에
+  두면 빌드 오류다(브라우저 렌더에는 boot 의미가 없음).
+- **타입**: `transition`은 빌드가 생성한 이름 목록(10.5 `actions.d.ts`)으로, `params`는 그 transition의 입력 타입으로
+  검사한다. 없는 이름은 타입 오류다.
+- **실행**: bootstrap 직후 문서 순서대로 시작하며 아일랜드 활성화를 기다리지 않는다. 실행은 일반 액션과 같다. 같은
+  요청 경로·`X-Surface-Page`·서버 입력 검증·동시성(DC-11·DC-30)·pending·`error` 처리·`reportError`를 그대로 따른다.
+  targets 없는 boot가 둘 이상이면 서로 abort하므로 dev에서 경고한다.
+- **params**: JSON으로 직렬화해 HTML에 넣으므로 공개 값이다(4.2 공개 props 규칙과 같음). 서버는 일반 요청처럼 다시
+  검증한다. prerender 페이지에서는 요청 의존 값을 쓸 수 없다(10.7 제한 ctx).
+- **이동·JS 없음**: 클라이언트 라우터 이동 후에는 새 페이지의 `<Boot>`가 실행된다(10.1). 같은 페이지로 돌아와도 다시
+  실행한다. JS가 없으면 실행되지 않으므로 SSR 결과만으로 의미 있는 화면이어야 한다.
+- **엔트리**: `<Boot>`가 렌더된 페이지는 액션 런타임을 로드한다(5.1).
+
 ## 3. 빌드 플러그인의 경계
 
 전용 컴파일러는 두지 않는다(DC-07). `.tsx` 변환은 TypeScript/esbuild와 Lithent JSX가 맡고, StateSurface의
@@ -284,7 +321,7 @@ components/ layouts/ ...     위치 자유 (import로 참조)
      에디터에서 즉시 오류를 보인다. 페이지 default export 시그니처도 타입으로 검사한다. JSX 엘리먼트 타입은
      Promise를 반환하는 컴포넌트를 거부해 async 컴포넌트(1장)를 에디터에서 막는다.
   2. **Vite 플러그인**: 타입으로 표현할 수 없는 규칙(Slot 자식 1개, Slot 자식의 children, 계산된 아일랜드,
-     Slot-in-Slot, `defineServerComponent` 사용 위치, 이름 형식·중복, 서버 전용 유출, 라우트 충돌, 지시자 조합 모순)은 dev에서 Vite 오류 오버레이로, build에서 실패로
+     Slot-in-Slot, `defineServerComponent`·`<Boot>` 사용 위치, 이름 형식·중복, 서버 전용 유출, 라우트 충돌, 지시자 조합 모순)은 dev에서 Vite 오류 오버레이로, build에서 실패로
      보고한다. 모든 메시지는 `[state-surface]` 접두어, 원본 `파일:줄:열`, 코드 프레임, 해결 힌트를 포함한다.
   3. **`state-surface check` CLI**: CI용으로 `tsc --noEmit`과 플러그인 분석만 빠르게 실행한다(번들 생성 없음).
      ESLint 플러그인은 1차 범위가 아니며, 규칙은 Vite 플러그인 한 곳에서 구현한다.
@@ -402,7 +439,7 @@ Lithent는 주석 노드·doctype을 출력하지 못하고 텍스트 자식을 
 | 페이지에 필요한 기능                   | 초기 runtime                                                    |
 | -------------------------------------- | --------------------------------------------------------------- |
 | static, action/boot/plugin/라우터 없음 | 엔진 script 없음(앱 엔트리 `client/entry.ts`는 별도, 8.3)       |
-| server 액션·스트림                     | loader와 액션·protocol·HTML adapter. Lithent 불필요             |
+| server 액션·스트림·`<Boot>`            | loader와 액션·protocol·HTML adapter. Lithent 불필요             |
 | 지연 client 활성화                     | 작은 scheduler와 metadata. 필요한 시점에 Lithent·대상 청크 로드 |
 | client:load                            | 시작 시 대상 청크와 공유 Lithent 로드                           |
 | `<ClientRouter />`                     | 라우터 런타임(10.1). static 페이지여도 엔진 JS가 생긴다         |
@@ -614,7 +651,7 @@ wire 검증 → JSON/NDJSON 구조를 권고한다. 기존 generator는 명시�
   `title`·`redirect`·`flush`다. 모르는 op는 버전 불일치로 간주한다.
 - **bootstrap**: `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`를 `<script type="application/json"
 id="__SURFACE__">` 하나로 통합한다. 내용은 `{ buildId, pageId, basePath, slots:[{ id, component, mode,
-activation, props }], ui, boot }`이며 실제 렌더된 슬롯만 담는다. server 슬롯은 props 없이 존재·모드만 기록한다.
+activation, props }], ui, boot:[{ transition, params }] }`이며 실제 렌더된 슬롯과 `<Boot>`(2.5)만 담는다. server 슬롯은 props 없이 존재·모드만 기록한다.
 - **html op 안의 아일랜드**: server 슬롯 HTML 안에 직접 지시자 아일랜드가 있으면(DC-08) `html` op의 `islands`에
   bootstrap `slots`와 같은 형식으로 메타데이터를 담는다. 지연 슬롯 응답(10.4)도 같은 형식을 쓴다. 브라우저는 교체
   직후 이 목록으로 아일랜드를 활성화하며 loader 맵은 `virtual:state-surface/islands`를 그대로 쓴다.
@@ -1326,7 +1363,7 @@ const response: Response = await handler.fetch(request, platform);
     signal: AbortSignal; // 클라이언트 abort + timeout 결합
     platform: unknown; // 어댑터별 원본(Workers ctx 등)
   }
-  // 페이지:      default export Page(ctx), getStaticPaths() (boot 문법은 DC-31)
+  // 페이지:      default export Page(ctx), getStaticPaths(), 트리 안 <Boot>(2.5)
   // transition:  handler(params, ctx)
   // 액션·지연 슬롯 renderer: (input, ctx)
   // 미들웨어:    onRequest(ctx, next) => Response
@@ -1604,11 +1641,13 @@ DC-01~DC-28 결정 후 최종 검토에서 Lithent SSR 제약(1장)과 계약 �
       generator export 형태 불가·보일러플레이트), 같은 이름만 abort(같은 슬롯에 스트림이 섞이는 경쟁), yield 키 기반
       빌드 추론(계산된 키·헬퍼·external에서 불완전해 동작 예측이 어려움). 근거: 생략은 현재 동작과 같은 안전한 쪽으로
       두고 병렬성은 명시 선언으로 얻는다. 7장/10.2/10.5. V-13.
-- [ ] DC-31: 자동 실행 transition(boot)의 페이지 문법. R-04·R-17·V-18·V-19가 boot를 요구하고 bootstrap에 `boot`
-      필드가 있지만 페이지 API가 없다. 후보 ① named export `export const boot = { transition, params?(ctx) }`
-      ② JSX 컴포넌트 `<Boot transition="…" params={…} />`(트리 순회로 수집, 레이아웃에도 둘 수 있음)
-      ③ boot를 없애고 지연 슬롯(R-20)으로 대체. 권고: ②. 페이지 함수가 준비한 값을 params로 그대로 쓰고
-      조건부 boot가 자연스러우며 DC-22 입력 타입으로 params를 검사할 수 있다. 2.1/10.1. V-18/V-19.
+- [x] DC-31 (2026-10-14 결정): 자동 실행 transition(boot)의 페이지 문법. ① JSX `<Boot transition params? />`를
+      페이지·레이아웃·서버 컴포넌트 트리에 두고(조건·반복 허용, DOM 출력 없음) 트리 순회로 수집해
+      `__SURFACE__.boot` 배열에 문서 순서로 기록 ② 이름·params는 `actions.d.ts`로 타입 검사 ③ bootstrap 직후 문서 순서로
+      시작하며 일반 액션과 같은 규칙(동시성·pending·오류·입력 검증) ④ params는 공개 값, prerender에서는 요청 의존 값
+      금지 ⑤ client 아일랜드 안은 빌드 오류, 라우터 이동 후 새 페이지 boot 실행. 검토 후 제외: named export
+      (페이지 함수와 별도 계산·중복 조회, 조건부 어색), boot 제거(로드 직후 스트림·client props 갱신 불가). 근거:
+      페이지 함수가 준비한 값을 그대로 쓰고 조건부 boot가 자연스럽다. 2.1/2.5/10.1. V-04/V-18/V-19.
 - [ ] DC-32: prerender HTML의 미들웨어·보안 헤더. 어댑터가 정적 파일을 먼저 서빙하면 `onRequest`의 CSP·보안
       헤더·인증·로깅이 prerender HTML에 적용되지 않는다. 후보 ① HTML 응답은 코어를 통과해 미들웨어를 실행하고
       어댑터가 제공하는 정적 읽기로 본문을 응답, JS·CSS·이미지 등 나머지 정적 자산만 어댑터 우선(Workers는 HTML
@@ -1630,7 +1669,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | V-01 | R-01           | static에 프레임을 보내도 콘텐츠 유지. action/boot/plugin/라우터 없는 페이지는 엔진 JS 요청 0건(앱 엔트리 별도 기록).                                                                                                                                                                                                                      |
 | V-02 | R-02           | server SSR·업데이트 HTML 일치. 단건/스트림·언어 전환·제거 처리, client 템플릿 배제. `X-Surface-Page` 누락·미등록 pageId 400, 같은 슬롯 이름의 다른 페이지 정의와 혼동 없음, html op `islands`로 내부 아일랜드 재활성화.                                                                                                                   |
 | V-03 | R-03           | 복수 아일랜드의 독립 hydrate/mount/unmount. 같은 컴포넌트의 인스턴스끼리 간섭 없음.                                                                                                                                                                                                                                                       |
-| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영.                                                                                                                                                                                                                                                |
+| V-04 | R-04/R-12      | timing·only·fallback·청크 실패, 휴면 delta·제거 후 load·첫 입력. 유실 없이 최신 상태 반영. `<Boot>` 조건부·복수 실행 순서, 클릭 없이 실행, client 아일랜드 안 `<Boot>`·없는 transition 이름 진단.                                                                                                                                         |
 | V-05 | R-01/R-05/R-11 | 전체 client 산출물에 static/server 전용 모듈·비밀 sentinel 없음. 필요한 컴포넌트·CSS만 로드.                                                                                                                                                                                                                                              |
 | V-06 | R-06           | 페이지별 불필요한 plugin/debug 로딩 없음. client 아일랜드 없는 페이지에서 Lithent 배제.                                                                                                                                                                                                                                                   |
 | V-07 | R-07           | JSON/NDJSON 최종 DOM·state·UI 일치. async handler·실패·빈 결과·Content-Type 규약 준수.                                                                                                                                                                                                                                                    |
@@ -1698,8 +1737,8 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   실행으로 확인하고 async 범위(2.1), 호출 지점 변환·트리 순회 수집(3장), 문서 조립(4.4), 작성 층 full·done 규칙과
   pageId·`islands`(6.2), persist 이동 순서(10.2), PRG 리다이렉트·flash 한도(10.5), SSR 해시 제거(11.2)를 반영하고
   DC-29~DC-32를 추가했다. DC-29는 페이지 함수만 async + server 슬롯 `defineServerComponent` load 단계로, DC-30은
-  targets 생략 시 모든 슬롯과 겹침으로 결정했다.
-- 다음: DC-31·DC-32를 결정한다. 이후 IMPLEMENT.md와 MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을
+  targets 생략 시 모든 슬롯과 겹침으로, DC-31은 JSX `<Boot>`로 결정했다(2.5).
+- 다음: DC-32를 결정한다. 이후 IMPLEMENT.md와 MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을
   연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
   공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
