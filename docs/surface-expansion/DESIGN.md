@@ -496,7 +496,7 @@ wire 검증 → JSON/NDJSON 구조를 권고한다. 기존 generator는 명시�
 | op/필드       | 대상        | 의미                                                                              |
 | ------------- | ----------- | --------------------------------------------------------------------------------- |
 | `html`        | server 슬롯 | 서버 렌더 HTML 적용. 슬롯의 `swap`(replace/morph, DC-03)을 따른다.                |
-| `props`       | client 슬롯 | props 전체 교체. Lithent 갱신.                                                    |
+| `props`       | client 슬롯 | props 전체 교체. Lithent 갱신. `reset: true`면 인스턴스 재생성(DC-05).            |
 | `merge`       | client 슬롯 | accumulate 규칙(배열 concat·문자열 연결·객체 shallow merge·스칼라 교체)으로 누적. |
 | `remove`      | 모든 슬롯   | 비활성화·cleanup·UI 제거. 앵커 자체의 수명은 별도.                                |
 | `ui`          | 모든 슬롯   | `classAdd`·`classRemove`·`cssVars`·`null`(초기화). 콘텐츠 갱신 후 적용.           |
