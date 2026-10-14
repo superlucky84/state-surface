@@ -417,10 +417,23 @@ wire 검증 → JSON/NDJSON 구조를 권고한다. 기존 generator는 명시�
 액션이 선택할 슬롯·renderer는 서버 등록 정보로 고정한다. params로 임의 템플릿·HTML을
 선택할 수 있게 하지 않는다. 외부 agent 프레임 주입도 공통 validator를 통과한다.
 
-server accumulate는 요청 내 full baseline에 순서대로 merge하고 그 시점의 HTML을 생성하는
-안을 권고한다(DC-10). 브라우저에 server delta 병합을 요구하지 않는다.
-요청 간 baseline은 DB 등 서버 소스에서 다시 읽는다. 세션 상태가 필요하면 저장소·revision·
-권한을 별도로 정의하며 클라이언트의 임의 snapshot을 신뢰하지 않는다.
+#### 요청 reducer와 server accumulate (DC-10 결정)
+
+- **요청 단위 상태**: 서버의 슬롯 상태 맵은 transition 요청 하나 동안만 존재한다. 다음 요청은 다시 `reset`에서
+  시작하고 필요한 데이터는 DB 등 서버 소스에서 다시 읽는다. 세션에 슬롯 상태를 저장하지 않으며 클라이언트가
+  보낸 snapshot을 신뢰하지 않는다. 서버가 stateless이므로 Workers·다중 인스턴스에서도 같은 동작이다.
+- **reducer**: 작성 층 프레임을 기존 `applyFrame` 규칙(full 교체, partial 병합, removed 삭제, accumulate 누적)으로
+  요청 상태에 반영한다. server 슬롯은 반영된 최신 상태로 컴포넌트를 렌더해 `html` op를, client 슬롯은 `props`
+  또는 accumulate delta를 `merge` op로 투영한다.
+- **혼합 프레임**: 논리 프레임 하나가 server·client 슬롯을 함께 바꾸면 하나의 `patch`에 html op와 props/merge
+  op를 함께 담아 브라우저에서 같은 flush에 반영되게 한다.
+- **server 렌더 coalesce**: 누적은 매 프레임 반영하되 server 슬롯의 렌더·전송은 묶는다. 슬롯별로 첫 갱신은 즉시,
+  이후에는 최대 33ms(클라이언트 프레임 예산과 동일, 설정 가능)에 한 번 렌더하며 `done`·`error` 전에는 대기 중인
+  슬롯을 반드시 최종 렌더해 보낸다. client 슬롯 op는 묶지 않고 즉시 보낸다(브라우저 큐가 coalesce).
+- **가이드와 dev 경고**: 토큰 스트리밍처럼 길게 쌓이는 영역은 client 모드(`merge` op)를 권장한다. dev에서 한
+  요청 동안 server 슬롯 재렌더 횟수나 누적 HTML 크기가 임계치를 넘으면 경고한다(임계치는 DC-14·DC-17에서 확정).
+- **렌더 오류**: server 슬롯 렌더가 실패하면 해당 요청에 `error` 프레임을 보내고 종료한다. 복구 규칙은 DC-14다.
+- `append` op(목록 끝 HTML 조각)는 후속 확장으로 남긴다(DC-09 확장 후보).
 
 ### 6.2 두 층 계약: 작성 프레임과 전송 op (DC-09 결정)
 
@@ -958,8 +971,11 @@ const response: Response = await handler.fetch(request, platform);
       프레임에 버전 필드 없음 ④ `done` 필수, done 없는 EOF는 오류 ⑤ async generator=NDJSON, async 함수=JSON 단건
       자동 정규화 ⑥ 빈 성공 허용. 근거: 서버가 병합·투영을 끝내므로 브라우저는 op 실행만 하면 되어 런타임이 작고,
       혼합 모드 교차 규칙이 없으며, 검증·coalesce·확장이 op 단위로 단순하다. 6.2/6.3. V-02/V-07/V-08/V-18.
-- [ ] DC-10: server accumulate. 요청 내 full 기준 reducer와 HTML 생성안. 요청 간 저장·revision과
-      혼합 프레임의 projection을 정한다. V-02/V-07/V-08.
+- [x] DC-10 (2026-10-14 결정): server accumulate. ① 슬롯 상태는 요청 하나 동안만(세션 저장 없음, 다음 요청은
+      reset부터) ② 요청 reducer는 기존 applyFrame 규칙, server 슬롯은 최신 상태로 렌더해 html op, client는 props/merge
+      op ③ 혼합 프레임은 patch 하나로 ④ server 렌더는 슬롯별 첫 갱신 즉시·이후 최대 33ms 1회·done/error 전 최종 렌더
+      ⑤ 고빈도 누적은 client 모드 권장 + dev 경고 ⑥ append op는 후속. 근거: stateless 서버로 런타임 이식성을
+      유지하고, 실수로 server 슬롯에 토큰을 흘려도 렌더 비용을 제한한다. 6.1. V-02/V-07/V-08.
 - [ ] DC-11: 컴포넌트 액션·pending·취소. context handle·요청 ID·기존 abort-previous 권고.
       첫 결과/완료·이벤트 우선순위·Promise 결과·renderer 실패를 정한다. V-04/V-08/V-13/V-18.
 - [x] DC-12 (2026-10-14 결정): 플러그인 선언·지연 lifecycle. ① 페이지·레이아웃 `export const plugins`, 플러그인별
@@ -1092,7 +1108,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
