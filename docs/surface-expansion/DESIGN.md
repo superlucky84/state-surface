@@ -1046,14 +1046,33 @@ transition 끝에 done을 yield하세요.
   페이지의 히어로·기능 목록 같은 UI 문구는 언어별 YAML `pages` 데이터 컬렉션으로 옮긴다. 기존 i18n parity 테스트는
   프레임워크 parity 검사로 대체한다. 7단계에서 일괄 전환한다.
 
-### 10.9 이미지 최적화 (R-25)
+### 10.9 이미지 최적화 (R-25, DC-26 결정)
 
-- `<Image src={import('./hero.png')} alt="..." />`(가칭)는 빌드 시 원본 크기를 읽어 width·height를 출력하고
-  `srcset`·`sizes`·WebP/AVIF 변환본을 생성한다. `alt`는 필수이며 장식 이미지는 빈 문자열을 명시한다.
-- 기본값은 `loading="lazy"`, `decoding="async"`다. `priority`(가칭)는 eager·`fetchpriority="high"`와 preload를 설정한다.
-- 변환 엔진(sharp 등)은 빌드·서버 의존성이며 client 산출물에 포함하지 않는다. dev에서는 요청 시 변환하고
-  결과를 캐시한다. 원격 이미지는 허용 도메인 목록에 있을 때만 변환하고, 아니면 진단한다.
-- `<Picture>`(가칭, 포맷별 `<source>`)와 배경 이미지 지원은 DC-26에서 범위를 정한다.
+```tsx
+import { Image, Picture } from 'state-surface';
+import hero from './hero.png';
+
+<Image src={hero} alt="서비스 화면" width={800} priority />          // constrained(기본), WebP
+<Image src={banner} alt="" layout="full-width" />                    // 장식 이미지는 빈 alt 명시
+<Image src={logo} alt="로고" width={120} layout="fixed" />
+<Picture src={hero} formats={['avif', 'webp']} alt="서비스 화면" />  // <source>들 + 원본 fallback
+```
+
+- **기본 속성**: `alt` 필수(장식 이미지는 빈 문자열 명시). 원본 크기에서 `width`·`height`를 출력해 CLS를 막는다.
+  기본 `loading="lazy"`·`decoding="async"`, `priority`면 eager·`fetchpriority="high"`·preload.
+- **포맷**: `<Image>`는 단일 `<img>`로 WebP를 출력한다. `<Picture formats={['avif','webp']}>`는 포맷별 `<source>`와 원본
+  포맷 `<img>` fallback을 출력한다. AVIF는 인코딩이 느려 `<Picture>`에서만 선택적으로 쓴다.
+- **반응형**: `layout="constrained"`(기본, 지정 width까지 줄어듦)·`"full-width"`(화면 폭)·`"fixed"`(고정 크기)에 따라
+  `srcset`·`sizes`·기본 CSS(`max-width: 100%; height: auto` 등)를 자동 생성한다. `sizes`를 직접 지정하면 덮어쓴다.
+  기본 폭 목록은 `[640, 750, 828, 1080, 1280, 1920, 2048]`이며 원본보다 큰 폭은 만들지 않는다(설정 가능).
+- **변환 엔진**: 빌드 의존성 `sharp`. client 산출물에 포함하지 않는다. import한 로컬 이미지는 빌드 시 변환해 해시
+  파일명으로 출력한다. dev는 요청 시 변환하고 `node_modules/.state-surface/images`에 캐시한다.
+- **원격 이미지**: `surface({ images: { remotePatterns } })`에 등록한 도메인만 변환하며 미등록 도메인은 빌드 오류다
+  (SSRF 방지). prerender 페이지는 빌드 시 변환한다. Node·Bun·Deno SSR은 `/_surface/image` 엔드포인트가 요청 시
+  변환·디스크 캐시한다(허용 도메인·폭 목록만 허용). Workers는 변환하지 않고 원본 URL을 쓰며 `width`·`height`를 필수로
+  요구한다. 설정하면 Cloudflare Images 변환 URL로 위임한다(11.4 제약표).
+- **배경 이미지**: `getImage(src, { width, format })`가 변환된 URL·`srcset`을 돌려주며 CSS `image-set()`이나 인라인
+  style에 쓰도록 가이드한다.
 
 ## 11. 런타임 중립 서버 코어와 어댑터 (R-26)
 
@@ -1332,8 +1351,11 @@ const response: Response = await handler.fetch(request, platform);
       저장소 문서에 선택(@mdx-js/rollup + lithent) ④ i18n parity는 빌드 오류(dev 경고), md는 블록 수준·mdx는 heading 수준
       ⑤ `shared/content.ts` 전부 이행(가이드=md, UI 문구=yaml) 후 제거. 근거: 정형 문서는 엄격하고 안전하게, 데모가 필요한
       문서는 MDX의 표현력을 쓰며, 현재 테스트 수준의 번역 보장을 프레임워크 기능으로 옮긴다. 10.8. V-27.
-- [ ] DC-26: 이미지. 변환 엔진·포맷·srcset 폭 목록·dev 캐시 위치·원격 허용 목록·`<Picture>`와
-      배경 이미지 범위를 정한다. V-27.
+- [x] DC-26 (2026-10-14 결정): 이미지. ① `<Image>`는 WebP 단일 img, `<Picture formats>`는 AVIF·WebP source + 원본
+      fallback ② `layout`(constrained 기본·full-width·fixed)으로 srcset·sizes·CSS 자동, 폭 목록 `[640…2048]` ③ sharp 빌드
+      변환·dev 요청 시 변환 캐시 ④ 원격은 remotePatterns만 변환(미등록 빌드 오류), SSR은 `/_surface/image`, Workers는 원본
+      통과·크기 필수·Cloudflare Images 위임 선택 ⑤ 배경 이미지는 `getImage()`. 근거: 기본은 가볍고 안전하게, 더 작은 용량이
+      필요한 곳만 AVIF, 반응형 실수(sizes 누락)를 막고 SSRF·Workers 제약을 지킨다. 10.9. V-27.
 - [x] DC-27 (2026-10-13 결정): 요청 컨텍스트·코어 API. ① 모든 서버 함수에 명시적 `ctx` 인자
       (암묵적 getContext 미제공) ② transition 쿠키 쓰기는 첫 프레임 yield 전까지, 이후는 dev 경고 후 무시
       ③ 양파형 `onRequest(ctx, next)` 미들웨어, `TransitionHooks` 제거 ④ 사용자 없음 → Express `req` shim·
@@ -1425,7 +1447,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-25·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-25·DC-26·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
