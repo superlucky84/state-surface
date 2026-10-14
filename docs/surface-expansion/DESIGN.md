@@ -126,7 +126,7 @@ ESLint 프로세서를 별도로 만들고 TypeScript 버전에 맞춰 계속 �
 - client 아일랜드의 props는 명시적으로 공개할 값이다. 함수·Request·비밀 값을 자동 직렬화하지 않는다.
   JSON 변환 불가능한 값은 조용히 누락하지 않고 진단한다. Date/BigInt 등의 추가 codec은 TBD다.
 - 서버 영역의 임의 클로저를 client 코드로 추출·복원하는 기능은 제공하지 않는다. client 컴포넌트는 별도
-  모듈에서 import한다. 라우트 안 보조 파일을 페이지로 잘못 발견하지 않는 규칙과 URL 충돌 진단이 필요하다(DC-16).
+  모듈에서 import한다. 라우트 탐색·URL 충돌 규칙은 3.1(DC-16)을 따른다.
 
 ## 3. 빌드 플러그인의 경계
 
@@ -188,6 +188,42 @@ subpath를 따른다. `engine/shared/`에 Node 전용 의존성을 섞지 않는
 - production은 빌드가 생성한 route registry를 사용한다(11.4).
 - BASE_PATH, asset manifest, 동적 청크 CSS, 소스맵과 scaffold overrides에 같은 설정을 반영한다.
   기존 `resolveAssetCss()`에도 동적 import의 관련 CSS를 처리하는 계약이 필요하다.
+
+### 3.1 프로젝트 구조·진단·scaffold (DC-16 결정)
+
+```text
+routes/                      페이지 (routes/**/*.tsx, _로 시작하는 파일·폴더 제외)
+  index.tsx                  → /
+  guide/[slug].tsx           → /guide/:slug
+  guide/_components/Toc.tsx  (페이지 아님)
+  _shared/...                (페이지 아님)
+transitions/                 transition 자동 등록 (transitions/search.ts → 'search')
+components/ layouts/ ...     위치 자유 (import로 참조)
+```
+
+- **라우트 탐색**: `routes/**/*.tsx` 중 `_`로 시작하는 파일·폴더 아래가 아닌 파일이 페이지다(Astro와 같은 규칙).
+  페이지 옆 보조 파일은 `_components/` 등 `_` 폴더에 둔다. `a.tsx`와 `a/index.tsx`처럼 같은 URL로 해석되는
+  파일, default export가 없는 페이지 파일은 빌드 오류다. 동적 세그먼트는 기존 `[param]` 규칙을 유지한다.
+- **transition 등록**: 루트 `transitions/**/*.ts`를 빌드가 registry로 생성한다. 이름은 디렉터리 기준 상대
+  경로(`transitions/chat/send.ts` → `'chat/send'`)이며 중복은 빌드 오류다. 기존 `routes/**/transitions/`
+  관례는 제거한다(AG-08). 서버 액션(R-21)도 같은 규칙의 `actions/` 디렉터리를 후보로 DC-22에서 정한다.
+- **진단 채널 3단**:
+  1. **타입**: `state-surface`가 `<Slot>` 속성·지시자 값·`SurfaceContext`·`definePlugin`의 JSX/TS 타입을 제공해
+     에디터에서 즉시 오류를 보인다. 페이지 default export 시그니처도 타입으로 검사한다.
+  2. **Vite 플러그인**: 타입으로 표현할 수 없는 규칙(Slot 자식 1개, 계산된 아일랜드, Slot-in-Slot, 이름 형식·
+     중복, 서버 전용 유출, 라우트 충돌, 지시자 조합 모순)은 dev에서 Vite 오류 오버레이로, build에서 실패로
+     보고한다. 모든 메시지는 `[state-surface]` 접두어, 원본 `파일:줄:열`, 코드 프레임, 해결 힌트를 포함한다.
+  3. **`state-surface check` CLI**: CI용으로 `tsc --noEmit`과 플러그인 분석만 빠르게 실행한다(번들 생성 없음).
+     ESLint 플러그인은 1차 범위가 아니며, 규칙은 Vite 플러그인 한 곳에서 구현한다.
+- **런타임 진단**: dev에서만 프레임 위반·알 수 없는 슬롯·플러그인 DOM 소유권 위반을 경고하고 devOverlay
+  (`?debug=1`)에 표시한다. production에서는 trace 훅으로만 노출한다.
+- **소스맵**: dev·build 모두 원본 TSX 소스맵을 유지한다. 플러그인 변환(지시자 → 래퍼)도 소스맵을 생성한다.
+- **dev/prod 동일성**: dev는 Vite SSR 모듈 로드, prod는 빌드 registry를 쓰지만 같은 분석·manifest 생성 함수를
+  호출한다. CI에서 같은 적합성 테스트(V-28)를 dev 서버와 production 빌드 양쪽에 실행한다.
+- **scaffold**: `create-state-surface` 기본 템플릿은 **최소 스타터**(페이지 1개에 static 마크업·server 슬롯·
+  client 아일랜드 하나씩, transition 1개)다. `--template demo`는 현재 쇼케이스 사이트를 생성한다. 어댑터는
+  프롬프트로 고르며 기본은 Node(DC-28). 템플릿은 저장소에 원본으로 두고 CI에서 생성·설치·빌드·테스트한다.
+  데모를 복사해 overrides를 덧씌우는 현재 `build-scaffold.mjs` 방식은 대체한다(AG-08).
 
 ## 4. SlotDefinition, SSR과 DOM 소유권
 
@@ -926,8 +962,12 @@ const response: Response = await handler.fetch(request, platform);
 - [x] DC-15 (2026-10-13 결정): 전환 범위·기본값. legacy adapter·shim·지원 기간 없이 새 모델을 유일한
       모델로 하고 구 API는 단계별로 제거한다(AG-08, 9.2). 근거: 외부 사용자가 없는 0.x 단계에서 호환 계층의
       설계·번들·테스트 비용이 이득보다 크다. V-01/V-08/V-18.
-- [ ] DC-16: 진단·편집기·dev/prod·scaffold. 원본 오류 위치·Slot/지시자 JSX 타입·소스맵·URL 충돌·
-      생성 프로젝트와 CSS 계약을 정한다. V-05/V-11/V-16/V-18.
+- [x] DC-16 (2026-10-14 결정): 진단·편집기·dev/prod·scaffold. ① 진단 3단: 타입(에디터) → Vite 오버레이·빌드
+      실패(파일:줄:열·코드 프레임·힌트) → `state-surface check` CLI, ESLint 플러그인은 1차 제외 ② 라우트는
+      `routes/**/*.tsx`에서 `_` 파일·폴더 제외, URL 충돌·default export 누락은 빌드 오류 ③ transition은 루트
+      `transitions/**/*.ts` 자동 등록(경로 = 이름) ④ dev/prod가 같은 분석 함수를 쓰고 V-28을 양쪽에 실행 ⑤ scaffold는
+      최소 스타터 기본 + `--template demo`, 어댑터 프롬프트, CI에서 생성·빌드·테스트. 근거: 규칙 구현을 한 곳으로
+      모으고, Astro식 탐색 규칙과 공유 가능한 transition 위치, 새 사용자의 시작 비용 최소화. 3.1. V-05/V-11/V-16/V-18.
 - [ ] DC-17: 초기 JS·응답·실행 시간·INP/CLS·첫 액션. 대표 페이지·환경·통과 수치를 고정해
       NFR-01의 70% 감소와 사용 경험을 함께 판정한다. 클라이언트 이동 지연·반복 이동 메모리(NFR-04)도
       같은 조건에서 고정한다. V-17/V-19.
@@ -1039,7 +1079,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-12·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
