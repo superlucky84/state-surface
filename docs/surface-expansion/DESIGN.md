@@ -101,7 +101,7 @@ export default async function Page(ctx: SurfaceContext) {
 - **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다(`<Slot>`과 직접
   지시자 공통).
 - **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
-  `fallback`, `capability`, `resetKey`, `swap`(server 모드 HTML 적용 방식, 4.3). 자식 props와 엔진 속성이 섞이지 않는다.
+  `fallback`, `capability`, `resetKey`, `swap`(server 모드 HTML 적용 방식, 4.3), `viewTransition`(9.1). 자식 props와 엔진 속성이 섞이지 않는다.
 - **지시자 표기**: `client:visible` 같은 namespaced JSX 속성을 사용한다. TypeScript는 5.1부터 namespaced
   JSX 속성의 타입 검사를 지원한다. esbuild·Vite 변환 통과 여부를 2단계 시작 시 spike로 확인하고,
   막히면 대체 표기(예: `clientVisible`)를 정한다. `Slot`·지시자 타입은 `state-surface`가 JSX 타입 선언으로 제공한다.
@@ -702,9 +702,39 @@ iframe, 위젯 노드를 head·body에 동적으로 추가한다. 이를 통제�
 필요한 메뉴 상태 등은 명시적인 storage나 서버 상태로 복원하고 비밀 값·전체 props·임의
 local state를 자동 저장하지 않는다.
 
-인페이지 startViewTransition은 DOM 반영의 선택 기능으로 두고 고속 스트림에서 매 프레임
-애니메이션 여부를 DC-06에서 정한다. 미지원·reduced motion·일반 링크·뒤로/앞으로·BFCache는
-V-14에서 검증한다. MPA와 동일 문서 전환의 차이는
+**전환 애니메이션 규칙**(DC-06 결정):
+
+```tsx
+// ① 액션 단위: 이 액션이 만드는 화면 변화를 전환으로 감싼다 (갤러리 → 이미지 상세 모핑)
+export default defineTransition({ viewTransition: true, handler: … });
+
+// ② 슬롯 단위: 이 슬롯이 처음 나타나거나 바뀔 때마다 전환 (어느 액션이 바꾸든)
+<Slot name="viewer" client:load viewTransition>
+  <ImageViewer image={img} />
+</Slot>
+
+// 썸네일과 상세 이미지에 같은 view-transition-name → 위치·크기가 이어지는 모핑
+<img style={`view-transition-name: photo-${id}`} … />
+```
+
+- **기본은 즉시 반영**한다. 현재 `sync()`가 모든 DOM 반영을 `startViewTransition()`으로 감싸는 동작을 바꾼다. 스트림
+  프레임마다 전환이 시작·중단되며 깜빡이고 클릭이 막히는 문제를 없앤다.
+- **opt-in 두 단위**: 액션 단위 `defineTransition({ viewTransition: true })`·`data-view-transition`, 슬롯 단위
+  `<Slot viewTransition>`. 슬롯 단위는 **슬롯이 처음 나타날 때(remove→재등장, 빈 슬롯에 첫 내용, 지연 슬롯 채움)도**
+  전환을 적용하므로 이미지 뷰어 열기 같은 첫 등장 모핑을 지원한다. 같은 patch에 전환 대상 슬롯이 하나라도 있으면
+  그 patch 전체를 한 번의 `startViewTransition()`으로 감싸 `view-transition-name` 모핑이 슬롯 사이에서도 이어지게 한다.
+- **스트림 추종 억제**: 전환이 진행 중일 때 도착한 같은 요청의 후속 프레임은 전환 없이 바로 적용한다(전환 콜백 안
+  반영과 순서는 5.3 generation 규칙을 따른다). 한 액션에서 전환은 첫 대상 patch에서 한 번만 시작하는 것이 기본이다.
+- **페이지 로드 시 첫 등장**: 처음 페이지가 그려질 때의 등장 효과는 기존 `data-animate` 프리셋(reveal)으로 처리하고,
+  아일랜드 활성화에는 전환을 걸지 않는다(SSR 콘텐츠가 이미 보이므로).
+- **페이지 이동**: 문서 로드 이동은 CSS `@view-transition { navigation: auto }`(앱 CSS opt-in), `<ClientRouter />` 이동은
+  기본 루트 크로스페이드로 두 경로가 같은 느낌을 준다. `<ClientRouter transition="none" />`으로 끈다. 요소별 모핑은
+  `view-transition-name` CSS로 지정한다(프리셋 애니메이션 API는 두지 않는다).
+- **reduced motion·미지원**: `prefers-reduced-motion: reduce`이면 모든 전환과 `data-animate`를 생략하고 즉시 반영한다.
+  View Transition API가 없으면 즉시 반영한다.
+- **상태 복원**: 문서 로드 사이의 UI 상태(메뉴 열림 등)는 자동 저장·복원하지 않는다. 필요하면 라우터 persist(10.2)를 쓴다.
+
+미지원·reduced motion·일반 링크·뒤로/앞으로·BFCache는 V-14에서 검증한다. MPA와 동일 문서 전환의 차이는
 [브라우저 공식 설명](https://developer.chrome.com/docs/web-platform/view-transitions/cross-document)을 따른다.
 
 ### 9.2 기존 코드의 일괄 전환 (AG-08)
@@ -1250,8 +1280,11 @@ const response: Response = await handler.fetch(request, platform);
       명시 초기화, 전송 층은 props op의 `reset` 플래그 ④ 휴면 중 갱신은 SSR snapshot으로 hydrate 후 최신 props 적용,
       휴면 중 reset이면 새 mount, snapshot은 활성화 후 폐기. 근거: 같은 대상의 갱신에서는 입력 초안을 지키고 대상이
       바뀌면 섞이지 않게 하며, hydration 불일치 없이 최신 상태에 도달한다. 5.3. V-03/V-04/V-12.
-- [ ] DC-06: MPA·인페이지 전환. CSS opt-in 유지·명시적 상태 복원·고속 스트림 애니메이션 억제안.
-      브라우저·reduced motion 범위를 정한다. V-08/V-14.
+- [x] DC-06 (2026-10-14 결정): 전환 애니메이션. ① 인페이지 기본은 즉시 반영(현재 모든 sync를 감싸는 동작 변경)
+      ② opt-in은 액션 단위(`viewTransition: true`)와 슬롯 단위(`<Slot viewTransition>`, 첫 등장 포함), 한 patch를 한 번의 전환으로
+      감싸 슬롯 간 모핑 ③ 진행 중 도착한 후속 스트림 프레임은 전환 없이 적용 ④ 페이지 로드 첫 등장은 `data-animate`
+      ⑤ 라우터 이동은 기본 크로스페이드, `transition="none"`으로 끔 ⑥ reduced motion·미지원은 즉시 반영, 문서 로드 간 자동
+      상태 복원 없음. 근거: 스트림 성능을 지키면서 이미지 뷰 전환처럼 첫 등장 모핑이 필요한 곳은 선언 하나로 쓴다. 9.1. V-08/V-14.
 - [x] DC-07 (2026-10-14 결정): 페이지 파일 형식·컴파일러. ① 전용 확장자(.surface) 없이 async 컴포넌트
       `.tsx`가 최종 형식 ② `default export async (ctx) => JSX`, 페이지 옵션은 named export(`definePage` 미사용)
       ③ 요청 컨텍스트 이름은 `ctx`(DC-27과 동일) ④ 전용 컴파일러 대신 Vite 플러그인이 Slot·지시자 분석·진단·
@@ -1447,7 +1480,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-20·DC-21·DC-22·DC-24·DC-25·DC-26·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01~DC-16(DC-15 포함)·DC-18~DC-22·DC-24~DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
