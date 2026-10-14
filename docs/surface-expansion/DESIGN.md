@@ -809,7 +809,8 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   해시는 교체 후 대상 요소로 스크롤한다. BFCache 복귀(pageshow persisted)와 충돌하지 않게 한다.
 - **접근성**: 교체 후 새 `<title>`을 live region으로 announce하고 포커스를 `<main>` 또는 지정 요소로
   이동한다. reduced motion이면 애니메이션 없이 교체한다.
-- **상태 연계**: 이동 시작 시 `AbortController`로 진행 중 transition과 이전 이동 fetch를 취소한다(기존
+- **상태 연계**: 이동 시작 시 `AbortController`로 이전 이동 fetch와 진행 중 transition을 취소한다. 단 대상이 모두
+  persist 슬롯인 액션은 유지한다(10.2, DC-19). (기존
   abort-previous와 같은 generation 모델). 언어 cookie 등 서버 상태는 다음 HTML 요청에 그대로 반영된다.
   POST 폼은 라우터가 가로채지 않고 액션 경로(10.5)로 처리한다.
 - **선언 위치**(DC-18 결정): 레이아웃 head에 `<ClientRouter />`를 둔다. 이 컴포넌트를 렌더한 페이지 사이에서만
@@ -817,17 +818,31 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   컴포넌트의 props로 받는다(`<ClientRouter prefetch="hover" />`, DC-20). 라우터 런타임 청크는 이 컴포넌트가 있는
   페이지에서만 로드한다(NFR-04).
 
-### 10.2 persist (R-18)
+### 10.2 persist (R-18, DC-19 결정)
 
-- 교체 전 이전 문서와 새 문서에서 같은 persist ID(가칭 `transition:persist="player"`, 미지정 시 빌드 플러그인이
-  안정적 ID 생성)를 찾는다. 짝이 있으면 이전 DOM 노드를 새 위치로 옮기고 새 노드는 버린다.
-  짝이 없으면 일반 dispose한다.
-- client 아일랜드는 Lithent 인스턴스와 DataProxy를 유지하고 새 페이지 SSR의 props를 DataProxy에 반영한다.
-  `transition:persist-props`(가칭)는 props 반영을 생략한다. componentId가 다르면 persist하지 않고 진단한다.
-- 노드 이동은 `moveBefore()` 지원 시 사용해 iframe·video·포커스 상태를 보존하고, 미지원이면
-  `insertBefore`로 대체한다. 이때 iframe 재로드 가능성을 문서화한다(DC-19).
-- server 슬롯과 스트리밍 대상 슬롯은 1차 범위에서 persist 대상이 아니며 선언 시 진단하는 안이다.
-  persist 요소의 slotId는 두 페이지에서 같은 의미여야 하고, 진행 중인 액션은 이동 시 abort된다.
+```tsx
+// 공통 레이아웃: 직접 지시자 아일랜드
+<AudioPlayer client:load transition:persist="player" />
+
+// client Slot은 name이 곧 persist ID
+<Slot name="chat:widget" client:idle transition:persist>
+  <ChatWidget />
+</Slot>
+```
+
+- **ID**: 직접 지시자 아일랜드·정적 요소는 `transition:persist="이름"`으로 **명시 이름이 필수**다. client `<Slot>`은
+  `transition:persist`만 쓰면 Slot `name`을 ID로 쓴다. 이름 형식은 DC-08 슬롯 이름 규칙을 따르고 페이지 안 중복은
+  빌드·SSR 오류다. 이름을 생략한 직접 지시자 persist는 빌드 오류다(자동 ID는 페이지마다 달라 조용히 실패하므로).
+- **짝 맞추기**: 교체 전 이전 문서와 새 문서에서 같은 persist ID를 찾는다. 짝이 있으면 이전 DOM 노드를 새 위치로
+  옮기고 새 노드는 버린다. 짝이 없으면 일반 dispose한다. componentId가 다르면 persist하지 않고 dev에서 경고한다.
+- **props**: 기본은 새 페이지 SSR props를 유지된 인스턴스에 반영한다(로컬 상태는 유지). `resetKey`(DC-05) 값이 바뀌면
+  재생성한다. `transition:persist-props`면 이전 props를 유지한다. 플러그인은 `update`를 받는다(DC-12).
+- **대상**: client 아일랜드·client Slot·정적 요소(video·audio·iframe 등)를 persist할 수 있다. server 슬롯은 HTML이
+  매 페이지 다시 렌더되므로 persist할 수 없고 선언하면 빌드 오류다.
+- **진행 중 액션**: 페이지 이동 시 대상 슬롯이 **모두** 새 페이지에서도 유지되는 persist 슬롯인 액션은 abort하지 않고
+  스트림을 계속 적용한다(채팅 위젯 응답·업로드 진행률). 사라지는 슬롯이 하나라도 포함된 액션은 이동 시 abort한다.
+- **노드 이동**: `moveBefore()`를 지원하면 사용해 iframe·video 재생·포커스 상태를 보존하고, 미지원이면
+  `insertBefore`로 대체한다. 이때 iframe 재로드·미디어 일시 정지가 생길 수 있음을 가이드에 명시한다.
 - view-transition-name과 persist는 독립이다. persist 요소에도 모핑 애니메이션을 지정할 수 있다.
 
 ### 10.3 Prefetch (R-19)
@@ -1205,8 +1220,11 @@ const response: Response = await handler.fetch(request, platform);
       `page-load`, payload `{from,to,direction,trigger,signal}`, `navigate()` API ⑤ inline script는 `data-surface-rerun`만
       재실행, module script는 src URL 기준 1회 ⑥ 앱 엔트리는 규칙 파일 `client/entry.ts`. 근거: Astro와 같은 사용 경험,
       오류 페이지에서도 매끄러운 이동, 검색 폼 등 일반 패턴 지원, SDK init 위치의 단순한 규칙. 10.1·8.3. V-19/V-20/V-31.
-- [ ] DC-19: persist. 빌드 플러그인 안정 ID·componentId 일치 조건·props 반영 기본·`moveBefore()` 우선 권고.
-      server/스트리밍 슬롯 persist 금지 여부와 iframe 재로드 허용을 정한다. V-21.
+- [x] DC-19 (2026-10-14 결정): persist. ① 명시 이름 필수(`transition:persist="이름"`), client Slot은 name이 ID, 생략·중복은
+      빌드 오류 ② 새 페이지 props 기본 반영, `transition:persist-props`로 유지, resetKey 변경 시 재생성 ③ client 아일랜드·
+      client Slot·정적 요소 허용, server 슬롯 금지 ④ 대상이 모두 persist인 진행 중 액션은 이동 후에도 유지, 그 외 abort
+      ⑤ `moveBefore()` 우선, 미지원 시 insertBefore(iframe 재로드 가능 명시). 근거: 페이지마다 다른 위치에서도 확실히
+      짝이 맞고, 채팅 위젯 같은 핵심 사례의 스트림이 이동으로 끊기지 않는다. 10.2. V-21.
 - [ ] DC-20: prefetch. 링크 기본 전략(hover/tap)·지연 시간·HTML 캐시 크기/TTL·back/forward 재사용·
       Speculation Rules 사용 범위·Save-Data 정책과 액션 후 무효화를 정한다. V-22.
 - [ ] DC-21: 지연 server 슬롯. 서명/암호화 방식·키 회전·토큰 한도·GET/POST·캐시 헤더·재시도와
@@ -1315,7 +1333,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-11·DC-12·DC-13·DC-14·DC-16·DC-18·DC-19·DC-22·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
