@@ -524,28 +524,58 @@ API 이름·타입은 TBD다. data-action은 간단한 서버 조작의 공개 �
 ## 8. Capability·UI·입력 안전성
 
 mode는 렌더링 위치, capability는 입력에 허용하는 표현이다. server+strict나 client+rich처럼
-조합할 수 있으며 서버 registry가 정책의 정본이다(DC-13).
+조합할 수 있으며 서버 registry가 정책의 정본이다. capability는 **transition 프레임으로 슬롯에 동적으로 들어오는
+데이터·HTML**에만 적용한다. 개발자가 레이아웃·페이지에 직접 작성한 마크업과 스크립트는 신뢰된 앱 코드다.
 
-| capability | 입력·적용 후보                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| strict     | 등록 schema의 데이터만 허용. renderer에서도 text·attribute·URL 문맥별로 안전하게 출력.        |
-| rich       | 제한 AST/마크다운. 요소·URL scheme 검증과 raw HTML 기본 비활성화 권고.                        |
-| unsafe     | 명시 opt-in. raw HTML과 스크립트 실행을 별도로 결정하고 sandbox iframe 등 격리 필요성을 선택. |
+### 8.1 슬롯 capability (DC-13 결정)
 
-보호 대상은 외부 상태·UI·agent 프레임이다. 신뢰해서 설치한 임의 JS의 격리는 일반 Lithent
-인스턴스로 제공하지 않는다. CSS 변수 적용도 완전한 샌드박스가 아니다. 자식 상속, 기존 CSS,
-클래스가 유발하는 전체 화면 표시 등의 영향은 허용 정책으로 다룬다.
+| capability      | 입력·적용                                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| strict (기본)   | 컴포넌트 props 데이터만. renderer는 text·attribute·URL 문맥별로 이스케이프해 출력한다.                                |
+| rich            | Markdown·블록을 AST(mdast→hast)로 변환한 뒤 허용 요소·속성·URL scheme(http·https·mailto·상대)만 렌더. raw HTML 차단.  |
+| unsafe (opt-in) | raw HTML 허용. `<script>`는 어떤 경우에도 실행하지 않는다. `sandbox="iframe"`이면 sandbox iframe `srcdoc`에 렌더한다. |
 
-- 클래스 토큰과 허용 규칙, cssVars의 `--` custom property와 값을 검사한다. UI 패치로 임의
-  style 속성·이벤트 속성·selector·외부 stylesheet를 받지 않는다.
-- SSR 속성은 문맥별로 escape한다. safeStateJSON의 script 안전성만으로 class/style 속성
-  안전성을 충족했다고 보지 않는다. rich renderer의 sanitizer는 선정이 필요하다.
-- 초기 SSR UI는 base class/style과 결합해 client와 같은 의미를 갖게 한다. UI reset에서 원래
-  클래스·변수 값을 복원하는 범위를 정하고 현재 classRemove·덮어쓴 값의 처리도 검증한다.
-- 외부 입력은 schema·capability·크기 한도를 통과시킨다. 위반 시 skip·중단은 DC-13/DC-14에서
-  결정한다. 신뢰한 HTTP 경로에서도 SSR 입력 이스케이프를 생략하지 않는다.
-- 인증·CSRF·origin 검증은 액션 권한 경계에서 기존 앱 정책과 연결하는 범위로 설계한다.
-  surface/build ID를 인증 근거로 사용하지 않는다. 일반 마운트를 보안 경계로 표현하지 않는다.
+- **스키마**: 개발자가 작성한 transition은 신뢰 코드이므로 TS 타입(컴포넌트 props)으로 검사한다. 외부 프레임
+  (agent 등)을 받는 슬롯은 `external`과 Standard Schema `schema`를 함께 선언해야 하며, `external` 없는 슬롯에 외부
+  프레임이 오면 거부하고 `external`인데 `schema`가 없으면 빌드 오류다. 외부 입력 + unsafe 조합은 dev에서 경고한다.
+- **rich 렌더러**: DOM 구현이 필요 없는 AST allowlist 방식이라 Workers에서도 동작하며 콘텐츠 컬렉션(R-24)과 같은
+  파이프라인을 쓴다. DOMPurify 같은 출력 후 정화는 사용하지 않는다.
+- **승격 금지**: 프레임의 `trusted:true` 같은 자기 선언으로 capability를 올릴 수 없다. 등록 registry가 정본이다.
+- **UI 패치 검증**: 클래스는 `[A-Za-z0-9_:/\[\].-]+` 토큰만, `cssVars` 키는 `--`로 시작해야 하며 값에 `;`·`{`·`}`·
+  `url(`·`expression(`이 있으면 거부한다. 임의 `style`·이벤트 속성·selector·외부 stylesheet는 받지 않는다.
+  현재 잘못된 `ui.classAdd` 타입이 검증을 통과하는 문제를 고친다.
+- **SSR 이스케이프**: 텍스트·속성·URL 문맥별로 이스케이프한다. 현재 SSR UI 클래스에 따옴표를 넣으면 속성이
+  추가되는 문제를 고친다. `safeStateJSON`의 script 안전성만으로 속성 안전성을 충족했다고 보지 않는다.
+- 초기 SSR UI는 base class/style과 결합해 client와 같은 의미를 갖게 한다. UI reset의 원래 값 복원 범위를 검증한다.
+- 보호 대상은 외부 상태·UI·agent 프레임이다. 신뢰해서 설치한 임의 JS의 격리나 CSS 변수의 완전한 샌드박스는
+  제공하지 않는다. 인증·CSRF·origin 검증은 액션 경계(11.2 미들웨어)에서 처리하고 surface/build ID를 인증 근거로
+  사용하지 않는다. 위반 시 skip·중단 규칙과 크기 한도는 DC-14에서 정한다.
+
+### 8.2 서드파티 스크립트 공존 (DC-13 결정)
+
+GTM·광고·픽셀·채팅 위젯·A/B 테스트 도구는 개발자 스니펫 외에도 런타임에 DOM API로 인라인·외부 스크립트,
+iframe, 위젯 노드를 head·body에 동적으로 추가한다. 이를 통제할 수 없으므로 **엔진은 자기가 소유한 DOM만 다룬다.**
+
+| 영역                                                       | 소유자   | 엔진 동작                     |
+| ---------------------------------------------------------- | -------- | ----------------------------- |
+| 슬롯 내부(`<h-state>` 안)                                  | 엔진     | replace·morph·hydration       |
+| body의 `<!--ss:body-->`~`<!--/ss:body-->` 사이             | 엔진     | 클라이언트 라우터 교체(10.1)  |
+| head의 `<!--ss:head-->`~`<!--/ss:head-->` 사이 관리 태그   | 엔진     | 클라이언트 라우터 병합        |
+| 그 밖 전부(서드파티가 추가한 script·iframe·노드·head 태그) | 서드파티 | 읽거나 지우거나 정화하지 않음 |
+
+- **주석 마커**: SSR이 레이아웃 출력의 body·head 내용을 주석 마커로 자동으로 감싼다. DOM 요소가 아니므로 레이아웃
+  계층·CSS에 영향이 없고 개발자는 마커를 작성하지 않는다. body 끝·시작에 추가된 서드파티 노드는 마커 밖이라 보존된다.
+- **동적 스크립트**: 서드파티가 DOM API로 추가한 스크립트는 브라우저가 평소대로 실행한다. 엔진의 script 미실행
+  규칙은 엔진이 슬롯에 넣는 HTML(DC-03)과 unsafe capability에만 해당한다.
+- **페이지뷰**: 라우터가 `pushState`를 쓰므로 GTM History Change 트리거가 동작한다. 추가로 `surface:page-load`
+  이벤트를 제공하고, 설정 시 `dataLayer.push({ event: 'surface.page_view' })`를 보낸다.
+- **한계**: 로드 시 DOM을 한 번만 스캔하는 서드파티는 클라이언트 이동 뒤 새 콘텐츠를 보지 못한다. 그런 페이지·
+  레이아웃은 라우터를 쓰지 않거나 링크에 `data-surface-reload`를 붙인다. 서드파티가 슬롯·마커 안 DOM을 바꾸는
+  경우(A/B 테스트 등)는 지원하지 않으며 hydration 불일치 시 client 렌더로 대체하고 dev에서 경고한다.
+- **CSP**: 엔진은 `unsafe-inline` 없이 동작한다. 요청마다 `ctx.nonce`를 제공하고 엔진이 출력하는 스크립트에 같은
+  nonce를 붙인다. `__SURFACE__`는 실행되지 않는 JSON이다. GTM nonce 전파와 `'strict-dynamic'` 조합 가이드를 둔다.
+- **슬롯 HTML 안의 임베드 스크립트**(트위터·유튜브 등)는 실행하지 않으므로 클라이언트 플러그인(DC-12)으로 로드하거나
+  `capability="unsafe" sandbox="iframe"`으로 격리한다.
 
 ## 9. MPA·전환·성능
 
@@ -628,7 +658,7 @@ after-preparation
 before-swap  (교체 함수 대체 가능)
    ↓ startViewTransition(swap) 또는 즉시 swap
      1. 사라지는 슬롯 dispose (Lithent unmount, 플러그인 cleanup, 옵저버 해제)
-     2. persist 요소 분리 → <head> 병합 → <body> 교체 → persist 요소 재부착
+     2. persist 요소 분리 → head 마커 사이 병합 → body 마커 사이 교체 → persist 요소 재부착
      3. history push/replace, scroll·hash 처리
 after-swap
    ↓ discoverAnchors → bootstrap/hydration → 활성화 scheduler → boot transition
@@ -639,9 +669,11 @@ page-load  (문서 로드에서도 동일하게 발생)
   (라우터·액션 위임·로더·플러그인 등록)과 페이지 수명(앵커·인스턴스·bootstrap·boot·옵저버)으로 나누고
   페이지 수명에 `mount(page)` / `dispose()`를 둔다. `bindDeclarativeActions`처럼 `document`에 거는
   리스너는 문서 수명에서 한 번만 등록한다. 플러그인에는 페이지 준비·해제 hook을 추가한다(DC-12/DC-18).
-- **head 병합**: title·meta는 새 문서 기준으로 교체한다. stylesheet·modulepreload는 URL 기준으로
-  유지·추가하고 새 CSS 로드 완료 후 교체해 FOUC를 막는다. 사라진 stylesheet의 제거 시점과
-  `__STATE__`/`__UI__`/`__BOOT__`/`__BASE_PATH__` 같은 bootstrap script는 새 문서에서 다시 읽는다.
+- **교체 범위**(DC-13): `<body>` 전체가 아니라 SSR이 자동 삽입한 `<!--ss:body-->`~`<!--/ss:body-->` 사이 노드만
+  교체한다. 래퍼 요소를 두지 않으므로 레이아웃 계층이 바뀌지 않고, 마커 밖의 서드파티 노드는 보존된다(8.2).
+- **head 병합**: `<!--ss:head-->` 마커 사이의 관리 태그만 병합한다. title·meta는 새 문서 기준으로 교체하고
+  stylesheet·modulepreload는 URL 기준으로 유지·추가하며 새 CSS 로드 완료 후 교체해 FOUC를 막는다. 마커 밖에
+  서드파티가 추가한 태그는 건드리지 않는다. `__SURFACE__` bootstrap은 새 문서에서 다시 읽는다.
 - **script 정책**: 엔진 엔트리와 이미 실행한 module script는 다시 실행하지 않는다. 새 페이지에만 있는
   module script는 한 번 실행한다. inline script 재실행은 명시적 표식(가칭 `data-surface-rerun`)이 있을 때만
   허용하는 안이다. 정확한 판정 키는 DC-18에서 정한다.
@@ -984,8 +1016,12 @@ const response: Response = await handler.fetch(request, platform);
       로드 시 이미 표시된 대상 슬롯에 즉시 attach ④ 서버에서 가능한 보강(Prism)은 서버 우선 권고 ⑤ 플러그인은
       아일랜드 내부 DOM을 수정하지 않음. 근거: 모든 모드·라우터에 하나의 수명 규칙, 정리 누락 방지, 페이지별 JS
       최소화. 5.1. V-02/V-06/V-15/V-18.
-- [ ] DC-13: schema·capability·HTML 안전성. strict 기본·rich allowlist·unsafe opt-in 권고.
-      sanitizer·CSS 규칙·unsafe의 script/iframe·UI reset 의미를 결정한다. V-09/V-10/V-15.
+- [x] DC-13 (2026-10-14 결정): schema·capability·HTML 안전성. ① 타입 기본, `external` 슬롯만 Standard Schema
+      필수 ② rich는 AST allowlist 렌더(raw HTML 차단, DOM 불필요) ③ unsafe는 opt-in, script 미실행, `sandbox="iframe"`
+      선택 ④ capability 승격 금지, UI 토큰·cssVars 값 검증, SSR 문맥별 이스케이프(기존 결함 수정) ⑤ 서드파티 공존:
+      엔진은 슬롯·`<!--ss:body-->`/`<!--ss:head-->` 주석 마커 사이만 다루고 나머지 DOM은 건드리지 않음, 페이지뷰는
+      History Change + `surface:page-load`, CSP nonce 지원. 근거: 외부 입력만 엄격히 막고 신뢰 코드는 타입으로,
+      GTM 등 동적 주입을 통제하지 않고도 공존하며 레이아웃 계층을 바꾸지 않는다. 8장. V-09/V-10/V-15/V-30.
 - [ ] DC-14: validator·한도·복구. state 위반은 중단, UI 국소 위반은 skip+trace 후보.
       frame/buffer/개수·timeout·EOF·재동기화·외부 source API를 정한다. V-08/V-09/V-10.
 - [x] DC-15 (2026-10-13 결정): 전환 범위·기본값. legacy adapter·shim·지원 기간 없이 새 모델을 유일한
@@ -1073,6 +1109,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | V-27 | R-24/R-25      | 콘텐츠 스키마 위반 원본 위치 진단·언어 parity·rich 렌더 안전성. 이미지 크기 속성·srcset·lazy/priority, CLS 0.1 이하.                                                               |
 | V-28 | R-26/NFR-02    | 공통 적합성 테스트(SSR·transition 스트림·abort·지연 슬롯·액션·404·BASE_PATH·cookie)가 전환 전 Express 결과와 동일. 첫 yield 후 cookie 무시·dev 경고, 미들웨어 조기 반환·응답 가공. |
 | V-29 | R-26/NFR-05    | 5개 어댑터에서 V-28 통과. 코어 번들에 `node:*`·Express import 없음, 실행 중 fs 접근 없음, Workers 제약 기능 진단, 콜드 스타트·번들 크기 기록.                                      |
+| V-30 | R-17/NFR-03    | GTM식 fixture가 head·body에 인라인·외부 script·iframe을 동적 주입한 상태에서 클라이언트 이동 20회 후 노드 보존, page_view 20회, CSP 위반 0.                                        |
 
 ## 14. 후속 구현 순서와 게이트
 
@@ -1108,7 +1145,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-16·DC-27·DC-28을 결정했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
