@@ -387,8 +387,7 @@ SSR 표시 / only fallback
   제거·reset으로 generation이 바뀌면 이전 로드가 완료돼도 mount하지 않는다.
 - 휴면 상태에서도 검증된 프레임을 순서대로 reducer에 적용한다. accumulate delta를 먼저
   병합해 최신 props·revision을 보관한다. UI-only 패치는 슬롯 root에 적용할 수 있다.
-- SSR DOM과 최신 props가 다르면 SSR snapshot으로 hydrate한 뒤 최신 props를 갱신하는 안을
-  권고한다. 최신 props로 바로 hydrate해 일치한다고 가정하지 않는다. snapshot 수명은 DC-05다.
+- SSR DOM과 최신 props가 다르면 SSR snapshot으로 hydrate한 뒤 최신 props를 갱신한다(5.3, DC-05).
 - **활성화 전 조작**(DC-04 결정): 로더는 휴면 아일랜드 경계 안의 `pointerdown`·`focusin`·`keydown`을 감지하면
   예정 시점과 무관하게 즉시 활성화를 시작한다. hydration은 기존 SSR DOM 노드를 재사용하므로 그 사이 입력한
   값·커서·포커스를 덮어쓰지 않아야 한다(Lithent hydration이 사용자 입력 value를 SSR 값으로 되돌리지 않는지
@@ -399,9 +398,33 @@ SSR 표시 / only fallback
 
 ### 5.3 로컬 상태와 DOM 반영
 
-같은 slotId/componentId/resetKey는 기존 DataProxy·마운트를 사용해 갱신한다(DC-05).
-props를 매 render마다 local state에 복사하지 않고 record 변경 시 reset을 명시한다.
-DOM 구조·key 변경으로 입력 노드가 제거된 경우까지 포커스 보존을 보장하지 않는다.
+**인스턴스 수명**(DC-05 결정):
+
+```tsx
+<Slot name="article:editor" client:visible resetKey="articleId">
+  <ArticleEditor articleId={a.id} />
+</Slot>
+// articleId 42 → 43 props 도착: 기준 값 변경 → 인스턴스 재생성(로컬 상태 초기화)
+// 같은 42의 제목만 변경: 인스턴스 유지, 입력 초안·토글·포커스 보존
+
+// transition의 명시 reset (예: 저장 완료 후 폼 비우기)
+yield { type: 'state', full: false, states: { 'article:editor': next },
+        changed: ['article:editor'], reset: ['article:editor'] };
+```
+
+- 같은 slotId·componentId에서 props만 바뀌면 기존 DataProxy·마운트를 재사용해 Lithent diff로 갱신한다. 로컬 상태는
+  유지된다. props를 매 render마다 local state에 복사하지 않도록 가이드한다.
+- `resetKey`는 Slot에 선언하는 **기준 prop 이름**(또는 이름 배열)이다. 새 props의 그 값이 이전과 다르면 엔진이
+  기존 인스턴스를 dispose하고 새로 mount한다(React `key`와 같은 발상). 직접 지시자 아일랜드에도 같은 속성을 쓴다.
+- transition은 작성 프레임의 `reset: [slotId]`로 명시적 초기화를 요청할 수 있다. 전송 층에서는 `props` op의
+  `reset: true` 플래그로 전달한다(DC-09 op 확장). server 슬롯에는 의미가 없으므로 진단한다.
+- 재생성·제거·컴포넌트 교체 시 로컬 상태는 사라진다. DOM 구조·key 변경으로 입력 노드가 제거된 경우의 포커스
+  보존은 보장하지 않는다. server 슬롯 안 아일랜드는 부모 교체 시 재생성된다(DC-08).
+
+**휴면 중 갱신과 hydration**(DC-05 결정): 활성화 전에 서버 갱신이 오면 엔진은 최신 props를 보관만 한다. 활성화 시
+`__SURFACE__`의 **SSR 당시 props(snapshot)로 먼저 hydrate**해 DOM과 정확히 일치시킨 뒤, 보관한 최신 props로 즉시
+갱신해 diff만 반영한다. 휴면 중 `reset`이나 resetKey 변경이 있었다면 hydrate 대신 최신 props로 새로 mount한다.
+snapshot은 활성화 직후 버린다. 이 순서는 DC-04의 활성화 전 입력 보존과 충돌하지 않는다.
 
 현재 큐는 동기 callback을 전제로 한다. 여기에 async loader만 추가하면 프레임·UI 순서와
 mounted 판정이 깨질 수 있으므로 다음 책임 분리를 권고한다.
@@ -1049,8 +1072,11 @@ const response: Response = await handler.fetch(request, platform);
       ④ 청크 실패는 1회 재시도 후 SSR 유지·reportError ⑤ `client:load`만 modulepreload ⑥ 로더 gzip 2KB는 목표·보고
       (CI 강제 없음) ⑦ data-action 첫 click/submit은 로더가 잡아 폼 snapshot 후 1회 실행. 근거: 지연 활성화의 이득을
       지키면서 첫 입력 유실을 막고, 일시 오류에도 SSR 화면을 유지한다. 5.2. V-04/V-06/V-13/V-17.
-- [ ] DC-05: 로컬 상태·SSR snapshot. DataProxy 재사용, 슬롯·컴포넌트·reset 식별, snapshot hydration
-      후 최신 props 반영안을 검증하고 선택한다. V-03/V-04/V-12.
+- [x] DC-05 (2026-10-14 결정): 로컬 상태·SSR snapshot. ① 같은 slotId·componentId의 props 갱신은 DataProxy 재사용으로
+      로컬 상태 유지 ② Slot `resetKey`(기준 prop 이름) 값이 바뀌면 자동 재생성 ③ transition 작성 프레임 `reset:[slotId]`로
+      명시 초기화, 전송 층은 props op의 `reset` 플래그 ④ 휴면 중 갱신은 SSR snapshot으로 hydrate 후 최신 props 적용,
+      휴면 중 reset이면 새 mount, snapshot은 활성화 후 폐기. 근거: 같은 대상의 갱신에서는 입력 초안을 지키고 대상이
+      바뀌면 섞이지 않게 하며, hydration 불일치 없이 최신 상태에 도달한다. 5.3. V-03/V-04/V-12.
 - [ ] DC-06: MPA·인페이지 전환. CSS opt-in 유지·명시적 상태 복원·고속 스트림 애니메이션 억제안.
       브라우저·reduced motion 범위를 정한다. V-08/V-14.
 - [x] DC-07 (2026-10-14 결정): 페이지 파일 형식·컴파일러. ① 전용 확장자(.surface) 없이 async 컴포넌트
@@ -1220,7 +1246,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-04·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-04·DC-05·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
