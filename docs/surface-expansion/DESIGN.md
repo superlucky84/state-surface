@@ -500,7 +500,32 @@ props }], ui, boot }`이며 실제 렌더된 슬롯만 담는다. server 슬롯�
 - **단건 응답**(DC-09 결정): transition을 async generator로 쓰면 NDJSON 스트림, 일반 async 함수로 쓰면 반환값
   (`{ states, ui }`)을 full + done으로 정규화해 `application/json` 한 번으로 응답한다(`{ frames:[patch, done] }`).
   브라우저는 Content-Type으로 읽고 같은 적용 pipeline을 쓴다.
-- 무효 op·한도 초과의 처리(요청 중단 vs op skip+trace)와 frame bytes·개수·buffer·timeout 한도는 DC-14에서 정한다.
+- **검증·위반 처리**(DC-14 결정): 서버가 정본 검증을 한다.
+  - 개발자 transition의 잘못된 작성 프레임: dev에서는 원본 위치와 함께 throw, production에서는 `error` 프레임을 보내고 종료한다.
+  - 외부(`external`) 프레임 위반: 그 프레임만 버리고 trace에 기록한 뒤 계속한다(8.1 스키마).
+  - 브라우저는 op 구조만 가볍게 재검사한다. `html`·`props`·`merge`·`remove` op 위반은 프로토콜 오류로 보고 적용을
+    중단해 액션을 error로 끝낸다. `ui` op 위반은 그 op만 건너뛰고 trace한다.
+- **외부 프레임 입구**: 1차 범위에서 외부 프레임용 공개 엔드포인트는 두지 않는다. 외부 소스(agent 등)의 프레임은
+  transition 안에서 헬퍼(가칭 `yield* ctx.external(source)`)로만 주입하며, 헬퍼가 `external` 슬롯·스키마·capability를 강제한다.
+- **타임아웃**(DC-14 결정): 프레임 사이 대기 **idle 30초**, 요청 **전체 5분**이 기본이다. 기존 전체 30초 단일 한도를
+  대체한다. `createHandler`와 transition별로 바꿀 수 있고 플랫폼 한도(Workers 등)가 더 짧으면 그것을 따른다.
+  초과 시 `error` 프레임을 보내고 generator를 `return()`으로 멈춘다.
+- **크기·개수 한도**(DC-14 결정, 모두 설정 가능):
+
+  | 항목                 | 기본값 | 초과 시                              |
+  | -------------------- | ------ | ------------------------------------ |
+  | 요청 body            | 100KB  | 413                                  |
+  | NDJSON 한 줄(프레임) | 1MB    | 서버 error+종료 / 브라우저 수신 중단 |
+  | 한 요청 전송 총량    | 32MB   | 서버 error+종료 / 브라우저 수신 중단 |
+  | 한 요청 op 수        | 10,000 | 서버 error+종료                      |
+  | `html` op 하나       | 512KB  | 서버 error+종료                      |
+
+  dev에서는 한도의 80%에 도달하면 경고한다. DC-10의 server 재렌더 경고 임계치도 같은 설정에 둔다.
+
+- **실패 복구**(DC-14 결정): 스트림이 중간에 실패해도 이미 적용된 슬롯은 되돌리지 않는다. `error` 프레임의
+  오류 슬롯에 메시지를 표시하고 액션 상태를 error로 둔다. 앱은 액션 API의 재시도(같은 transition을 `reset`부터
+  다시 실행) 또는 새로고침을 선택한다. 엔진은 자동 재실행하지 않는다(부작용 있는 액션의 중복 실행 방지).
+  다음 요청은 항상 `reset`으로 시작하므로 상태는 자연히 재동기화된다.
 - 오류 표시는 `error` 프레임의 `slot`이 가리키는 오류 슬롯으로 한정한다. 다른 슬롯을 제거하지 않는다.
 - 취소는 대기 큐와 비동기 DOM 반영도 요청 generation으로 무효화한다. 확정된 결과를 자동 rollback하지 않는다.
   모듈 로드 취소와 액션 실행 취소는 별도로 처리한다.
@@ -1054,8 +1079,12 @@ const response: Response = await handler.fetch(request, platform);
       엔진은 슬롯·`<!--ss:body-->`/`<!--ss:head-->` 주석 마커 사이만 다루고 나머지 DOM은 건드리지 않음, 페이지뷰는
       History Change + `surface:page-load`, CSP nonce 지원. 근거: 외부 입력만 엄격히 막고 신뢰 코드는 타입으로,
       GTM 등 동적 주입을 통제하지 않고도 공존하며 레이아웃 계층을 바꾸지 않는다. 8장. V-09/V-10/V-15/V-30.
-- [ ] DC-14: validator·한도·복구. state 위반은 중단, UI 국소 위반은 skip+trace 후보.
-      frame/buffer/개수·timeout·EOF·재동기화·외부 source API를 정한다. V-08/V-09/V-10.
+- [x] DC-14 (2026-10-14 결정): validator·한도·복구. ① 서버 정본 검증: 개발자 프레임 위반은 dev throw/prod error+종료,
+      external 위반은 그 프레임만 drop+trace ② 브라우저: 콘텐츠 op 위반은 적용 중단, ui op 위반은 skip+trace
+      ③ 타임아웃 idle 30초·전체 5분 ④ 한도 body 100KB·한 줄 1MB·총 32MB·op 1만·html op 512KB(설정 가능, dev 80% 경고)
+      ⑤ 실패 시 적용분 유지·오류 슬롯·액션 error, 재시도 API 제공, 자동 재실행 없음 ⑥ 외부 프레임은 transition 안
+      헬퍼로만 주입(공개 엔드포인트 없음). 근거: 신뢰 코드의 실수는 빨리 드러내고 외부 입력은 국소 차단하며, 긴 LLM
+      스트림을 허용하면서 메모리 폭주와 중복 부작용을 막는다. 6.3. V-08/V-09/V-10.
 - [x] DC-15 (2026-10-13 결정): 전환 범위·기본값. legacy adapter·shim·지원 기간 없이 새 모델을 유일한
       모델로 하고 구 API는 단계별로 제거한다(AG-08, 9.2). 근거: 외부 사용자가 없는 0.x 단계에서 호환 계층의
       설계·번들·테스트 비용이 이득보다 크다. V-01/V-08/V-18.
@@ -1178,7 +1207,7 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지),
   DC-18~DC-26, V-19~V-27과 라우터·콘텐츠 구현 단계를 추가했다. 이어서 AG-07과 11장(런타임 중립 서버 코어·어댑터),
   DC-27/DC-28, V-28/V-29와 구현 단계 1(서버 코어·어댑터)을 추가하고 이후 단계 번호를 하나씩 미뤘다.
-  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
+  DC-01·DC-02·DC-03·DC-07·DC-08·DC-09·DC-10·DC-12·DC-13·DC-14·DC-16·DC-27·DC-28을 결정했고, AG-09(외부 SDK 호환, 8.3·V-31)를 추가했고, AG-08(하위 호환 비고려)에 따라 DC-15를 결정하고 NFR-02·9.2·V-18과 legacy 서술을 일괄 전환 기준으로 바꿨다.
 - 다음: 사용자가 두 문서를 검토해 추가 요구와 DC 선택을 정한다. 이후 IMPLEMENT.md와
   MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을 연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 공개 문법·wire·입력 한도·브라우저·성능의 TBD는 구현 선행 결정이다.
