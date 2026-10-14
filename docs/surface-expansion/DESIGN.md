@@ -712,11 +712,15 @@ const SearchBox = mount((renew, props) => {
 - **동시성**(DC-11 결정): 같은 이름의 액션이 다시 실행되거나 **대상 슬롯(targets)이 겹치는** 액션이 시작되면
   이전 요청을 abort한다. 대상이 겹치지 않는 액션은 동시에 진행한다(예: 검색 중 좋아요). 액션별로
   `mode: 'queue'`를 선언하면 같은 이름의 요청을 순서대로 실행한다. 기존 전역 abort-previous를 대체한다(AG-08).
-  대상 슬롯 정보는 서버 등록 정보에서 빌드 manifest로 내려받는다. `targets`를 선언하지 않은 transition은 실행 전에
-  대상을 알 수 없으므로 클라이언트 겹침 판정 규칙을 DC-30에서 정한다.
+  대상 슬롯 정보는 서버 등록 정보에서 빌드 manifest로 내려받는다.
+- **targets 생략**(DC-30 결정): `targets`를 선언하지 않은 transition은 실행 전에 대상을 알 수 없으므로 **페이지의 모든
+  슬롯과 겹치는 것**으로 본다. 시작하면 진행 중인 요청을 모두 abort하고, 이후 시작하는 어떤 액션도 이 요청을
+  abort한다(그 액션에 한해 기존 전역 abort-previous와 같은 동작). `mode: 'queue'`는 같은 이름끼리만 순서를 지킨다.
+  dev에서는 생략한 transition이 처음 실행될 때 "targets를 선언하면 겹치지 않는 액션과 병렬 실행된다"고 한 번 경고한다.
+  병렬 실행이 필요한 액션은 targets를 선언하도록 가이드한다.
 - **pending 표시**: 요청 ID별로 관리한다. 대상 슬롯 앵커의 `data-pending`은 요청 완료(done·error·abort)까지 유지하고
   첫 결과 도착은 `data-has-result`로 표시한다. 이전 요청의 종료 처리가 새 요청의 pending을 해제하지 않는다.
-  `data-pending-targets`는 표시 대상만 좁힌다.
+  `data-pending-targets`는 표시 대상만 좁힌다. targets를 생략한 transition의 기본 표시 대상은 페이지의 모든 슬롯이다(DC-30).
 - **이벤트 우선순위**: 컴포넌트 핸들러가 `preventDefault()`를 호출한 이벤트에는 `data-action` 위임이 실행되지 않는다.
   한 이벤트에서 액션은 한 번만 실행한다. submit은 submitter의 name·value와 복수 값 필드를 포함해 폼 값을
   이벤트 시점에 snapshot한다(V-13).
@@ -1004,6 +1008,7 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   매 페이지 다시 렌더되므로 persist할 수 없고 선언하면 빌드 오류다.
 - **진행 중 액션**: 페이지 이동 시 대상 슬롯이 **모두** 새 페이지에서도 유지되는 persist 슬롯인 액션은 abort하지 않고
   스트림을 계속 적용한다(채팅 위젯 응답·업로드 진행률). 사라지는 슬롯이 하나라도 포함된 액션은 이동 시 abort한다.
+  targets를 생략한 액션은 모든 슬롯이 대상이므로 이동 시 abort한다(DC-30).
 - **노드 이동 순서**: `moveBefore()`는 이동 대상과 목적지가 모두 문서에 연결돼 있을 때만 iframe·video 재생·포커스
   상태를 보존한다. 노드를 먼저 떼어내면 그 순간 iframe이 다시 로드되고 미디어가 멈추므로 "분리 → 교체 → 재부착"
   순서를 쓰지 않는다. 새 body 콘텐츠를 이전 콘텐츠 옆에 삽입하고, 새 콘텐츠의 같은 persist ID 노드 자리로 이전
@@ -1099,7 +1104,7 @@ export default defineTransition({
 
 - **선언 형태**: default export는 `defineTransition({ input?, targets?, mode?, handler })` 또는 기존처럼 generator·async
   함수 자체(입력 검증 없음)다. `targets`는 DC-11 동시성·DC-09 대상 고정의 근거이며 생략하면 서버에서는 handler의
-  첫 full 프레임이 담은 슬롯이 대상이 된다. 생략한 transition의 클라이언트 동시성 판정은 DC-30에서 정한다.
+  첫 full 프레임이 담은 슬롯이 대상이 된다. 클라이언트는 생략한 transition을 모든 슬롯과 겹치는 것으로 본다(7장, DC-30).
   `mode: 'queue'`는 DC-11 동시성 옵션이다.
 - **스키마**: Standard Schema 인터페이스로 받아 zod·valibot·arktype 등을 쓸 수 있고 엔진은 특정 라이브러리에
   의존하지 않는다. 서버 검증은 필수, 클라이언트 사전 검증은 선택이다. 폼 입력(form-urlencoded·multipart)은 스키마에
@@ -1593,10 +1598,12 @@ DC-01~DC-28 결정 후 최종 검토에서 Lithent SSR 제약(1장)과 계약 �
       응답, transition=`error` 프레임, 지연 슬롯=재시도 후 fallback. 검토 후 제외: 엔진의 async 컴포넌트 해결(자체 JSX
       런타임·다중 패스·폭포수 위험), Lithent async SSR(코어 변경·hydration 의미 정의). 둘 다 수요 확인 후 후속.
       근거: Lithent를 바꾸지 않고 지연 슬롯의 빈 곳을 메우며, 데이터 대기 위치가 명확하다. 2.1/2.4/10.4. V-11/V-23.
-- [ ] DC-30: `targets`를 생략한 transition의 클라이언트 동시성 판정. 후보 ① 모든 슬롯과 겹침으로 간주(시작 시
-      진행 중 요청 전부 abort, 기존 abort-previous와 같은 동작) ② `targets` 필수(빌드 오류) ③ 같은 이름만 abort.
-      권고: ① + dev에서 targets 선언 권장 경고. 빠른 작성은 유지하면서 겹침을 놓쳐 잘못 병행되는 일이 없다.
-      7장/10.5. V-12/V-13.
+- [x] DC-30 (2026-10-14 결정): `targets`를 생략한 transition의 클라이언트 동시성. ① 페이지의 모든 슬롯과 겹치는
+      것으로 간주(시작 시 진행 중 요청 전부 abort, 이후 어떤 액션이든 이 요청을 abort) ② 기본 pending 표시는 모든 슬롯
+      ③ 페이지 이동 시 abort(DC-19) ④ dev에서 첫 실행 시 targets 선언 권장 경고. 검토 후 제외: targets 필수(일반
+      generator export 형태 불가·보일러플레이트), 같은 이름만 abort(같은 슬롯에 스트림이 섞이는 경쟁), yield 키 기반
+      빌드 추론(계산된 키·헬퍼·external에서 불완전해 동작 예측이 어려움). 근거: 생략은 현재 동작과 같은 안전한 쪽으로
+      두고 병렬성은 명시 선언으로 얻는다. 7장/10.2/10.5. V-13.
 - [ ] DC-31: 자동 실행 transition(boot)의 페이지 문법. R-04·R-17·V-18·V-19가 boot를 요구하고 bootstrap에 `boot`
       필드가 있지만 페이지 API가 없다. 후보 ① named export `export const boot = { transition, params?(ctx) }`
       ② JSX 컴포넌트 `<Boot transition="…" params={…} />`(트리 순회로 수집, 레이아웃에도 둘 수 있음)
@@ -1632,7 +1639,7 @@ DC-08은 DC-05, DC-09는 DC-11, DC-10은 DC-09, DC-11은 DC-12, DC-12는 DC-17�
 | V-10 | R-10/NFR-03    | SSR 속성 breakout(`"`·`&`·`<` 포함 속성값, JSON `data-params`)·script/event·`javascript:` URL·악성 rich·capability 승격·UI 타입 위반을 방어하고 허용 밖 적용 차단. `__SURFACE__` JSON의 `</script>`·U+2028 이스케이프.                                                                                                                    |
 | V-11 | R-11           | `.tsx` 페이지의 layout·조건·반복·slot SSR·metadata 일치. 병렬 요청(await 사이 교차) 사이 수집 데이터 유출 없음. `client:only` 컴포넌트 서버 미실행, async 컴포넌트·Slot 자식 children·Slot 밖 `defineServerComponent` 진단, server 슬롯 `load` 병렬 대기와 실패 시 오류 응답, doctype·주석 마커·관리 태그 순서, html/head/body 누락 진단. |
 | V-12 | R-12           | props 갱신 때 local draft/toggle·유지된 입력 focus 보존. reset·record 교체·제거는 정의된 수명 준수.                                                                                                                                                                                                                                       |
-| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확.                                                                                                                                                                                                                                              |
+| V-13 | R-13           | 첫 submit 값·submitter 유지와 단일 실행. 첫 결과 이후 pending·연속 요청·실패·취소 상태 정확. 겹치는 targets만 abort·나머지 병렬, targets 생략 액션은 모든 요청과 상호 abort·전체 pending·dev 경고 1회.                                                                                                                                    |
 | V-14 | R-14           | MPA·일반 링크·뒤로/앞으로·미지원·reduced motion. 선택한 값만 복원, 스트림 DOM 순서 보존.                                                                                                                                                                                                                                                  |
 | V-15 | R-15           | 중복 ID·컴포넌트 재사용·미등록/권한 밖 슬롯·부모자식 소유권. 미지원 중첩 진단 또는 검증된 보존·cleanup.                                                                                                                                                                                                                                   |
 | V-16 | R-16           | import 경계·비 JSON props·지시자·URL 충돌의 원본 진단. dev/prod CSS·소스맵·지시자 변환 일치.                                                                                                                                                                                                                                              |
@@ -1690,8 +1697,9 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   2026-10-14 최종 검토에서 Lithent SSR 제약(1장: 동기 즉시 실행, 속성 미이스케이프, 주석 노드 없음)을 패키지
   실행으로 확인하고 async 범위(2.1), 호출 지점 변환·트리 순회 수집(3장), 문서 조립(4.4), 작성 층 full·done 규칙과
   pageId·`islands`(6.2), persist 이동 순서(10.2), PRG 리다이렉트·flash 한도(10.5), SSR 해시 제거(11.2)를 반영하고
-  DC-29~DC-32를 추가했다. DC-29는 페이지 함수만 async + server 슬롯 `defineServerComponent` load 단계로 결정했다(2.4).
-- 다음: DC-30~DC-32를 결정한다. 이후 IMPLEMENT.md와 MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을
+  DC-29~DC-32를 추가했다. DC-29는 페이지 함수만 async + server 슬롯 `defineServerComponent` load 단계로, DC-30은
+  targets 생략 시 모든 슬롯과 겹침으로 결정했다.
+- 다음: DC-31·DC-32를 결정한다. 이후 IMPLEMENT.md와 MANUAL_TEST_CHECKLIST.md를 작성하고 검증 ID·단계별 기록을
   연결한다.
 - 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
   공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
