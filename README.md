@@ -22,13 +22,13 @@ User action → POST /transition/:name → Server yields state frames
 
 ## Why StateSurface?
 
-| Traditional SPA | StateSurface |
-|---|---|
-| Client fetches data, manages state, renders UI | Server streams state, client projects DOM |
-| Full-page JS bundle, hydration cost | Per-anchor hydration, minimal client JS |
-| Complex state sync (Redux, Zustand, ...) | No client state — server is the source of truth |
-| Router + layout + data loading | File-based routes, declarative layout slots |
-| Loading spinners everywhere | Progressive streaming with partial/accumulate frames |
+| Traditional SPA                                | StateSurface                                         |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| Client fetches data, manages state, renders UI | Server streams state, client projects DOM            |
+| Full-page JS bundle, hydration cost            | Per-anchor hydration, minimal client JS              |
+| Complex state sync (Redux, Zustand, ...)       | No client state — server is the source of truth      |
+| Router + layout + data loading                 | File-based routes, declarative layout slots          |
+| Loading spinners everywhere                    | Progressive streaming with partial/accumulate frames |
 
 ## Quick Start
 
@@ -84,7 +84,8 @@ const StockPrice = ({ symbol, price, change }: Props) => (
     <h3 class="font-bold">{symbol}</h3>
     <p class="text-2xl">${price}</p>
     <span class={change >= 0 ? 'text-green-600' : 'text-red-600'}>
-      {change >= 0 ? '+' : ''}{change}%
+      {change >= 0 ? '+' : ''}
+      {change}%
     </span>
   </div>
 );
@@ -139,10 +140,10 @@ Trigger transitions from HTML attributes — zero JS event handlers.
 </form>
 ```
 
-| Attribute | Purpose |
-|---|---|
-| `data-action` | Transition name to invoke |
-| `data-params` | JSON params (optional) |
+| Attribute              | Purpose                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `data-action`          | Transition name to invoke                                 |
+| `data-params`          | JSON params (optional)                                    |
 | `data-pending-targets` | Anchor names to mark pending during transition (optional) |
 
 ## Frame Types
@@ -152,19 +153,24 @@ StateSurface streams three types of state frames:
 **Full frame** — Replaces all active state. First frame in every stream must be full.
 
 ```json
-{"type":"state","states":{"slot:a":{"title":"Hello"},"slot:b":{"items":[1,2,3]}}}
+{ "type": "state", "states": { "slot:a": { "title": "Hello" }, "slot:b": { "items": [1, 2, 3] } } }
 ```
 
 **Partial frame** — Updates or removes specific slots without touching others.
 
 ```json
-{"type":"state","full":false,"changed":["slot:a"],"states":{"slot:a":{"title":"Updated"}}}
+{
+  "type": "state",
+  "full": false,
+  "changed": ["slot:a"],
+  "states": { "slot:a": { "title": "Updated" } }
+}
 ```
 
 **Accumulate frame** — Appends data into existing slots (arrays concat, strings concat, objects merge). Perfect for streaming chat, logs, or progressive content.
 
 ```json
-{"type":"state","accumulate":true,"states":{"chat:current":{"text":" world"}}}
+{ "type": "state", "accumulate": true, "states": { "chat:current": { "text": " world" } } }
 ```
 
 ## Features
@@ -172,7 +178,7 @@ StateSurface streams three types of state frames:
 - **Full SSR** — Every page renders complete HTML on the server
 - **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames
 - **Abort previous** — Concurrent transitions auto-cancel earlier ones
-- **Per-anchor hydration** — SHA256 hash check, no full-page rehydration
+- **Per-anchor hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
 - **File-based routing** — Routes, templates, and transitions auto-discovered from `routes/`
 - **View Transition API** — MPA cross-fade + in-page element morphing
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
@@ -194,7 +200,7 @@ shared/                  # Data helpers, i18n utilities
 client/                  # Assets (styles.css, plugins/)
 
 engine/                  # Framework core (do not edit)
-  server/                #   Express routes, SSR, transition handler
+  server/                #   Web-standard core, SSR, transition handler
   client/                #   Browser bootstrap, hydration, frame queue
   shared/                #   Protocol types, template registry
 ```
@@ -220,7 +226,7 @@ pnpm test && pnpm build
 ## Commands
 
 ```bash
-pnpm dev                          # Dev server (tsx watch + Vite HMR)
+pnpm dev                          # Dev server (Vite + shared server core)
 pnpm build                        # Production build
 pnpm start                        # Run production server
 pnpm test                         # Run all tests (Vitest)
@@ -232,11 +238,11 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | Server listen port |
-| `BASE_PATH` | _(empty)_ | Mount app under a sub-path (e.g. `/demo`) |
-| `NODE_ENV` | `development` | `development` / `test` / `production` |
+| Variable    | Default       | Description                               |
+| ----------- | ------------- | ----------------------------------------- |
+| `PORT`      | `3000`        | Server listen port                        |
+| `BASE_PATH` | _(empty)_     | Mount app under a sub-path (e.g. `/demo`) |
+| `NODE_ENV`  | `development` | `development` / `test` / `production`     |
 
 ## API Reference
 
@@ -245,7 +251,8 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 import { defineTemplate, prefixPath, getBasePath } from 'state-surface';
 
 // Server
-import { createApp, defineTransition } from 'state-surface/server';
+import { createHandler, defineTransition, sequence } from 'state-surface/server';
+import { serve } from 'state-surface/adapters/node';
 
 // Client runtime
 import { createStateSurface } from 'state-surface/client';
@@ -254,13 +261,13 @@ import { createStateSurface } from 'state-surface/client';
 ```typescript
 // Types
 import type { RouteModule, StateFrame, BootConfig, TemplateModule } from 'state-surface';
-import type { TransitionHandler, TransitionHooks } from 'state-surface/server';
+import type { TransitionHandler, SurfaceContext, Middleware } from 'state-surface/server';
 import type { StateSurfacePlugin } from 'state-surface/client';
 ```
 
 ## Tech Stack
 
-- **Server**: [Express 5](https://expressjs.com/) + [Vite](https://vite.dev/) middleware
+- **Server**: Node.js Web Request/Response core + [Vite](https://vite.dev/) middleware
 - **Rendering**: [Lithent](https://github.com/superlucky84/lithent) (~4 KB VDOM diff engine)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) via `@tailwindcss/vite`
 - **Transport**: NDJSON over HTTP POST
@@ -269,3 +276,6 @@ import type { StateSurfacePlugin } from 'state-surface/client';
 ## License
 
 [MIT](LICENSE)
+
+Server configuration, runtime adapters, cookies, middleware and validation commands are documented in
+[`docs/server-adapters.md`](docs/server-adapters.md). The default server uses Node HTTP; Express is an optional peer for existing applications.

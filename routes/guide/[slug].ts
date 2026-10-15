@@ -13,8 +13,8 @@ const VALID_SLUGS = [
   'ui-patch',
 ];
 
-function parseSlug(req: { params: Record<string, string> }): string {
-  const slug = req.params.slug;
+function parseSlug(ctx: { params: Record<string, string> }): string {
+  const slug = ctx.params.slug;
   if (!VALID_SLUGS.includes(slug)) {
     throw new Error(`Invalid guide slug: "${slug}"`);
   }
@@ -38,12 +38,12 @@ export default {
 
   transition: 'guide-load',
 
-  params: req => ({ slug: parseSlug(req), lang: getLang(req) }),
+  params: ctx => ({ slug: parseSlug(ctx), lang: getLang(ctx) }),
 
-  initial: req => guideLoadingState(parseSlug(req), getLang(req)),
+  initial: ctx => guideLoadingState(parseSlug(ctx), getLang(ctx)),
 
   boot: {
     auto: true,
-    params: req => ({ slug: parseSlug(req), lang: getLang(req) }),
+    params: ctx => ({ slug: parseSlug(ctx), lang: getLang(ctx) }),
   },
 } satisfies RouteModule;

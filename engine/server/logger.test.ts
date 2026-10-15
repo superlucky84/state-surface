@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { createLogger } from './logger.js';
-import { createApp } from './index.js';
+import { createDemo } from '../../testing/server.js';
 
 function sinkSpy() {
   return {
@@ -54,7 +54,7 @@ describe('createLogger', () => {
 describe('request logging middleware', () => {
   it('logs method, url and status code', async () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-    const { app } = await createApp({ logLevel: 'info' });
+    const { server: app } = await createDemo({ logger: createLogger({ level: 'info' }) });
 
     await request(app).get('/examples/search').expect(200);
 

@@ -16,5 +16,5 @@ export default {
 
   transition: 'vt-demo',
 
-  initial: req => viewTransitionContent(getLang(req)),
+  initial: ctx => viewTransitionContent(getLang(ctx)),
 } satisfies RouteModule;

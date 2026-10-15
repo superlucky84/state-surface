@@ -2,13 +2,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { surface } from './engine/vite.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rawBase = process.env.BASE_PATH;
 const base = rawBase ? `${rawBase.replace(/\/$/, '')}/` : '/';
 
 export default defineConfig({
-  plugins: [tailwindcss()],
+  plugins: [surface(), tailwindcss()],
   base,
   build: {
     outDir: 'dist/client',
@@ -21,7 +22,7 @@ export default defineConfig({
     },
   },
   ssr: {
-    noExternal: ['lithent'],
+    noExternal: ['lithent', 'state-surface'],
   },
   resolve: {
     alias: [

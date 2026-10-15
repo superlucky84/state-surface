@@ -1,34 +1,59 @@
-import express from 'express';
-import request from 'supertest';
-import { describe, it, expect } from 'vitest';
-import { createRouteHandler } from './routeHandler.js';
-import type { RouteModule } from '../shared/routeModule.js';
-
-function makeFailingRoute(): RouteModule {
-  return {
-    layout() {
-      throw new Error('secret-internal-message');
-    },
-  } as RouteModule;
-}
-
-describe('createRouteHandler error responses', () => {
-  it('hides SSR internals in production mode', async () => {
-    const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-
-    try {
-      const app = express();
-      app.get('/broken', createRouteHandler(makeFailingRoute()));
-
-      const res = await request(app).get('/broken');
-
-      expect(res.status).toBe(500);
-      expect(res.headers['content-type']).toContain('text/html; charset=utf-8');
-      expect(res.text).toBe('Internal Server Error');
-      expect(res.text).not.toContain('secret-internal-message');
-    } finally {
-      process.env.NODE_ENV = prevNodeEnv;
-    }
+import { describe, it, expect, vi } from 'vitest';
+import { createHandler } from './core/handler.js';
+describe('SSR error responses', () => {
+  it('hides internals in production and reports error with request context', async () => {
+    const onError = vi.fn();
+    const handler = createHandler({
+      manifest: {
+        routes: [
+          {
+            pattern: '/broken',
+            module: {
+              layout() {
+                throw new Error('secret-internal-message');
+              },
+            },
+          },
+        ],
+        templates: {},
+        transitions: {},
+      },
+      onError,
+    });
+    const response = await handler.fetch(new Request('https://surface.test/broken'));
+    expect(response.status).toBe(500);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(await response.text()).toBe('Internal Server Error');
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ url: new URL('https://surface.test/broken') })
+    );
+  });
+  it('routes template rendering failures through onError without leaking comments', async () => {
+    const onError = vi.fn();
+    const handler = createHandler({
+      manifest: {
+        routes: [
+          {
+            pattern: '/',
+            module: {
+              layout: () => '<h-state name="broken"></h-state>',
+              initial: () => ({ broken: {} }),
+            },
+          },
+        ],
+        transitions: {},
+        templates: {
+          broken() {
+            throw new Error('secret-template-detail');
+          },
+        },
+      },
+      onError,
+    });
+    const response = await handler.fetch(new Request('https://surface.test/'));
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('Internal Server Error');
+    expect(onError).toHaveBeenCalledOnce();
   });
 });

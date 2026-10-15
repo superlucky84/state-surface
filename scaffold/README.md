@@ -60,3 +60,12 @@ Do not re-run scaffolding to update an existing app. Upgrade the runtime package
 pnpm up state-surface
 pnpm test && pnpm build
 ```
+
+
+The default server imports the generated Vite manifest and uses
+`serve({ manifest })` from `state-surface/adapters/node`. User routes and transitions
+receive `SurfaceContext` (Web Request, URL, params, cookies, locals, env, signal).
+Use ctx.cookies to read/write cookies; transition cookie writes must happen before
+the first yield. Vite's surface plugin generates the registry for development and
+production. To embed in Express, install the optional express peer and mount
+`surface({ manifest })` before body-parsing middleware.

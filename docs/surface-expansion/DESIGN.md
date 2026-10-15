@@ -2,7 +2,7 @@
 
 작성일: 2026-10-13
 
-상태: Draft / Review — 구현 전 검토 초안
+상태: 단계 1 구현 완료 — 이후 단계의 설계 계약 유지
 
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md)를 따른다. 사용자와 합의한 목표,
 현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `Slot`, 지시자와 신규 프레임 필드는
@@ -15,22 +15,25 @@
 
 ## 1. 현재 기반과 설계의 출발점
 
-| 경계                | 현재 코드                                                                                   | 재사용·변경 방향                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| 페이지 계약         | [routeModule.ts](../../engine/shared/routeModule.ts): `layout(stateScript): string`         | `.tsx` 페이지(PageDefinition)로 일괄 교체하고 문자열 layout 계약은 제거한다(AG-08). |
-| 라우트 발견         | [routeScanner.ts](../../engine/server/routeScanner.ts): `.ts`만 route로 인정                | `.tsx` 페이지의 발견·dev 로드·production 생성 모듈을 연결한다.                      |
-| JSX·SSR             | [tsconfig.json](../../tsconfig.json), [ssrRenderer.ts](../../engine/server/ssrRenderer.ts)  | Lithent JSX와 `renderToString()`으로 페이지 트리를 렌더링한다.                      |
-| 슬롯 채움           | [ssr.ts](../../engine/server/ssr.ts): 문자열의 h-state를 정규식으로 채움                    | 새 트리는 렌더 과정에서 슬롯을 처리하고 정규식 문자열 채움 경로는 제거한다(AG-08).  |
-| 컴포넌트 레지스트리 | [templateRegistry.ts](../../engine/shared/templateRegistry.ts): 이름과 TagFunction          | 슬롯 인스턴스·컴포넌트·모드·capability를 분리한다.                                  |
-| 초기 클라이언트     | [main.ts](../../engine/client/main.ts), [auto.ts](../../engine/client/templates/auto.ts)    | 공통 로더·액션 런타임·아일랜드 로더·플러그인으로 분리한다.                          |
-| 상태 적용           | [stateSurface.ts](../../engine/client/stateSurface.ts)                                      | reducer·프레임 큐를 활용하고 비동기 로드와 DOM 반영을 분리한다.                     |
-| Lithent 갱신        | [lithentBridge.ts](../../engine/client/lithentBridge.ts)                                    | DataProxy와 기존 마운트를 활용하며 인스턴스 키를 슬롯 ID로 관리한다.                |
-| 전송                | [server/index.ts](../../engine/server/index.ts), [ndjson.ts](../../engine/shared/ndjson.ts) | JSON 분기·혼합 모드 projection·스트림 상태 검증을 추가한다.                         |
-| 서버 런타임         | [server/index.ts](../../engine/server/index.ts): Express 조립, `node:fs`·`node:crypto` 사용 | 웹 표준 `Request → Response` 코어와 런타임 어댑터로 분리한다(11장).                 |
-| UI·MPA              | [protocol.ts](../../engine/shared/protocol.ts), [styles.css](../../client/styles.css)       | 기존 UI 패치와 MPA opt-in을 활용하고 안전성·적용 순서를 보강한다.                   |
-| 페이지 이동         | [main.ts](../../engine/client/main.ts): 문서당 1회 초기화, History API·링크 가로채기 없음   | 재초기화 가능한 runtime 수명과 선택형 라우터·prefetch를 추가한다(10장).             |
-| 페이지 출력         | [routeHandler.ts](../../engine/server/routeHandler.ts): 모든 페이지 요청 시 SSR             | 페이지별 prerender·지연 server 슬롯 엔드포인트를 추가한다.                          |
-| 콘텐츠·자산         | [content.ts](../../shared/content.ts): 4천여 줄 TS 객체, 이미지 처리 도구 없음              | 스키마 검증 콘텐츠 컬렉션과 이미지 컴포넌트를 추가한다.                             |
+아래 표는 설계 착수 기준(`611b37e` 이전)의 코드다. 단계 1에서 서버 코어·어댑터·정적 registry로 옮긴 현재 구조는
+[server-adapters.md](../server-adapters.md)와 IMPLEMENT 실행 기록을 참조한다.
+
+| 경계                | 현재 코드                                                                                                                                        | 재사용·변경 방향                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| 페이지 계약         | [routeModule.ts](../../engine/shared/routeModule.ts): `layout(stateScript): string`                                                              | `.tsx` 페이지(PageDefinition)로 일괄 교체하고 문자열 layout 계약은 제거한다(AG-08). |
+| 라우트 발견         | [routeScanner.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/routeScanner.ts): `.ts`만 route로 인정                | `.tsx` 페이지의 발견·dev 로드·production 생성 모듈을 연결한다.                      |
+| JSX·SSR             | [tsconfig.json](../../tsconfig.json), [ssrRenderer.ts](../../engine/server/ssrRenderer.ts)                                                       | Lithent JSX와 `renderToString()`으로 페이지 트리를 렌더링한다.                      |
+| 슬롯 채움           | [ssr.ts](../../engine/server/ssr.ts): 문자열의 h-state를 정규식으로 채움                                                                         | 새 트리는 렌더 과정에서 슬롯을 처리하고 정규식 문자열 채움 경로는 제거한다(AG-08).  |
+| 컴포넌트 레지스트리 | [templateRegistry.ts](../../engine/shared/templateRegistry.ts): 이름과 TagFunction                                                               | 슬롯 인스턴스·컴포넌트·모드·capability를 분리한다.                                  |
+| 초기 클라이언트     | [main.ts](../../engine/client/main.ts), [auto.ts](../../engine/client/templates/auto.ts)                                                         | 공통 로더·액션 런타임·아일랜드 로더·플러그인으로 분리한다.                          |
+| 상태 적용           | [stateSurface.ts](../../engine/client/stateSurface.ts)                                                                                           | reducer·프레임 큐를 활용하고 비동기 로드와 DOM 반영을 분리한다.                     |
+| Lithent 갱신        | [lithentBridge.ts](../../engine/client/lithentBridge.ts)                                                                                         | DataProxy와 기존 마운트를 활용하며 인스턴스 키를 슬롯 ID로 관리한다.                |
+| 전송                | [server/index.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/index.ts), [ndjson.ts](../../engine/shared/ndjson.ts) | JSON 분기·혼합 모드 projection·스트림 상태 검증을 추가한다.                         |
+| 서버 런타임         | [server/index.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/index.ts): Express 조립, `node:fs`·`node:crypto` 사용 | 웹 표준 `Request → Response` 코어와 런타임 어댑터로 분리한다(11장).                 |
+| UI·MPA              | [protocol.ts](../../engine/shared/protocol.ts), [styles.css](../../client/styles.css)                                                            | 기존 UI 패치와 MPA opt-in을 활용하고 안전성·적용 순서를 보강한다.                   |
+| 페이지 이동         | [main.ts](../../engine/client/main.ts): 문서당 1회 초기화, History API·링크 가로채기 없음                                                        | 재초기화 가능한 runtime 수명과 선택형 라우터·prefetch를 추가한다(10장).             |
+| 페이지 출력         | [routeHandler.ts](../../engine/server/routeHandler.ts): 모든 페이지 요청 시 SSR                                                                  | 페이지별 prerender·지연 server 슬롯 엔드포인트를 추가한다.                          |
+| 콘텐츠·자산         | [content.ts](../../shared/content.ts): 4천여 줄 TS 객체, 이미지 처리 도구 없음                                                                   | 스키마 검증 콘텐츠 컬렉션과 이미지 컴포넌트를 추가한다.                             |
 
 기존 코드 검토에서 `pnpm test`는 34개 파일/458개 테스트가 통과했고 client build도 성공했다.
 공통 JS는 98.52kB / gzip 추정 28.21kB였다. 이는 새 구조의 측정 결과가 아니다.
@@ -1335,22 +1338,33 @@ import hero from './hero.png';
 사용자 합의(AG-07)로 Express·Node 고정을 풀고 웹 표준 서버 코어와 어댑터 구조를 1차 범위에 포함한다.
 Astro·SvelteKit·Remix·Hono가 사용하는 `fetch(Request) → Response` 핸들러 + 어댑터 방식을 따른다.
 
-### 11.1 현재 결합 지점
+### 11.1 설계 기준의 결합 지점
 
-| 결합                                 | 위치                                                                                                                                                 | 분리 방향                                 |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Express 앱 조립·JSON body·static·404 | [server/index.ts](../../engine/server/index.ts)                                                                                                      | 코어 라우터 + 어댑터의 정적 서빙          |
-| `req`/`res` 기반 SSR·NDJSON 쓰기     | [routeHandler.ts](../../engine/server/routeHandler.ts), `index.ts`의 transition                                                                      | `Response` + `ReadableStream` 반환        |
-| 사용자 API의 Express `Request` 노출  | [routeModule.ts](../../engine/shared/routeModule.ts), [i18n.ts](../../shared/i18n.ts)                                                                | `SurfaceContext`로 일괄 전환(shim 없음)   |
-| 실행 중 fs 스캔·동적 import          | [routeScanner.ts](../../engine/server/routeScanner.ts), [bootstrap.ts](../../engine/server/bootstrap.ts), [assets.ts](../../engine/server/assets.ts) | 빌드 생성 registry·asset manifest import  |
-| `node:crypto` 동기 sha256(SSR 해시)  | [ssr.ts](../../engine/server/ssr.ts)                                                                                                                 | 해시 제거(11.2). 암호화·서명은 Web Crypto |
-| `node:http` 종료 처리·logger         | [gracefulShutdown.ts](../../engine/server/gracefulShutdown.ts), [logger.ts](../../engine/server/logger.ts)                                           | Node 어댑터로 이동, logger는 주입         |
+이 표는 분리 전 근거이며 단계 1에서 제거·이동했다. 현재 코어는 `engine/server/core/`, 전송은 `engine/adapters/`,
+탐색은 `engine/build/`·`engine/vite.ts`에 있다. 요청별 데이터는 ctx로 전달하며 생성 모듈의 전역 값은 불변 빌드 설정뿐이다.
+
+| 결합                                 | 위치                                                                                                                                                                                                                                                           | 분리 방향                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Express 앱 조립·JSON body·static·404 | [server/index.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/index.ts)                                                                                                                                                           | 코어 라우터 + 어댑터의 정적 서빙          |
+| `req`/`res` 기반 SSR·NDJSON 쓰기     | [routeHandler.ts](../../engine/server/routeHandler.ts), `index.ts`의 transition                                                                                                                                                                                | `Response` + `ReadableStream` 반환        |
+| 사용자 API의 Express `Request` 노출  | [routeModule.ts](../../engine/shared/routeModule.ts), [i18n.ts](../../shared/i18n.ts)                                                                                                                                                                          | `SurfaceContext`로 일괄 전환(shim 없음)   |
+| 실행 중 fs 스캔·동적 import          | [routeScanner.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/routeScanner.ts), [bootstrap.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/bootstrap.ts), [assets.ts](../../engine/server/assets.ts) | 빌드 생성 registry·asset manifest import  |
+| `node:crypto` 동기 sha256(SSR 해시)  | [ssr.ts](../../engine/server/ssr.ts)                                                                                                                                                                                                                           | 해시 제거(11.2). 암호화·서명은 Web Crypto |
+| `node:http` 종료 처리·logger         | [gracefulShutdown.ts](https://github.com/superlucky84/state-surface/blob/611b37e/engine/server/gracefulShutdown.ts), [logger.ts](../../engine/server/logger.ts)                                                                                                | Node 어댑터로 이동, logger는 주입         |
 
 ### 11.2 코어 계약
 
 ```ts
 // 가칭
-const handler = createHandler({ manifest, basePath, security, bodyLimit, logger, hooks });
+const handler = createHandler({
+  manifest,
+  basePath,
+  security,
+  bodyLimit,
+  logger,
+  middleware,
+  onError,
+});
 const response: Response = await handler.fetch(request, platform);
 ```
 
@@ -1441,6 +1455,11 @@ const response: Response = await handler.fetch(request, platform);
 - **dev·검증**(DC-28 결정): dev는 Node + Vite middleware 단일 경로를 유지하고 코어 핸들러를 Vite dev 서버에
   연결해 dev와 production이 같은 코어를 사용하게 한다. Workers는 production 빌드 산출물을 CI에서
   wrangler dev(workerd)로 실행해 V-28 적합성 테스트를 통과시킨다. Bun·Deno도 각 런타임으로 같은 테스트를 실행한다.
+
+단계 1 workerd 검증에서 idle 스트림의 연결 종료 감지가 지연됨을 확인했다. Workers 어댑터는 native writer와
+빈 NDJSON 줄 heartbeat(기본 250ms), `waitUntil` cleanup을 사용한다. 빈 줄은 기존 decoder에서 무시하며 상태 프레임이
+아니다. `enable_request_signal` 플래그도 함께 사용한다. 실제 취소·생성기 종료 판정은 다른 어댑터와 같은 시나리오로
+검증하며 타임아웃을 취소 성공으로 계산하지 않는다.
 
 ### 11.4 빌드 산출물과 런타임 제약
 

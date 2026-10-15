@@ -15,5 +15,5 @@ export default {
 
   transition: 'action-demo',
 
-  initial: req => actionsContent(getLang(req)),
+  initial: ctx => actionsContent(getLang(ctx)),
 } satisfies RouteModule;

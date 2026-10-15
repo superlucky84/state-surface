@@ -20,5 +20,5 @@ export default {
 
   transition: 'chat',
 
-  initial: req => chatContent(getLang(req)),
+  initial: ctx => chatContent(getLang(ctx)),
 } satisfies RouteModule;

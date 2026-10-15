@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createApp } from 'state-surface/server';
+import { createDemo } from '../testing/server.js';
 
 let app: any;
 beforeAll(async () => {
-  ({ app } = await createApp());
+  ({ server: app } = await createDemo());
 });
 import { guideContent, guideLoadedState } from './content.js';
 import type { Block } from './content.js';

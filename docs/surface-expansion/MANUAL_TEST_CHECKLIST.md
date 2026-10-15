@@ -355,3 +355,12 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
 - MT-09 후속: Chromium `moveBefore`의 iframe 문서·포커스는 보존되지만 입력 선택 범위 초기화를 재현했다.
   단계 6에서 보완하며 Firefox·Safari·실기기 동작은 별도로 검증한다.
 - MT-01~MT-18 수동 판정 및 릴리스 승인은 여전히 미실행이다.
+
+### 단계 1 자동 선행 검증 — 2026-10-15
+
+- MT-15 관련 자동 fixture: Node·Express·Bun·Deno·workerd 각각 동일 HTTP 8개 시나리오 통과.
+  Web core bundle/source 검사와 서버 타입 검사 통과. 실제 서비스 배포·수동 cross-runtime 판정은 아직 미실행이다.
+- MT-18 관련 자동 검사: cross-origin/Sec-Fetch-Site 403, 본문 413, 오류 내부 정보 숨김, cookie cutoff·abort/cleanup 검증.
+  HTML 속성 이스케이프는 아직 고치지 않았으며 단계 2의 Lithent upstream 선행 조건을 유지한다.
+- MT-16 관련 시작점: scaffold 원본/overrides·helper/타입 선언을 갱신·재생성했다. 독립 패키지 설치 검증은 단계 8이다.
+- 루트·/demo 브라우저 parity와 단계 0 기술 관측은 계속 통과한다. MT-01~MT-18 수동 릴리스 판정으로 계산하지 않는다.

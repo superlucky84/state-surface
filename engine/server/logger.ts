@@ -30,7 +30,7 @@ function resolveDefaultLevel(nodeEnv: string | undefined): LogLevel {
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const level = options.level ?? resolveDefaultLevel(options.nodeEnv ?? process.env.NODE_ENV);
+  const level = options.level ?? resolveDefaultLevel(options.nodeEnv);
   const sink = options.sink ?? console;
 
   const shouldLog = (next: LogLevel) => LEVEL_RANK[next] >= LEVEL_RANK[level];

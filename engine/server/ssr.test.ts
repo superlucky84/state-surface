@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeStateJSON, fillHState, buildStateScript, buildUiScript, ssrHash } from './ssr.js';
+import { safeStateJSON, fillHState, buildStateScript, buildUiScript } from './ssr.js';
 
 describe('safeStateJSON', () => {
   it('escapes < > & for safe HTML embedding', () => {
@@ -32,7 +32,7 @@ describe('fillHState', () => {
 
     const result = fillHState(html, states, renderTemplate);
     expect(result).toContain('<h1>Hello</h1>');
-    expect(result).toContain('data-ssr-hash=');
+    expect(result).not.toContain('data-ssr-hash');
   });
 
   it('leaves anchors empty when no state provided', () => {
@@ -118,40 +118,5 @@ describe('buildUiScript', () => {
 
   it('returns empty string when ui is empty', () => {
     expect(buildUiScript({})).toBe('');
-  });
-});
-
-describe('ssrHash', () => {
-  it('produces a hex hash string', () => {
-    const hash = ssrHash('<div>hello</div>');
-    expect(hash).toMatch(/^[0-9a-f]{12}$/);
-  });
-
-  it('same content produces same hash', () => {
-    expect(ssrHash('<p>test</p>')).toBe(ssrHash('<p>test</p>'));
-  });
-
-  it('normalizes whitespace differences', () => {
-    const a = ssrHash('<p>  hello   world  </p>');
-    const b = ssrHash('<p> hello world </p>');
-    expect(a).toBe(b);
-  });
-
-  it('ignores HTML comments', () => {
-    const a = ssrHash('<div><!-- comment -->text</div>');
-    const b = ssrHash('<div>text</div>');
-    expect(a).toBe(b);
-  });
-
-  it('sorts attributes for stable hashing', () => {
-    const a = ssrHash('<div class="a" id="b">x</div>');
-    const b = ssrHash('<div id="b" class="a">x</div>');
-    expect(a).toBe(b);
-  });
-
-  it('excludes dynamic attributes', () => {
-    const a = ssrHash('<div nonce="abc123">x</div>');
-    const b = ssrHash('<div>x</div>');
-    expect(a).toBe(b);
   });
 });

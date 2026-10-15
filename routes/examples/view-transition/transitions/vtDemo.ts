@@ -1,11 +1,15 @@
+import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../../shared/i18n.js';
+import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 import { viewTransitionContent } from '../../../../shared/content.js';
 
-async function* vtDemo(params: Record<string, unknown>): AsyncGenerator<StateFrame, void, unknown> {
-  const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
+async function* vtDemo(
+  params: Record<string, unknown>,
+  ctx: SurfaceContext
+): AsyncGenerator<StateFrame, void, unknown> {
+  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
   const base = viewTransitionContent(lang);
   const cardId = params.card as string | undefined;
   const back = params.back as boolean | undefined;

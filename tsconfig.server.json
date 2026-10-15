@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": [
+    "engine/server.ts",
+    "engine/server/**/*.ts",
+    "engine/adapters/**/*.ts",
+    "engine/shared/**/*.ts"
+  ],
+  "exclude": ["**/*.test.ts"]
+}

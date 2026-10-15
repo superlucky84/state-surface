@@ -1,6 +1,7 @@
+import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../../shared/i18n.js';
+import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -32,11 +33,12 @@ const THEMES: Record<
 };
 
 async function* uiPatchDemo(
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
   const action = (params.action as string) ?? 'theme';
   const theme = (params.theme as string) ?? 'reset';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
+  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
   const ko = lang === 'ko';
   const headerTitle = ko ? 'UI Patch 데모' : 'UI Patch Demo';
 

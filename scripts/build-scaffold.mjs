@@ -21,7 +21,7 @@ rmSync(scaffold, { recursive: true, force: true });
 mkdirSync(scaffold, { recursive: true });
 
 // 1. Copy directories
-const SYNC_DIRS = ['client', 'shared', 'routes', 'layouts'];
+const SYNC_DIRS = ['client', 'shared', 'routes', 'layouts', 'testing'];
 for (const dir of SYNC_DIRS) {
   cpSync(resolve(root, dir), resolve(scaffold, dir), { recursive: true });
 }

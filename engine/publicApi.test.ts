@@ -9,7 +9,7 @@ describe('public API split', () => {
     expect(rootApi).toHaveProperty('getBasePath');
 
     expect(rootApi).not.toHaveProperty('defineTransition');
-    expect(rootApi).not.toHaveProperty('createApp');
+    expect(rootApi).not.toHaveProperty('createHandler');
     expect(rootApi).not.toHaveProperty('createStateSurface');
 
     // UiPatch type should be accessible (type-only, but re-exported)
@@ -19,7 +19,7 @@ describe('public API split', () => {
   it('exposes server-only APIs on state-surface/server', async () => {
     const serverApi = await import('state-surface/server');
 
-    expect(serverApi).toHaveProperty('createApp');
+    expect(serverApi).toHaveProperty('createHandler');
     expect(serverApi).toHaveProperty('defineTransition');
     expect(serverApi).toHaveProperty('resolveAsset');
     expect(serverApi).toHaveProperty('resolveAssetCss');

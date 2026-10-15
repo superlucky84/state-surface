@@ -9,21 +9,28 @@ It tracks active decisions in `docs/ui-protocol/DESIGN.md` and legacy baseline d
 - Response type: `application/x-ndjson`
 - One JSON frame per line
 - Stream order is preserved
+- Empty lines are permitted as transport heartbeats and ignored by the decoder; they are not frames.
+- POST validates Origin (or Sec-Fetch-Site when Origin is absent); an explicit allowed-origin list is configurable.
+- The core reads the body with a 100 KiB default byte limit (413 on overflow); malformed/non-object JSON returns 400.
+- Server handlers use explicit `SurfaceContext`; Express request/response hooks are removed.
+- Cookies set before the first transition yield are committed with response headers; late writes are ignored.
+- Abort/timeout closes the stream and returns the generator; application I/O must observe `ctx.signal`.
+- Runtime adapters and deployment requirements: [server-adapters.md](docs/server-adapters.md).
 
 ## Frame Types
 
 ```ts
 type StateFrame =
   | {
-      type: "state";
+      type: 'state';
       states: Record<string, any>;
-      full?: boolean;        // default true
-      accumulate?: boolean;  // default false — stack delta into existing slot state
+      full?: boolean; // default true
+      accumulate?: boolean; // default false — stack delta into existing slot state
       changed?: string[];
       removed?: string[];
     }
-  | { type: "error"; message?: string; template?: string; data?: any }
-  | { type: "done" };
+  | { type: 'error'; message?: string; template?: string; data?: any }
+  | { type: 'done' };
 ```
 
 ## State Frame Rules
@@ -49,12 +56,12 @@ type StateFrame =
 
 Per slot, the incoming data is merged into the existing `activeStates[slot]`:
 
-| Field type | Merge behavior |
-|---|---|
-| Array | `[...existing, ...incoming]` (concat) |
-| String | `existing + incoming` (concat) |
-| Object | `{ ...existing, ...incoming }` (shallow merge) |
-| Scalar (number, boolean, null) | `incoming` (replace) |
+| Field type                     | Merge behavior                                 |
+| ------------------------------ | ---------------------------------------------- |
+| Array                          | `[...existing, ...incoming]` (concat)          |
+| String                         | `existing + incoming` (concat)                 |
+| Object                         | `{ ...existing, ...incoming }` (shallow merge) |
+| Scalar (number, boolean, null) | `incoming` (replace)                           |
 
 If the slot does not yet exist in `activeStates`, the incoming data is used as-is.
 
@@ -63,37 +70,46 @@ If the slot does not yet exist in `activeStates`, the incoming data is used as-i
 ### Full (first frame)
 
 ```json
-{"type":"state","states":{"page:article:view":{"articleId":1},"loading":{"articleId":1}}}
+{
+  "type": "state",
+  "states": { "page:article:view": { "articleId": 1 }, "loading": { "articleId": 1 } }
+}
 ```
 
 ### Partial update
 
 ```json
-{"type":"state","full":false,"states":{"page:article:view":{"article":{"id":1,"title":"A"}}},"changed":["page:article:view"],"removed":[]}
+{
+  "type": "state",
+  "full": false,
+  "states": { "page:article:view": { "article": { "id": 1, "title": "A" } } },
+  "changed": ["page:article:view"],
+  "removed": []
+}
 ```
 
 ### Partial remove-only
 
 ```json
-{"type":"state","full":false,"states":{},"removed":["loading"]}
+{ "type": "state", "full": false, "states": {}, "removed": ["loading"] }
 ```
 
 ### Error
 
 ```json
-{"type":"error","template":"system:error","data":{"message":"db timeout"}}
+{ "type": "error", "template": "system:error", "data": { "message": "db timeout" } }
 ```
 
 ### Done
 
 ```json
-{"type":"done"}
+{ "type": "done" }
 ```
 
 ### Accumulate — string delta (streaming text)
 
 ```json
-{"type":"state","accumulate":true,"states":{"chat:current":{"text":" world"}}}
+{ "type": "state", "accumulate": true, "states": { "chat:current": { "text": " world" } } }
 ```
 
 Runtime concatenates `activeStates['chat:current'].text += ' world'`.
@@ -101,7 +117,11 @@ Runtime concatenates `activeStates['chat:current'].text += ' world'`.
 ### Accumulate — array append (chat history)
 
 ```json
-{"type":"state","accumulate":true,"states":{"chat:messages":{"messages":[{"id":"b-1","role":"bot","text":"Hello"}]}}}
+{
+  "type": "state",
+  "accumulate": true,
+  "states": { "chat:messages": { "messages": [{ "id": "b-1", "role": "bot", "text": "Hello" }] } }
+}
 ```
 
 Runtime concatenates `activeStates['chat:messages'].messages = [...existing, newMsg]`.
@@ -111,31 +131,42 @@ Runtime concatenates `activeStates['chat:messages'].messages = [...existing, new
 ### Invalid: partial without changed/removed
 
 ```json
-{"type":"state","full":false,"states":{"a":{"x":1}}}
+{ "type": "state", "full": false, "states": { "a": { "x": 1 } } }
 ```
 
 ### Invalid: changed key missing in states
 
 ```json
-{"type":"state","full":false,"states":{},"changed":["a"]}
+{ "type": "state", "full": false, "states": {}, "changed": ["a"] }
 ```
 
 ### Invalid: removed key present in states
 
 ```json
-{"type":"state","full":false,"states":{"a":{"x":1}},"removed":["a"]}
+{ "type": "state", "full": false, "states": { "a": { "x": 1 } }, "removed": ["a"] }
 ```
 
 ### Invalid: same key in changed and removed
 
 ```json
-{"type":"state","full":false,"states":{"a":{"x":1}},"changed":["a"],"removed":["a"]}
+{
+  "type": "state",
+  "full": false,
+  "states": { "a": { "x": 1 } },
+  "changed": ["a"],
+  "removed": ["a"]
+}
 ```
 
 ### Invalid: accumulate with removed
 
 ```json
-{"type":"state","accumulate":true,"states":{"chat:current":{"text":"x"}},"removed":["chat:typing"]}
+{
+  "type": "state",
+  "accumulate": true,
+  "states": { "chat:current": { "text": "x" } },
+  "removed": ["chat:typing"]
+}
 ```
 
 ### Invalid: accumulate as first frame in stream

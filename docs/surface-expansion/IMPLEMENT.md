@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 0 완료 — 다음은 단계 1 서버 코어·어댑터
+상태: 단계 1 완료 — 단계 2 외부 선행 릴리스 확인 필요
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -61,18 +61,18 @@
 DESIGN이 "구현에서 정한다"로 남긴 세부 선택이다. 표시한 단계 착수 시 결정하고 근거를 이 표에 기록한다. 결정 전까지
 TBD다.
 
-| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                     | 상태                                                            |
-| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                        | TBD                                                             |
-| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                              | TBD                                                             |
-| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                            | TBD                                                             |
-| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                            | TBD                                                             |
-| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                  | TBD                                                             |
-| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                   | TBD                                                             |
-| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | fixture 앱 1개를 각 어댑터로 띄워 같은 HTTP 시나리오 실행                                                                  | TBD                                                             |
-| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록 | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용 |
-| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                         | TBD                                                             |
-| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                            | TBD                                                             |
+| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                              |
+| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | TBD                                                                               |
+| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | TBD                                                                               |
+| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | TBD                                                                               |
+| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | TBD                                                                               |
+| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                               |
+| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | TBD                                                                               |
+| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교 |
+| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                   |
+| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | TBD                                                                               |
+| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                               |
 
 ---
 
@@ -138,62 +138,62 @@ layout이지만 사용자 API는 `ctx` 기반으로 일괄 전환한다. DESIGN 
 
 #### 코어
 
-- [ ] `engine/server/core/`(가칭)에 `createHandler({ manifest, basePath, security, bodyLimit, logger, onError,
+- [x] `engine/server/core/`(가칭)에 `createHandler({ manifest, basePath, security, bodyLimit, logger, onError,
 middleware })` → `{ fetch(request, platform) }`를 만든다.
-- [ ] 라우팅: 빌드 manifest의 경로 패턴으로 페이지 GET·`POST /transition/:name`·404를 처리한다. 지연 슬롯·액션·
+- [x] 라우팅: 빌드 manifest의 경로 패턴으로 페이지 GET·`POST /transition/:name`·404를 처리한다. 지연 슬롯·액션·
       prerender 경로는 단계 4·5·7에서 추가한다.
-- [ ] `SurfaceContext`: `request`·`url`·`params`·`cookies`(get/set/delete → `Set-Cookie`)·`locals`·`env`·`signal`
+- [x] `SurfaceContext`: `request`·`url`·`params`·`cookies`(get/set/delete → `Set-Cookie`)·`locals`·`env`·`signal`
       (클라이언트 abort + timeout 결합)·`platform`·`route.kind`. 요청마다 `nonce`를 만든다(사용은 단계 2).
-- [ ] 미들웨어 `onRequest(ctx, next)`와 `sequence()`. 조기 반환과 응답 가공을 지원한다.
-- [ ] 쿠키 쓰기 시점: 페이지 SSR은 Response 생성 전까지, transition은 첫 프레임 yield 전까지. 이후 호출은 무시하고
+- [x] 미들웨어 `onRequest(ctx, next)`와 `sequence()`. 조기 반환과 응답 가공을 지원한다.
+- [x] 쿠키 쓰기 시점: 페이지 SSR은 Response 생성 전까지, transition은 첫 프레임 yield 전까지. 이후 호출은 무시하고
       dev에서 경고·trace를 남긴다(DC-27).
-- [ ] transition 응답: async generator를 `ReadableStream` NDJSON으로 감싸고 `request.signal` abort 시
+- [x] transition 응답: async generator를 `ReadableStream` NDJSON으로 감싸고 `request.signal` abort 시
       `generator.return()`을 호출한다. 기존 timeout·done·error 처리를 그대로 옮긴다(한도 개정은 단계 4).
-- [ ] body 크기 한도(기본 100KB)를 스트림을 읽으며 강제하고 초과 시 413을 응답한다.
-- [ ] CSRF: 모든 POST에서 `Origin`(없으면 `Sec-Fetch-Site`)이 같은 origin인지 검사하고 다르면 403. 허용 origin 목록
+- [x] body 크기 한도(기본 100KB)를 스트림을 읽으며 강제하고 초과 시 413을 응답한다.
+- [x] CSRF: 모든 POST에서 `Origin`(없으면 `Sec-Fetch-Site`)이 같은 origin인지 검사하고 다르면 403. 허용 origin 목록
       옵션. DC-22 ④를 코어 공통 검사로 먼저 적용한다.
-- [ ] 모르는 요청 헤더를 거부하지 않는다. `onError(err, ctx)`로 SSR·transition 스트림 중간 오류를 전달한다(8.3-4·5).
-- [ ] `process.env` 직접 읽기를 없애고 옵션·`ctx.env`로 받는다. logger는 주입한다.
-- [ ] SSR 해시(`data-ssr-hash`, `node:crypto`)를 제거하고 관련 테스트를 고친다(DESIGN 11.2).
+- [x] 모르는 요청 헤더를 거부하지 않는다. `onError(err, ctx)`로 SSR·transition 스트림 중간 오류를 전달한다(8.3-4·5).
+- [x] `process.env` 직접 읽기를 없애고 옵션·`ctx.env`로 받는다. logger는 주입한다.
+- [x] SSR 해시(`data-ssr-hash`, `node:crypto`)를 제거하고 관련 테스트를 고친다(DESIGN 11.2).
 
 #### 빌드 registry
 
-- [ ] 최소 Vite 플러그인이 route·transition·asset manifest를 정적 import하는 서버 엔트리를 생성한다. 실행 중
+- [x] 최소 Vite 플러그인이 route·transition·asset manifest를 정적 import하는 서버 엔트리를 생성한다. 실행 중
       `readdir`·`fs.readFileSync`(`routeScanner.ts`·`bootstrap.ts`·`assets.ts`)를 없앤다.
-- [ ] dev는 Vite SSR 모듈 로드로 같은 manifest 생성 함수를 호출하고, 코어 핸들러를 Vite dev 서버에 연결한다(DC-28 ④).
+- [x] dev는 Vite SSR 모듈 로드로 같은 manifest 생성 함수를 호출하고, 코어 핸들러를 Vite dev 서버에 연결한다(DC-28 ④).
 
 #### 어댑터 (`state-surface/adapters/*`)
 
-- [ ] `node`: `node:http` ↔ Request/Response 변환, 정적 파일 서빙(캐시 헤더), graceful shutdown(`gracefulShutdown.ts`
+- [x] `node`: `node:http` ↔ Request/Response 변환, 정적 파일 서빙(캐시 헤더), graceful shutdown(`gracefulShutdown.ts`
       이전), CLI 실행. 기본 어댑터.
-- [ ] `express`: `app.use(surface())`. 원시 요청 스트림을 읽으며, 앞선 body parser와 함께 쓸 때의 순서를 가이드한다.
-- [ ] `bun`: `Bun.serve({ fetch })`, `Bun.file` 정적 서빙.
-- [ ] `deno`: `Deno.serve(handler)`, 정적 서빙, 권한 플래그(net·read·env) 문서화.
-- [ ] `cloudflare`: `export default { fetch }`, Workers Static Assets, `platform.env`.
-- [ ] 어댑터 계약 `{ name, serverEntry, readStatic, supports }` 타입을 정의한다(`readStatic` 사용은 단계 7).
-- [ ] `surface({ adapter })` 옵션(기본 node), `express`를 optional peerDependency로, `package.json` `exports`에
+- [x] `express`: `app.use(surface())`. 원시 요청 스트림을 읽으며, 앞선 body parser와 함께 쓸 때의 순서를 가이드한다.
+- [x] `bun`: `Bun.serve({ fetch })`, `Bun.file` 정적 서빙.
+- [x] `deno`: `Deno.serve(handler)`, 정적 서빙, 권한 플래그(net·read·env) 문서화.
+- [x] `cloudflare`: `export default { fetch }`, Workers Static Assets, `platform.env`.
+- [x] 어댑터 계약 `{ name, serverEntry, readStatic, supports }` 타입을 정의한다(`readStatic` 사용은 단계 7).
+- [x] `surface({ adapter })` 옵션(기본 node), `express`를 optional peerDependency로, `package.json` `exports`에
       어댑터 subpath 추가(컴파일 배포는 단계 8).
 
 #### 사용자 코드 일괄 전환
 
-- [ ] `RouteModule`의 `params(req)`·`initial(req)`·`boot.params(req)`를 ctx로 바꾸고, `shared/i18n.ts`를
+- [x] `RouteModule`의 `params(req)`·`initial(req)`·`boot.params(req)`를 ctx로 바꾸고, `shared/i18n.ts`를
       `getLang(ctx)`로 바꾼다.
-- [ ] `routes/_shared/hooks.ts`와 `TransitionHooks`를 제거하고 `switch-lang` transition이 첫 yield 전에
+- [x] `routes/_shared/hooks.ts`와 `TransitionHooks`를 제거하고 `switch-lang` transition이 첫 yield 전에
       `ctx.cookies.set`으로 쿠키를 쓴다.
-- [ ] 저장소 루트 `server.ts`를 node 어댑터 엔트리로 바꾸고 scaffold overrides의 `server.ts`도 갱신한다.
+- [x] 저장소 루트 `server.ts`를 node 어댑터 엔트리로 바꾸고 scaffold overrides의 `server.ts`도 갱신한다.
 
 #### CI
 
-- [ ] 적합성 스위트(`conformance/`): SSR·transition 스트림·abort·404·BASE_PATH·cookie·미들웨어 조기 반환/가공.
+- [x] 적합성 스위트(`conformance/`): SSR·transition 스트림·abort·404·BASE_PATH·cookie·미들웨어 조기 반환/가공.
       전환 전 Express 결과를 스냅샷으로 고정해 비교한다. 이후 단계에서 시나리오를 추가한다.
-- [ ] CI 매트릭스: Node(기본)·Bun·Deno, Workers는 production 빌드를 `wrangler dev`(workerd)로 실행해 같은 스위트.
-- [ ] 코어 번들 검사: lint 규칙과 번들 스캔으로 `node:*`·express import 0을 확인한다.
+- [x] CI 매트릭스: Node(기본)·Bun·Deno, Workers는 production 빌드를 `wrangler dev`(workerd)로 실행해 같은 스위트.
+- [x] 코어 번들 검사: lint 규칙과 번들 스캔으로 `node:*`·express import 0을 확인한다.
 
 #### Baseline 테스트
 
-- [ ] 기존 서버 테스트(`routeHandler`·`transition`·`basePath.integration`·`demoIntegration` 등)를 코어 경유로 이전해 통과.
-- [ ] ctx 쿠키 시점 규칙, 미들웨어 합성, CSRF 403, body 413, abort 시 generator 종료 단위 테스트.
-- [ ] 적합성 스위트가 5개 어댑터에서 통과.
+- [x] 기존 서버 테스트(`routeHandler`·`transition`·`basePath.integration`·`demoIntegration` 등)를 코어 경유로 이전해 통과.
+- [x] ctx 쿠키 시점 규칙, 미들웨어 합성, CSRF 403, body 413, abort 시 generator 종료 단위 테스트.
+- [x] 적합성 스위트가 5개 어댑터에서 통과.
 
 #### 제거 확인
 
@@ -713,9 +713,10 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 ### 실행 기록
 
-| 단계 | 날짜       | 커밋                                  | `pnpm test`(파일/개수) | 측정·판정                                                                   | 비고                                                                       |
-| ---- | ---------- | ------------------------------------- | ---------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5` | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정 | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
+| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                         | 비고                                                                       |
+| ---- | ---------- | ---------------------------------------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정       | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
+| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9 | IC-07 결정; portable core/type guard 통과                                  |
 
 ### 단계 0 실행 상세
 
@@ -740,10 +741,35 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 초기 하네스 실패(기본 브라우저 캐시 경로 누락, UI clear 기대값, 안정화 click 때문에 채팅 응답이 끝난 뒤 취소 시도)는
   원인 확인 후 각각 cache export·실제 clear 계약·Enter submit으로 수정해 재검증했다. 활성화·persist 제약은 해결했다고 표시하지 않는다.
 
+### 단계 1 실행 상세 (2026-10-15)
+
+- `createHandler({manifest,...}).fetch(Request,platform)`·SurfaceContext·sequence 미들웨어·쿠키·nonce·env·body 한도·CSRF·stream abort/timeout·onError를 구현했다.
+  `createApp`, Express req 기반 API, TransitionHooks, hooks.ts, SSR hash를 제거했다. 기본 Node HTTP와 optional Express peer로 분리했다.
+- `engine/vite.ts`가 build/dev 공통 정적 registry와 asset 설정을 생성한다. 실행 중 readdir/readFileSync 탐색은 없다.
+  core source + 독립 edge bundle 검사와 `pnpm typecheck:server`가 통과한다. 빌드용 탐색은 `engine/build/`, 정적 파일 async 읽기는 어댑터에만 있다.
+- Node 24.19.0·Express 5.2.1·Bun 1.3.0·Deno 2.5.4·Wrangler 4.151.0/workerd에서 같은 fixture·8개 시나리오씩 40개 통과.
+  SSR·env·cookie·nonce·동적 params·HEAD·404·BASE_PATH·미들웨어·점진 NDJSON·첫 프레임 쿠키·CSRF·본문 한도·오류 masking·취소/finally·정적 자산 MIME/cache/경계 포함.
+- Worker idle 취소 실패는 구/신 Wrangler와 최소 workerd probe에서 진단했다. native TransformStream writer의 idle 빈 줄 heartbeat(250ms)와 waitUntil cleanup으로 해결했다.
+  기존 decoder의 빈 줄 무시 계약을 유지한다. 취소 시나리오는 전용 소켓을 첫 state 프레임 직후 끊고, timeout(1s) 전 generator finally가 실행되는지 검사한다.
+  `enable_request_signal` 플래그가 필요하며 코드·설정·문서에 기록했다. 판정 assertion을 끄거나 skip하지 않았다.
+- 단위/통합 테스트: 35개 파일/459개 통과. 종전 hash 전용 6개를 제거하고 context 4개·stream cleanup/cookie 2개·template 오류 reporting 1개를 추가했다.
+  기존 hook 검증은 ctx/middleware 검증으로 바꿨다. 등록·렌더·라우팅의 기존 테스트는 새 코어를 경유한다.
+- Express 변경 전 저장한 SSR 9페이지·transition 2개를 정확히 비교했다(정규화는 hash 속성만 제거). 전부 동일하다.
+  생산 예외 상세는 onError로 보고하고 클라이언트에는 가리며, 의도적으로 yield한 error 프레임은 그대로 유지한다.
+- production 루트 parity 9 + spike 4, `/demo` parity 9 통과. dev SSR·언어 전환·cookie 동작 통과.
+  5개 어댑터의 실제 데모 앱도 virtual entry로 빌드했다. 기본 산출물은 빈 BASE_PATH Node 앱으로 복원했다.
+- 테스트용 앱 helper를 프로젝트 `testing/`로 옮기고 scaffold 원본·Vite/Vitest overrides·Node 엔트리·타입 선언·명령을 같은 단계에서 갱신했다.
+  생성물은 `pnpm build`에서 재생성했다. 독립 배포 패키지의 컴파일·새 scaffold 설치 행렬 최종 판정은 예정대로 단계 8이다.
+- GitHub Actions에 5-runtime matrix와 core/type guard·legacy parity·adapter app build를 추가했다. 현재 증거는 클라우드 로컬 실행이며 원격 CI 실행 완료를 주장하지 않는다.
+- 전체 `tsc --noEmit`은 기존 client/template 타입 문제로 실패한다. `611b37e` archive에서도 47개 오류가 재현됐다.
+  이번 변경의 서버 그래프는 별도 strict typecheck로 검증했다. 남은 전체 오류는 baseline과 정규화 비교하고 신규 오류는 남기지 않았다.
+  이는 build·Vitest의 실패가 아니며 단계 8 타입 진단 완성 때 추적한다.
+- 문서·제거 검색·format:check·전체 build·frozen install을 검증했다. [서버 가이드](../server-adapters.md), PROTOCOL, README, AGENTS 및 4개 정본 문서를 갱신했다.
+
 ### 상태
 
-- **완료**: 단계 0 기준선·E2E·성능 하네스·위험 spike·CI 설정과 실행 기록. IC-08 결정.
-- **다음**: 단계 1 시작 시 IC-07(공통 적합성 fixture/어댑터 실행 방식)을 결정하고 웹 표준 서버 코어와 어댑터를 구현한다.
-- **블로커**: 단계 2 진입 전에 Lithent SSR 속성 이스케이프 보강 릴리스 필요. 단계 1은 진행 가능하다.
-  hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다.
-- **기준 커밋**: `94e4046` (단계 0 착수 직전). 이 단계의 변경·실행 증거는 해당 단계 0 커밋과 `perf/` 참조.
+- **완료**: 단계 0과 단계 1. IC-07(공통 fixture + 실제 runtime HTTP)·IC-08 결정.
+- **다음**: 단계 2 진입 전에 IC-01(namespaced JSX 최종 선택)·IC-02(Lithent SSR 이스케이프 릴리스)를 확정하고 Page/Slot·JSX 구현에 들어간다.
+- **블로커**: 현재 고정 Lithent 1.21.7은 속성 이스케이프 보강이 없어 단계 2 Entry를 충족하지 않는다. 별도 upstream 릴리스 확인이 필요하다.
+  hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 클라이언트·템플릿의 기존 전체 tsc 오류는 단계 8에서 추적한다.
+- **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`. 단계 1 변경은 이번 단계 종료 커밋 및 `conformance/`·테스트 기록 참조.

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createApp } from './index.js';
-import { transitionHooks } from '../../routes/_shared/hooks.js';
+import { createDemo } from '../../testing/server.js';
 
 let app: any;
 beforeAll(async () => {
-  ({ app } = await createApp({ hooks: transitionHooks }));
+  ({ server: app } = await createDemo({}));
 });
 
 describe('demo SSR page', () => {
@@ -21,7 +20,7 @@ describe('demo SSR page', () => {
 
     // SSR-filled content
     expect(res.text).toContain('StateSurface');
-    expect(res.text).toContain('data-ssr-hash');
+    expect(res.text).not.toContain('data-ssr-hash');
 
     // __STATE__ script present
     expect(res.text).toContain('id="__STATE__"');

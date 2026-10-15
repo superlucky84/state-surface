@@ -6,11 +6,11 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { createApp } from './index.js';
+import { createDemo } from '../../testing/server.js';
 
 let app: any;
 beforeAll(async () => {
-  ({ app } = await createApp());
+  ({ server: app } = await createDemo());
 });
 import { decodeFrames } from '../shared/ndjson.js';
 import { StateSurface } from '../client/stateSurface.js';

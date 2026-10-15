@@ -46,3 +46,6 @@ coverage/
 playwright-report/
 test-results/
 perf/results/
+
+# Local Workers state
+.wrangler/

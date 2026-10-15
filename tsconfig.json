@@ -15,9 +15,13 @@
     "paths": {
       "state-surface": ["./engine/index.ts"],
       "state-surface/server": ["./engine/server.ts"],
-      "state-surface/client": ["./engine/client.ts"]
+      "state-surface/client": ["./engine/client.ts"],
+      "state-surface/adapters/*": ["./engine/adapters/*.ts"],
+      "state-surface/vite": ["./engine/vite.ts"],
+      "state-surface/internal/assets": ["./engine/server/assets.ts"],
+      "state-surface/internal/basePath": ["./engine/shared/basePath.ts"]
     }
   },
-  "include": ["engine", "server.ts", "client", "shared", "routes", "layouts"],
+  "include": ["engine", "server.ts", "client", "shared", "routes", "layouts", "testing"],
   "exclude": ["node_modules", "dist"]
 }

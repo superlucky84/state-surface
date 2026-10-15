@@ -16,5 +16,5 @@ export default {
 
   transition: 'search',
 
-  initial: req => searchContent(getLang(req)),
+  initial: ctx => searchContent(getLang(ctx)),
 } satisfies RouteModule;

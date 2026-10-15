@@ -36,7 +36,7 @@ describe('hydration mismatch fallback', () => {
 
   it('hydrates normally when SSR content matches', () => {
     document.body.innerHTML = `
-      <h-state name="page:header" data-ssr-hash="abc123">
+      <h-state name="page:header">
         <header>Blog</header>
       </h-state>
     `;
@@ -56,7 +56,7 @@ describe('hydration mismatch fallback', () => {
   });
 
   it('still hydrates anchors that have no SSR content', () => {
-    // Anchor exists but was not filled by SSR (no data-ssr-hash)
+    // Anchor exists but was not filled by SSR (no SSR content)
     document.body.innerHTML = `
       <h-state name="page:header"></h-state>
       <h-state name="page:content"></h-state>

@@ -1,6 +1,7 @@
+import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../../shared/i18n.js';
+import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
@@ -29,8 +30,8 @@ const BOT_RESPONSES: Record<string, { en: string; ko: string }> = {
     ko: 'StateSurface는 HTTP POST를 통한 NDJSON으로 상태를 스트리밍합니다. 서버가 데이터가 준비되는 대로 프레임을 하나씩 yield하면 클라이언트가 점진적으로 적용합니다 — WebSocket 없이, 특별한 프로토콜 없이.',
   },
   hydration: {
-    en: 'Hydration in StateSurface is per h-state root, not full-page. SSR generates a sha256 hash for each anchor. On client boot, hashes are compared — mismatch triggers a client re-render from state.',
-    ko: 'StateSurface의 하이드레이션은 전체 페이지가 아닌 h-state 루트별로 이루어집니다. SSR이 각 앵커에 sha256 해시를 생성합니다. 클라이언트 부트 시 해시를 비교하여 불일치 시 상태에서 재렌더링합니다.',
+    en: 'Hydration in StateSurface is per h-state root, not full-page. The client hydrates each SSR anchor from its initial snapshot, then applies streamed updates.',
+    ko: 'StateSurface의 하이드레이션은 전체 페이지가 아닌 h-state 루트별로 이루어집니다. 클라이언트는 각 SSR 앵커를 초기 스냅샷으로 하이드레이션한 뒤 스트리밍 갱신을 적용합니다.',
   },
   abort: {
     en: 'The abort-previous policy means starting a new transition immediately cancels any in-flight stream. In this chatbot, sending a new message while the bot is responding cancels the current generation.',
@@ -56,9 +57,12 @@ function makeBotResponse(userText: string, lang: Lang): string {
     : 'Try asking about: surface, template, transition, action, streaming, hydration, abort, ndjson, or accumulate!';
 }
 
-async function* chat(params: Record<string, unknown>): AsyncGenerator<StateFrame, void, unknown> {
+async function* chat(
+  params: Record<string, unknown>,
+  ctx: SurfaceContext
+): AsyncGenerator<StateFrame, void, unknown> {
   const userText = String(params.message ?? '').trim();
-  const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
+  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
 
   if (!userText) {
     yield { type: 'done' };

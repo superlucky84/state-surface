@@ -1,226 +1,253 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import request from 'supertest';
-import { createApp } from './index.js';
-import type { StateFrame } from '../shared/protocol.js';
+import { describe, it, expect, vi } from 'vitest';
+import { createHandler } from './core/handler.js';
 import { decodeFrames } from '../shared/ndjson.js';
-import type { TransitionHandler, TransitionRegistry } from './transition.js';
+import type { TransitionHandler } from './transition.js';
+import type { HandlerOptions } from './core/handler.js';
 
-let app: any;
-let appWithHooks: any;
-let appWithShortTimeout: any;
-let appWithSmallBodyLimit: any;
-let transitionRegistries: TransitionRegistry[] = [];
-const afterHook = vi.fn();
-
-function registerOnAllApps(name: string, handler: TransitionHandler) {
-  for (const registry of transitionRegistries) {
-    registry.registerTransition(name, handler);
-  }
+function fixture(
+  transitions: Record<string, TransitionHandler>,
+  options: Partial<HandlerOptions> = {}
+) {
+  return createHandler({
+    development: true,
+    ...options,
+    manifest: { routes: [], templates: {}, transitions },
+  });
 }
-
-beforeAll(async () => {
-  ({ app } = await createApp());
-  ({ app: appWithHooks } = await createApp({
-    hooks: {
-      onBeforeTransition({ body }) {
-        return { ...body, fromHook: true };
-      },
-      onAfterTransition({ name }) {
-        afterHook(name);
-      },
-    },
-  }));
-  ({ app: appWithShortTimeout } = await createApp({ transitionTimeout: 20 }));
-  ({ app: appWithSmallBodyLimit } = await createApp({ bodyLimit: '16b' }));
-
-  transitionRegistries = [
-    app.locals.transitionRegistry,
-    appWithHooks.locals.transitionRegistry,
-    appWithShortTimeout.locals.transitionRegistry,
-    appWithSmallBodyLimit.locals.transitionRegistry,
-  ];
-});
-
-describe('POST /transition/:name', () => {
-  beforeEach(() => {
-    afterHook.mockClear();
-    for (const registry of transitionRegistries) {
-      registry.clearRegistry();
-    }
-
-    registerOnAllApps('test:article', async function* (params) {
-      yield {
-        type: 'state',
-        states: {
-          'page:article': { articleId: params.articleId },
-          loading: { articleId: params.articleId },
-        },
-      } satisfies StateFrame;
-
-      yield {
-        type: 'state',
-        full: false,
-        states: { 'content:loaded': { title: 'Hello' } },
-        changed: ['content:loaded'],
-        removed: ['loading'],
-      } satisfies StateFrame;
-
-      yield { type: 'done' } satisfies StateFrame;
-    });
+function post(
+  path = '/transition/example',
+  body: unknown = {},
+  headers: Record<string, string> = {}
+) {
+  return new Request('https://surface.test' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
   });
+}
+const valid: TransitionHandler = async function* (params) {
+  yield { type: 'state', states: { payload: params } };
+  yield {
+    type: 'state',
+    full: false,
+    states: { b: { ok: true } },
+    changed: ['b'],
+    removed: ['loading'],
+  };
+  yield { type: 'done' };
+};
 
-  it('returns 404 for unknown transition', async () => {
-    const res = await request(app).post('/transition/unknown').send({});
-    expect(res.status).toBe(404);
-  });
-
-  it('applies default security headers on transition responses', async () => {
-    const res = await request(app).post('/transition/test:article').send({ articleId: 1 });
-
-    expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
-  });
-
-  it('streams valid NDJSON for known transition', async () => {
-    const res = await request(app)
-      .post('/transition/test:article')
-      .send({ articleId: 1 })
-      .expect('Content-Type', /ndjson/);
-
-    const frames = decodeFrames(res.text);
+describe('web transition transport', () => {
+  it('streams full, partial, removed and done frames with security headers', async () => {
+    const response = await fixture({ example: valid }).fetch(post(undefined, { q: 1 }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('ndjson');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    const frames = decodeFrames(await response.text());
     expect(frames).toHaveLength(3);
-
-    expect(frames[0].type).toBe('state');
-    if (frames[0].type === 'state') {
-      expect(frames[0].full).not.toBe(false);
-      expect(frames[0].states).toHaveProperty('page:article');
-      expect(frames[0].states).toHaveProperty('loading');
-    }
-
-    expect(frames[1].type).toBe('state');
-    if (frames[1].type === 'state') {
-      expect(frames[1].full).toBe(false);
-      expect(frames[1].changed).toContain('content:loaded');
-      expect(frames[1].removed).toContain('loading');
-    }
-
+    expect(frames[0]).toMatchObject({ type: 'state', states: { payload: { q: 1 } } });
+    expect(frames[1]).toMatchObject({ full: false, removed: ['loading'] });
     expect(frames[2].type).toBe('done');
   });
-
-  it('sends error frame for invalid frames from handler', async () => {
-    registerOnAllApps('test:bad', async function* () {
-      yield {
-        type: 'state',
-        full: false,
-        states: { a: { x: 1 } },
-      } as any;
-    });
-
-    const res = await request(app).post('/transition/test:bad').send({});
-    const frames = decodeFrames(res.text);
-
-    expect(frames.some(f => f.type === 'error')).toBe(true);
+  it('returns 404 for unknown names and isolates handler manifests', async () => {
+    expect((await fixture({}).fetch(post())).status).toBe(404);
+    expect((await fixture({ example: valid }).fetch(post())).status).toBe(200);
   });
-
-  it('sends error frame when transition generator throws', async () => {
-    registerOnAllApps('test:throws', async function* () {
-      yield {
-        type: 'state',
-        states: { a: { ok: true } },
-      } satisfies StateFrame;
-
-      throw new Error('transition exploded');
+  it('rejects invalid frames without forwarding them', async () => {
+    const response = await fixture({
+      example: async function* () {
+        yield { type: 'state', full: false, states: { a: 1 } } as any;
+      },
+    }).fetch(post());
+    expect(decodeFrames(await response.text())).toEqual([
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('Invalid frame') }),
+    ]);
+  });
+  it('reports stream errors through onError and hides internals in production', async () => {
+    const onError = vi.fn();
+    const response = await fixture(
+      {
+        example: async function* () {
+          yield { type: 'state', states: {} };
+          throw new Error('secret');
+        },
+      },
+      { onError, development: false }
+    ).fetch(post());
+    expect(decodeFrames(await response.text())).toEqual([
+      { type: 'state', states: {} },
+      { type: 'error', message: 'Transition failed' },
+    ]);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+  it('times out before the first yield and discards pending cookies', async () => {
+    const response = await fixture(
+      {
+        example: async function* (_, ctx) {
+          ctx.cookies.set('leak', 'no');
+          await new Promise(r => setTimeout(r, 60));
+          yield { type: 'done' };
+        },
+      },
+      { transitionTimeout: 10 }
+    ).fetch(post());
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await response.text()).toContain('Transition timeout');
+  });
+  it('times out after a frame and closes the stream', async () => {
+    const response = await fixture(
+      {
+        example: async function* (_, ctx) {
+          yield { type: 'state', states: {} };
+          await new Promise(resolve =>
+            ctx.signal.addEventListener('abort', resolve, { once: true })
+          );
+          yield { type: 'done' };
+        },
+      },
+      { transitionTimeout: 15 }
+    ).fetch(post());
+    expect(decodeFrames(await response.text()).at(-1)).toMatchObject({
+      type: 'error',
+      message: expect.stringContaining('timeout'),
     });
-
-    const res = await request(app).post('/transition/test:throws').send({});
-    const frames = decodeFrames(res.text);
-
-    expect(frames).toHaveLength(2);
-    expect(frames[0].type).toBe('state');
-    expect(frames[1].type).toBe('error');
-    if (frames[1].type === 'error') {
-      expect(frames[1].message).toContain('transition exploded');
+  });
+  it('enforces streamed bytes rather than trusting Content-Length', async () => {
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('{"q":"'));
+        c.enqueue(new TextEncoder().encode('x'.repeat(50) + '"}'));
+        c.close();
+      },
+    });
+    const response = await fixture({ example: valid }, { bodyLimit: 16 }).fetch(
+      new Request('https://surface.test/transition/example', {
+        method: 'POST',
+        body,
+        duplex: 'half',
+      } as RequestInit)
+    );
+    expect(response.status).toBe(413);
+  });
+  it('rejects malformed JSON and arrays', async () => {
+    for (const body of ['{', '[]', 'null']) {
+      const response = await fixture({ example: valid }).fetch(
+        new Request('https://surface.test/transition/example', { method: 'POST', body })
+      );
+      expect(response.status).toBe(400);
     }
   });
-
-  it('emits timeout error frame when transition exceeds configured timeout', async () => {
-    registerOnAllApps('test:timeout', async function* () {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      yield { type: 'done' } satisfies StateFrame;
-    });
-
-    const res = await request(appWithShortTimeout).post('/transition/test:timeout').send({});
-    const frames = decodeFrames(res.text);
-
-    expect(frames.some(frame => frame.type === 'error')).toBe(true);
-    expect(frames.some(frame => frame.type === 'done')).toBe(false);
-    const timeoutFrame = frames.find(frame => frame.type === 'error');
-    if (timeoutFrame?.type === 'error') {
-      expect(timeoutFrame.message).toContain('Transition timeout');
-    }
+  it('checks Origin then Sec-Fetch-Site for every POST, including early middleware', async () => {
+    const forbidden: Record<string, string>[] = [
+      { origin: 'https://evil.test' },
+      { 'sec-fetch-site': 'cross-site' },
+      { 'sec-fetch-site': 'same-site' },
+      { origin: 'null' },
+    ];
+    for (const headers of forbidden)
+      expect(
+        (
+          await fixture({ example: valid }, { middleware: [() => new Response('early')] }).fetch(
+            post(undefined, {}, headers)
+          )
+        ).status
+      ).toBe(403);
+    expect(
+      (
+        await fixture({ example: valid }).fetch(
+          post(undefined, {}, { origin: 'https://surface.test', 'x-trace-id': 'allowed' })
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await fixture(
+          { example: valid },
+          { security: { allowedOrigins: ['https://trusted.test'] } }
+        ).fetch(post(undefined, {}, { origin: 'https://trusted.test' }))
+      ).status
+    ).toBe(200);
   });
-
-  it('respects bodyLimit option for transition requests', async () => {
-    const res = await request(appWithSmallBodyLimit)
-      .post('/transition/test:article')
-      .send({ payload: 'x'.repeat(128) });
-
-    expect(res.status).toBe(413);
+  it('commits cookies before first yield, ignores late writes, and supports deletion', async () => {
+    const warn = vi.fn();
+    const response = await fixture(
+      {
+        example: async function* (_, ctx) {
+          ctx.cookies.set('a', 'first');
+          ctx.cookies.delete('old');
+          yield { type: 'state', states: {} };
+          ctx.cookies.set('a', 'late');
+          yield { type: 'done' };
+        },
+      },
+      { logger: { level: 'warn', warn, debug: vi.fn(), info: vi.fn(), error: vi.fn() } }
+    ).fetch(post());
+    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.get('set-cookie')).toContain('a=first');
+    await response.text();
+    expect(warn).toHaveBeenCalledOnce();
   });
-
-  it('keeps default body when hooks are not registered', async () => {
-    registerOnAllApps('test:no-hooks', async function* (params) {
-      yield {
-        type: 'state',
-        states: { payload: params },
-      } satisfies StateFrame;
-      yield { type: 'done' } satisfies StateFrame;
-    });
-
-    const res = await request(app).post('/transition/test:no-hooks').send({ q: 1 });
-    const frames = decodeFrames(res.text);
-
-    expect(frames[0].type).toBe('state');
-    if (frames[0].type === 'state') {
-      expect(frames[0].states.payload).toMatchObject({ q: 1 });
-      expect(frames[0].states.payload).not.toHaveProperty('fromHook');
-    }
+  it('closes a cooperative generator when a Request is aborted', async () => {
+    const closed = vi.fn();
+    const controller = new AbortController();
+    const response = await fixture({
+      example: async function* (_, ctx) {
+        try {
+          yield { type: 'state', states: {} };
+          await new Promise(resolve =>
+            ctx.signal.addEventListener('abort', resolve, { once: true })
+          );
+          yield { type: 'done' };
+        } finally {
+          closed();
+        }
+      },
+    }).fetch(
+      new Request('https://surface.test/transition/example', {
+        method: 'POST',
+        body: '{}',
+        signal: controller.signal,
+      })
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    const pending = reader.read();
+    controller.abort();
+    await pending;
+    await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
   });
-
-  it('applies onBeforeTransition body transform when hooks are registered', async () => {
-    registerOnAllApps('test:with-hooks', async function* (params) {
-      yield {
-        type: 'state',
-        states: { payload: params },
-      } satisfies StateFrame;
-      yield { type: 'done' } satisfies StateFrame;
-    });
-
-    const res = await request(appWithHooks).post('/transition/test:with-hooks').send({ q: 1 });
-    const frames = decodeFrames(res.text);
-
-    expect(frames[0].type).toBe('state');
-    if (frames[0].type === 'state') {
-      expect(frames[0].states.payload).toMatchObject({ q: 1, fromHook: true });
-    }
+  it('discards cookies when a generator throws before the first frame', async () => {
+    const response = await fixture({
+      example: async function* (_, ctx) {
+        ctx.cookies.set('secret', 'discard');
+        throw new Error('failed before yield');
+      },
+    }).fetch(post());
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await response.text()).toContain('failed before yield');
   });
-
-  it('calls onAfterTransition after stream completion', async () => {
-    await request(appWithHooks).post('/transition/test:article').send({ articleId: 7 });
-
-    expect(afterHook).toHaveBeenCalledWith('test:article');
-    expect(afterHook).toHaveBeenCalledTimes(1);
-  });
-
-  it('isolates transition registries per app instance', async () => {
-    transitionRegistries[0].registerTransition('test:isolated', async function* () {
-      yield { type: 'done' } satisfies StateFrame;
-    });
-
-    const ok = await request(app).post('/transition/test:isolated').send({});
-    expect(ok.status).toBe(200);
-
-    const missing = await request(appWithHooks).post('/transition/test:isolated').send({});
-    expect(missing.status).toBe(404);
+  it('cancels an in-flight body read and releases the generator', async () => {
+    const closed = vi.fn();
+    const response = await fixture({
+      example: async function* (_, ctx) {
+        try {
+          yield { type: 'state', states: {} };
+          await new Promise(resolve =>
+            ctx.signal.addEventListener('abort', resolve, { once: true })
+          );
+          yield { type: 'done' };
+        } finally {
+          closed();
+        }
+      },
+    }).fetch(post());
+    const reader = response.body!.getReader();
+    await reader.read();
+    const pending = reader.read();
+    await reader.cancel();
+    expect(await pending).toEqual({ value: undefined, done: true });
+    await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
   });
 });

@@ -93,3 +93,34 @@ jobs:
         with:
           name: performance-report
           path: perf/results/
+
+  conformance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [node, express, bun, deno, cloudflare]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - if: matrix.adapter == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+      - if: matrix.adapter == 'deno'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck:server
+      - run: pnpm build:conformance
+      - run: pnpm check:core
+      - run: pnpm test:conformance ${{ matrix.adapter }}
+      - if: matrix.adapter == 'node'
+        run: pnpm build && pnpm test:legacy && pnpm build:adapter-app

@@ -13,5 +13,5 @@ export default {
     return baseSurface(body, stateScript);
   },
 
-  initial: req => examplesContent(getLang(req)),
+  initial: ctx => examplesContent(getLang(ctx)),
 } satisfies RouteModule;

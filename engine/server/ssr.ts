@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { UiPatch } from '../shared/protocol.js';
 
 // ── safeStateJSON ──
@@ -20,7 +19,6 @@ export function safeStateJSON(value: unknown): string {
 
 /**
  * Fill <h-state name="..."> anchors in HTML with rendered template content.
- * Also injects data-ssr-hash for hydration mismatch detection.
  * When ui is provided, injects class and style attributes for FOUC prevention.
  *
  * renderTemplate: given a state name and its data, returns the inner HTML string.
@@ -43,7 +41,6 @@ export function fillHState(
       }
 
       const inner = renderTemplate(name, data);
-      const hash = ssrHash(inner);
 
       // Build UI attributes (class + style from CSS vars)
       let uiAttrs = '';
@@ -60,7 +57,7 @@ export function fillHState(
         }
       }
 
-      return `<h-state name="${name}"${attrs}${uiAttrs} data-ssr-hash="${hash}">${inner}</h-state>`;
+      return `<h-state name="${name}"${attrs}${uiAttrs}>${inner}</h-state>`;
     }
   );
 }
@@ -97,60 +94,4 @@ export function buildBootScript(boot: {
  */
 export function buildBasePathScript(basePath: string): string {
   return `<script id="__BASE_PATH__" type="application/json">${safeStateJSON(basePath)}</script>`;
-}
-
-// ── SSR Hash ──
-
-/**
- * Canonicalize HTML and produce a sha256 hash for hydration mismatch detection.
- *
- * Canonicalization rules (from DESIGN.md):
- * - Collapse whitespace runs, trim edges
- * - Sort attributes by key
- * - Exclude HTML comments
- * - Exclude dynamic attributes (nonce, data-timestamp, etc.)
- */
-export function ssrHash(html: string): string {
-  const canonical = canonicalize(html);
-  return createHash('sha256').update(canonical).digest('hex').slice(0, 12);
-}
-
-const DYNAMIC_ATTRS = new Set(['nonce', 'data-timestamp', 'data-nonce']);
-
-function canonicalize(html: string): string {
-  let result = html;
-
-  // Remove HTML comments
-  result = result.replace(/<!--[\s\S]*?-->/g, '');
-
-  // Sort attributes on tags
-  result = result.replace(
-    /<(\w[\w-]*)((?:\s+[^>]*?)?)>/g,
-    (_match, tag: string, attrStr: string) => {
-      if (!attrStr.trim()) return `<${tag}>`;
-
-      const attrs: Array<[string, string]> = [];
-      const attrRegex = /\s+([\w-]+)(?:="([^"]*)")?/g;
-      let m: RegExpExecArray | null;
-
-      while ((m = attrRegex.exec(attrStr)) !== null) {
-        const [, key, value] = m;
-        // Exclude dynamic attributes
-        if (!DYNAMIC_ATTRS.has(key)) {
-          attrs.push([key, value !== undefined ? `${key}="${value}"` : key]);
-        }
-      }
-
-      // Sort by attribute name
-      attrs.sort((a, b) => a[0].localeCompare(b[0]));
-      const sorted = attrs.map(([, full]) => full).join(' ');
-
-      return `<${tag}${sorted ? ' ' + sorted : ''}>`;
-    }
-  );
-
-  // Collapse whitespace runs, trim
-  result = result.replace(/\s+/g, ' ').trim();
-
-  return result;
 }

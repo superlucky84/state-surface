@@ -7,7 +7,11 @@
   "exports": {
     ".": "./engine/index.ts",
     "./server": "./engine/server.ts",
-    "./client": "./engine/client.ts"
+    "./client": "./engine/client.ts",
+    "./vite": "./engine/vite.ts",
+    "./adapters/*": "./engine/adapters/*.ts",
+    "./internal/assets": "./engine/server/assets.ts",
+    "./internal/basePath": "./engine/shared/basePath.ts"
   },
   "files": [
     "engine/**/*.ts",
@@ -43,17 +47,23 @@
   },
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "dev": "tsx watch server.ts",
+    "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false && node scripts/build-scaffold.mjs",
     "start": "NODE_ENV=production node dist/server.js",
     "test": "vitest run",
-    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts'",
-    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts'",
+    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
+    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
     "build:scaffold": "node scripts/build-scaffold.mjs",
     "test:e2e": "playwright test",
     "perf": "node perf/measure.mjs",
     "perf:compare": "node perf/compare.mjs",
-    "test:spikes": "playwright test --project=spikes"
+    "test:spikes": "playwright test --project=spikes",
+    "build:conformance": "node conformance/build.mjs",
+    "test:conformance": "node conformance/run.mjs",
+    "check:core": "node conformance/guard.mjs",
+    "test:legacy": "node conformance/legacy.mjs",
+    "typecheck:server": "tsc -p tsconfig.server.json",
+    "build:adapter-app": "tsx conformance/app-build.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -68,6 +78,7 @@
     "@types/prismjs": "^1.26.6",
     "@types/supertest": "^6.0.3",
     "ctxbin": "^1.3.1",
+    "express": "^5.2.1",
     "happy-dom": "^20.5.0",
     "idiomorph": "0.7.4",
     "oxc-parser": "0.94.0",
@@ -77,11 +88,19 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "4.151.0"
   },
   "dependencies": {
-    "express": "^5.2.1",
     "lithent": "^1.21.7",
     "prismjs": "^1.30.0"
+  },
+  "peerDependencies": {
+    "express": "^5.2.1"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
   }
 }

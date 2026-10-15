@@ -1,15 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { createApp } from './index.js';
+import { createDemo } from '../../testing/server.js';
 import { decodeFrames } from '../shared/ndjson.js';
-import { transitionHooks } from '../../routes/_shared/hooks.js';
 
 let app: any;
 
 beforeAll(async () => {
-  ({ app } = await createApp({
+  ({ server: app } = await createDemo({
     basePath: '/demo',
-    hooks: transitionHooks,
   }));
 });
 

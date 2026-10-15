@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createApp } from './index.js';
+import { createDemo } from '../../testing/server.js';
 
 let app: any;
 let appWithoutSecurityHeaders: any;
 beforeAll(async () => {
-  ({ app } = await createApp());
-  ({ app: appWithoutSecurityHeaders } = await createApp({ securityHeaders: false }));
+  ({ server: app } = await createDemo());
+  ({ server: appWithoutSecurityHeaders } = await createDemo({ security: { headers: false } }));
 });
 
 describe('multi-route SSR', () => {
@@ -21,7 +21,7 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('<h-state name="page:features"');
     expect(res.text).toContain('StateSurface');
     expect(res.text).toContain('id="__STATE__"');
-    expect(res.text).toContain('data-ssr-hash');
+    expect(res.text).not.toContain('data-ssr-hash');
   });
 
   it('GET /examples/search returns SSR-rendered search page', async () => {

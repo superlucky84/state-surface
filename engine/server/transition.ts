@@ -1,9 +1,10 @@
+import type { SurfaceContext } from './core/context.js';
 import type { StateFrame } from '../shared/protocol.js';
 
 // A transition is an async generator that yields StateFrames
 export type TransitionHandler = (
   params: Record<string, unknown>,
-  options?: { signal?: AbortSignal }
+  ctx: SurfaceContext
 ) => AsyncGenerator<StateFrame, void, unknown>;
 
 export type TransitionModule = {

@@ -31,7 +31,8 @@
 
 ## 2. 배경 및 문제 정의
 
-현재 StateSurface는 "Server owns state, client owns DOM projection" 원칙과 NDJSON 상태 프레임을 사용한다. 실제 코드에서 확인한 개선 범위는 다음과 같다:
+설계 착수 기준 StateSurface는 "Server owns state, client owns DOM projection" 원칙과 NDJSON 상태 프레임을 사용했다.
+아래는 당시의 문제 정의다. 2026-10-15 단계 1에서 서버 Express 결합·런타임 탐색·SSR 해시를 제거했고, 현재 상태는 IMPLEMENT 실행 기록을 따른다.
 
 1. **불필요한 클라이언트 JavaScript 전송 (No Zero-JS)**:
    - `auto.ts`의 `eager: true` glob import로 인해 현재 방문한 페이지와 무관한 모든 라우트의 템플릿과 Lithent 런타임이 무조건 초기에 로드된다.
@@ -289,7 +290,7 @@ R-26은 2026-10-13 사용자 합의(AG-07)로 1차 범위에 포함한다.
 ## 8. 진행 상태 및 Handoff (Status & Next Steps)
 
 - **완료**: 현재 코드의 지원 범위를 반영하고 R-11을 단일 파일 페이지·레이아웃 모델로 확장했다. 검증 가능한 상태·보안·성능 범위를 보정하고 DESIGN.md 검토 초안을 작성했다. 사용자 합의(AG-06)에 따라 클라이언트 라우터·persist·prefetch·지연 server 슬롯·타입 지정 액션·scoped CSS·prerender·콘텐츠 컬렉션·이미지 최적화(R-17~R-25, NFR-04)를 1차 범위에 추가하고 R-14·제약·비목표를 정합화했다. 사용자 합의(AG-07)에 따라 런타임 중립 서버 코어와 어댑터(R-26, NFR-05)를 추가하고 제약 3·비목표 5를 정합화했다. 사용자 합의(AG-08)에 따라 2.0 전체에서 하위 호환을 고려하지 않도록 NFR-02·R-01·R-08·비목표 6을 개정했다. DC-07 결정에 따라 R-11·R-22를 `.tsx` 최종 형식과 CSS Modules 기준으로 바꾸고 비목표 7을 추가했다. DC-01~DC-28을 결정했고 외부 SDK·태그 매니저 기본 설치 호환(R-27, AG-09)을 1차 범위에 추가했다. 2026-10-14 최종 검토에서 Lithent SSR 제약(동기 즉시 실행, 속성 미이스케이프)을 확인해 R-04·R-08·R-11·R-14·R-17·R-20·R-21·R-23·R-26·NFR-01·NFR-03~05·비목표 보충 문장을 정합화하고 DC-29~DC-32를 추가했다.
-- **다음**: IMPLEMENT.md 단계 0(기준선 고정)을 시작한다. 네 문서(REQUIREMENTS·DESIGN·IMPLEMENT·MANUAL_TEST_CHECKLIST)를 갖췄다. 최종 검토에서 추가한 DC-29(페이지 함수만 async + server 슬롯 `load`), DC-30(targets 생략 시 모든 슬롯과 겹침), DC-31(JSX `<Boot>`), DC-32(prerender HTML도 코어·미들웨어 통과)를 결정했고 IMPLEMENT.md에 단계 0~10을 작성했다.
+- **다음**: 단계 0·1 검증을 완료했다. IMPLEMENT.md 단계 2 진입 전에 Lithent SSR 속성 이스케이프 보강 릴리스를 확인한다. 네 문서(REQUIREMENTS·DESIGN·IMPLEMENT·MANUAL_TEST_CHECKLIST)를 갖췄다. 최종 검토에서 추가한 DC-29(페이지 함수만 async + server 슬롯 `load`), DC-30(targets 생략 시 모든 슬롯과 겹침), DC-31(JSX `<Boot>`), DC-32(prerender HTML도 코어·미들웨어 통과)를 결정했고 IMPLEMENT.md에 단계 0~10을 작성했다.
 - **블로커**: 문서 작성의 외부 블로커는 없다. 새 SSR 경로(DESIGN 14장 2단계) 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
 - **현재 기준 커밋**: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
 - **기존 코드 검토의 검증 기록**: 코드 기준 `6742026cb91bd06b030ce503da387701f6e1fb6e`, `pnpm test` 34개 파일/458개 테스트 통과, `pnpm exec vite build` 성공. 공통 JS 98.52kB / gzip 추정 28.21kB, Node 22.12.0 / pnpm 10.13.1 / Vite 7.3.1. 현재 기준 커밋은 문서·에이전트 설정만 추가했다.

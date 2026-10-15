@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+import type { SurfaceContext } from './core/context.js';
 import type { RouteModule } from '../shared/routeModule.js';
 import type { UiPatch } from '../shared/protocol.js';
 import { getTransition, type TransitionHandler } from './transition.js';
@@ -23,18 +23,18 @@ export type InitialResult = {
  */
 export async function getInitialStates(
   route: RouteModule,
-  req: Request,
+  ctx: SurfaceContext,
   options: InitialStatesOptions = {}
 ): Promise<Record<string, any>> {
   if (route.initial) {
-    return await route.initial(req);
+    return await route.initial(ctx);
   }
 
   if (!route.transition) {
     return {};
   }
 
-  const result = await getInitialResult(route, req, options);
+  const result = await getInitialResult(route, ctx, options);
   return result.states;
 }
 
@@ -44,11 +44,11 @@ export async function getInitialStates(
  */
 export async function getInitialResult(
   route: RouteModule,
-  req: Request,
+  ctx: SurfaceContext,
   options: InitialStatesOptions = {}
 ): Promise<InitialResult> {
   if (route.initial) {
-    const states = await route.initial(req);
+    const states = await route.initial(ctx);
     return { states, ui: {} };
   }
 
@@ -56,7 +56,7 @@ export async function getInitialResult(
     return { states: {}, ui: {} };
   }
 
-  const params = route.params?.(req) ?? {};
+  const params = route.params?.(ctx) ?? {};
   const resolveTransition = options.getTransition ?? getTransition;
   const handler = resolveTransition(route.transition);
 
@@ -64,7 +64,7 @@ export async function getInitialResult(
     throw new Error(`SSR: transition "${route.transition}" not found in registry`);
   }
 
-  const gen = handler(params);
+  const gen = handler(params, ctx);
   const { value } = await gen.next();
 
   // Clean up generator to avoid resource leaks

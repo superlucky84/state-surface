@@ -4,7 +4,7 @@ import { getInitialStates } from './initialStates.js';
 import { registerTransition, clearRegistry } from './transition.js';
 import type { StateFrame } from '../shared/protocol.js';
 
-// Minimal Express request mock
+// Request context fixture
 function mockReq(params: Record<string, string> = {}): any {
   return { params, query: {}, body: {} };
 }
@@ -82,7 +82,7 @@ describe('getInitialStates', () => {
     const route: RouteModule = {
       layout: () => '',
       transition: 'test-params',
-      params: req => ({ id: Number(req.params.id) }),
+      params: ctx => ({ id: Number(ctx.params.id) }),
     };
 
     const states = await getInitialStates(route, mockReq({ id: '42' }));

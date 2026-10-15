@@ -1,16 +1,18 @@
+import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { isValidLang } from '../../../../shared/i18n.js';
+import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
 import { streamingContent } from '../../../../shared/content.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function* streamDemo(
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
   const mode = (params.mode as string) ?? 'full-sequence';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : 'en';
+  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
   const ko = lang === 'ko';
   const base = streamingContent(lang);
 

@@ -15,5 +15,5 @@ export default {
 
   transition: 'ui-patch-demo',
 
-  initial: req => uiPatchContent(getLang(req)),
+  initial: ctx => uiPatchContent(getLang(ctx)),
 } satisfies RouteModule;

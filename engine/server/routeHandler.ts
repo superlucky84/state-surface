@@ -1,5 +1,5 @@
-import type { Request, Response } from 'express';
 import type { RouteModule } from '../shared/routeModule.js';
+import type { SurfaceContext } from './core/context.js';
 import { getInitialResult } from './initialStates.js';
 import {
   fillHState,
@@ -8,54 +8,28 @@ import {
   buildBootScript,
   buildBasePathScript,
 } from './ssr.js';
-import { createSSRRenderer } from './ssrRenderer.js';
-import { getBasePath } from '../shared/basePath.js';
 import type { TransitionHandler } from './transition.js';
 
-type RouteHandlerOptions = {
-  renderer?: (name: string, data: any) => string;
-  getTransition?: (name: string) => TransitionHandler | undefined;
-};
-
-/**
- * Create an Express GET handler for a route module.
- * Performs per-route SSR: initial states → layout → fillHState → respond.
- */
-export function createRouteHandler(routeModule: RouteModule, options: RouteHandlerOptions = {}) {
-  const renderer = options.renderer ?? createSSRRenderer();
-
-  return async (req: Request, res: Response) => {
-    try {
-      const { states: initialStates, ui: initialUi } = await getInitialResult(routeModule, req, {
-        getTransition: options.getTransition,
-      });
-
-      const hasStates = Object.keys(initialStates).length > 0;
-      const stateScript = hasStates ? buildStateScript(initialStates) : '';
-      const uiScript = buildUiScript(initialUi);
-
-      let bootScript = '';
-      if (routeModule.boot?.auto && routeModule.transition) {
-        const bootParams = routeModule.boot.params?.(req) ?? routeModule.params?.(req) ?? {};
-        bootScript = buildBootScript({
-          transition: routeModule.transition,
-          params: bootParams,
-        });
-      }
-
-      const basePathScript = buildBasePathScript(getBasePath());
-      const shell = routeModule.layout(stateScript + uiScript + bootScript + basePathScript);
-      const html = hasStates ? fillHState(shell, initialStates, renderer, initialUi) : shell;
-
-      res.status(200).type('text/html; charset=utf-8').send(html);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'SSR error';
-      console.error(`[SSR] ${req.path}: ${message}`);
-      if (process.env.NODE_ENV === 'production') {
-        res.status(500).type('text/html; charset=utf-8').send('Internal Server Error');
-      } else {
-        res.status(500).type('text/html; charset=utf-8').send(`SSR Error: ${message}`);
-      }
-    }
-  };
+export async function renderRoute(
+  route: RouteModule,
+  ctx: SurfaceContext,
+  options: {
+    renderer: (name: string, data: any) => string;
+    getTransition: (name: string) => TransitionHandler | undefined;
+  }
+): Promise<string> {
+  const { states, ui } = await getInitialResult(route, ctx, options);
+  let boot = '';
+  if (route.boot?.auto && route.transition)
+    boot = buildBootScript({
+      transition: route.transition,
+      params: route.boot.params?.(ctx) ?? route.params?.(ctx) ?? {},
+    });
+  const scripts =
+    (Object.keys(states).length ? buildStateScript(states) : '') +
+    buildUiScript(ui) +
+    boot +
+    buildBasePathScript(ctx.basePath);
+  const shell = route.layout(scripts, ctx);
+  return fillHState(shell, states, options.renderer, ui);
 }

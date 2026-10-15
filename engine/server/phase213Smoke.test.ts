@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { createApp } from './index.js';
-import { transitionHooks } from '../../routes/_shared/hooks.js';
+import { createDemo } from '../../testing/server.js';
 
 let app: any;
 
@@ -14,7 +13,7 @@ function readStateScript(html: string): Record<string, any> {
 }
 
 beforeAll(async () => {
-  ({ app } = await createApp({ hooks: transitionHooks }));
+  ({ server: app } = await createDemo({}));
 });
 
 describe('phase 2-13 smoke coverage', () => {

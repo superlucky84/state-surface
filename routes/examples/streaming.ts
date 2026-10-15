@@ -17,5 +17,5 @@ export default {
 
   transition: 'stream-demo',
 
-  initial: req => streamingContent(getLang(req)),
+  initial: ctx => streamingContent(getLang(ctx)),
 } satisfies RouteModule;
