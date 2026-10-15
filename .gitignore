@@ -49,3 +49,7 @@ perf/results/
 
 # Local Workers state
 .wrangler/
+
+# The engine's build-time compiler/discovery code is tracked source.
+!engine/build/
+!engine/build/**
