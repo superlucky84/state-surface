@@ -292,7 +292,7 @@ export async function createApp(options?: StateSurfaceServerOptions) {
   // which doesn't match the bundled dist/server.js location.
   async function startProd() {
     loadManifest(rootDir);
-    app.use(express.static(path.join(rootDir, 'dist/client')));
+    app.use(basePath || '/', express.static(path.join(rootDir, 'dist/client')));
 
     app.use((_req, res) => {
       res.status(404).send('Not Found');
