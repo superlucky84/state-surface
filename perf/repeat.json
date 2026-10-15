@@ -1,0 +1,807 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-10-15T08:16:29.043Z",
+  "commit": "94e404684da0ee69bceb63d8f6c03fb72c34af54",
+  "browser": "141.0.7390.37",
+  "node": "v24.19.0",
+  "conditions": {
+    "cpuSlowdown": 4,
+    "downloadBytesPerSecond": 500000,
+    "uploadBytesPerSecond": 375000,
+    "latencyMs": 20,
+    "cache": "disabled; fresh context per sample",
+    "compression": "identity HTTP; gzip sizes computed from response bodies at level 9",
+    "samples": 5,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "server": "localhost production; direct SSR roundtrip is a proxy, not isolated server render time",
+    "labInp": "maximum Event Timing duration with nonzero interactionId; short lab sample, not field INP",
+    "cls": "maximum session window (1s gap / 5s duration), excluding recent input"
+  },
+  "pages": [
+    {
+      "path": "/",
+      "samples": [
+        {
+          "run": 1,
+          "initialAssets": [
+            {
+              "path": "/",
+              "kind": "document",
+              "bytes": 9655,
+              "gzipBytes": 2700
+            },
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 9655,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 5.290110000000141,
+          "firstActionMs": 186.10000000009313,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 405.4000000000233,
+          "ttfbMs": 2.6000000000931323,
+          "documentNavigationMs": 381
+        },
+        {
+          "run": 2,
+          "initialAssets": [
+            {
+              "path": "/",
+              "kind": "document",
+              "bytes": 9655,
+              "gzipBytes": 2700
+            },
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 9655,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 8.216379999999845,
+          "firstActionMs": 143.90000000002328,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 392.19999999995343,
+          "ttfbMs": 2,
+          "documentNavigationMs": 417.5999999999767
+        },
+        {
+          "run": 3,
+          "initialAssets": [
+            {
+              "path": "/",
+              "kind": "document",
+              "bytes": 9655,
+              "gzipBytes": 2700
+            },
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 9655,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 4.266864000000169,
+          "firstActionMs": 132.70000000006985,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 395.9000000000233,
+          "ttfbMs": 2,
+          "documentNavigationMs": 389.69999999995343
+        },
+        {
+          "run": 4,
+          "initialAssets": [
+            {
+              "path": "/",
+              "kind": "document",
+              "bytes": 9655,
+              "gzipBytes": 2700
+            },
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 9655,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 4.391742000000704,
+          "firstActionMs": 126.59999999997672,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 387.30000000004657,
+          "ttfbMs": 1.599999999976717,
+          "documentNavigationMs": 418.4000000000233
+        },
+        {
+          "run": 5,
+          "initialAssets": [
+            {
+              "path": "/",
+              "kind": "document",
+              "bytes": 9655,
+              "gzipBytes": 2700
+            },
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 9655,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.576017999999749,
+          "firstActionMs": 185,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 390.20000000006985,
+          "ttfbMs": 1.599999999976717,
+          "documentNavigationMs": 391
+        }
+      ],
+      "median": {
+        "initialJsGzipBytes": 28147,
+        "htmlBytes": 9655,
+        "cssBytes": 37415,
+        "bootJsonBytes": 0,
+        "ssrRoundTripMs": 4.391742000000704,
+        "firstActionMs": 143.90000000002328,
+        "cls": 0,
+        "labInpMs": 24,
+        "documentLoadMs": 392.19999999995343,
+        "ttfbMs": 2,
+        "documentNavigationMs": 391
+      }
+    },
+    {
+      "path": "/guide/quickstart",
+      "samples": [
+        {
+          "run": 1,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/guide/quickstart",
+              "kind": "document",
+              "bytes": 10326,
+              "gzipBytes": 2391
+            },
+            {
+              "path": "/transition/guide-load",
+              "kind": "fetch",
+              "bytes": 10584,
+              "gzipBytes": 3983
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 10326,
+          "cssBytes": 37415,
+          "bootJsonBytes": 10584,
+          "ssrRoundTripMs": 4.020798000001378,
+          "firstActionMs": 288.80000000004657,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 421.9000000000233,
+          "ttfbMs": 2.400000000023283,
+          "documentNavigationMs": 413.19999999995343
+        },
+        {
+          "run": 2,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/guide/quickstart",
+              "kind": "document",
+              "bytes": 10326,
+              "gzipBytes": 2391
+            },
+            {
+              "path": "/transition/guide-load",
+              "kind": "fetch",
+              "bytes": 10584,
+              "gzipBytes": 3983
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 10326,
+          "cssBytes": 37415,
+          "bootJsonBytes": 10584,
+          "ssrRoundTripMs": 2.8597110000009707,
+          "firstActionMs": 283.19999999995343,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 408.60000000009313,
+          "ttfbMs": 1.900000000023283,
+          "documentNavigationMs": 425
+        },
+        {
+          "run": 3,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/guide/quickstart",
+              "kind": "document",
+              "bytes": 10326,
+              "gzipBytes": 2391
+            },
+            {
+              "path": "/transition/guide-load",
+              "kind": "fetch",
+              "bytes": 10584,
+              "gzipBytes": 3983
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 10326,
+          "cssBytes": 37415,
+          "bootJsonBytes": 10584,
+          "ssrRoundTripMs": 4.6934110000001965,
+          "firstActionMs": 314.69999999995343,
+          "cls": 0,
+          "labInpMs": 32,
+          "documentLoadMs": 405.30000000004657,
+          "ttfbMs": 2,
+          "documentNavigationMs": 418.9000000000233
+        },
+        {
+          "run": 4,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/guide/quickstart",
+              "kind": "document",
+              "bytes": 10326,
+              "gzipBytes": 2391
+            },
+            {
+              "path": "/transition/guide-load",
+              "kind": "fetch",
+              "bytes": 10584,
+              "gzipBytes": 3983
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 10326,
+          "cssBytes": 37415,
+          "bootJsonBytes": 10584,
+          "ssrRoundTripMs": 4.722806000001583,
+          "firstActionMs": 363.69999999995343,
+          "cls": 0,
+          "labInpMs": 56,
+          "documentLoadMs": 408.5999999999767,
+          "ttfbMs": 2.200000000069849,
+          "documentNavigationMs": 412.69999999995343
+        },
+        {
+          "run": 5,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/guide/quickstart",
+              "kind": "document",
+              "bytes": 10326,
+              "gzipBytes": 2391
+            },
+            {
+              "path": "/transition/guide-load",
+              "kind": "fetch",
+              "bytes": 10584,
+              "gzipBytes": 3983
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 10326,
+          "cssBytes": 37415,
+          "bootJsonBytes": 10584,
+          "ssrRoundTripMs": 3.847298000000592,
+          "firstActionMs": 325.39999999990687,
+          "cls": 0,
+          "labInpMs": 32,
+          "documentLoadMs": 426.5,
+          "ttfbMs": 2.400000000023283,
+          "documentNavigationMs": 406.30000000004657
+        }
+      ],
+      "median": {
+        "initialJsGzipBytes": 28147,
+        "htmlBytes": 10326,
+        "cssBytes": 37415,
+        "bootJsonBytes": 10584,
+        "ssrRoundTripMs": 4.020798000001378,
+        "firstActionMs": 314.69999999995343,
+        "cls": 0,
+        "labInpMs": 32,
+        "documentLoadMs": 408.60000000009313,
+        "ttfbMs": 2.200000000069849,
+        "documentNavigationMs": 413.19999999995343
+      }
+    },
+    {
+      "path": "/examples/search",
+      "samples": [
+        {
+          "run": 1,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/search",
+              "kind": "document",
+              "bytes": 4408,
+              "gzipBytes": 1785
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4408,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 4.10960200000045,
+          "firstActionMs": 109.19999999995343,
+          "cls": 0,
+          "labInpMs": 32,
+          "documentLoadMs": 405.29999999993015,
+          "ttfbMs": 1.599999999976717,
+          "documentNavigationMs": 416.29999999993015
+        },
+        {
+          "run": 2,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/search",
+              "kind": "document",
+              "bytes": 4408,
+              "gzipBytes": 1785
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4408,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.138899000001402,
+          "firstActionMs": 104.5,
+          "cls": 0,
+          "labInpMs": 16,
+          "documentLoadMs": 393.80000000004657,
+          "ttfbMs": 1.099999999976717,
+          "documentNavigationMs": 407.10000000009313
+        },
+        {
+          "run": 3,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/search",
+              "kind": "document",
+              "bytes": 4408,
+              "gzipBytes": 1785
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4408,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.015303000000131,
+          "firstActionMs": 89,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 413.5,
+          "ttfbMs": 0.9000000000232831,
+          "documentNavigationMs": 412.4000000000233
+        },
+        {
+          "run": 4,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/search",
+              "kind": "document",
+              "bytes": 4408,
+              "gzipBytes": 1785
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4408,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 2.9079509999974107,
+          "firstActionMs": 97.80000000004657,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 393.9000000000233,
+          "ttfbMs": 0.7999999999301508,
+          "documentNavigationMs": 428.5
+        },
+        {
+          "run": 5,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/search",
+              "kind": "document",
+              "bytes": 4408,
+              "gzipBytes": 1785
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4408,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 2.942081999994116,
+          "firstActionMs": 86.09999999997672,
+          "cls": 0,
+          "labInpMs": 16,
+          "documentLoadMs": 402.80000000004657,
+          "ttfbMs": 0.9000000000232831,
+          "documentNavigationMs": 403.60000000009313
+        }
+      ],
+      "median": {
+        "initialJsGzipBytes": 28147,
+        "htmlBytes": 4408,
+        "cssBytes": 37415,
+        "bootJsonBytes": 0,
+        "ssrRoundTripMs": 3.015303000000131,
+        "firstActionMs": 97.80000000004657,
+        "cls": 0,
+        "labInpMs": 24,
+        "documentLoadMs": 402.80000000004657,
+        "ttfbMs": 0.9000000000232831,
+        "documentNavigationMs": 412.4000000000233
+      }
+    },
+    {
+      "path": "/examples/chat",
+      "samples": [
+        {
+          "run": 1,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/chat",
+              "kind": "document",
+              "bytes": 4916,
+              "gzipBytes": 1987
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4916,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.7340770000009798,
+          "firstActionMs": 119.29999999993015,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 380.9000000000233,
+          "ttfbMs": 1.400000000023283,
+          "documentNavigationMs": 398.80000000004657
+        },
+        {
+          "run": 2,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/chat",
+              "kind": "document",
+              "bytes": 4916,
+              "gzipBytes": 1987
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4916,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.039249999994354,
+          "firstActionMs": 113.59999999997672,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 390,
+          "ttfbMs": 1.400000000023283,
+          "documentNavigationMs": 416.89999999990687
+        },
+        {
+          "run": 3,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/chat",
+              "kind": "document",
+              "bytes": 4916,
+              "gzipBytes": 1987
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4916,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 3.05326100000093,
+          "firstActionMs": 113.59999999997672,
+          "cls": 0,
+          "labInpMs": 16,
+          "documentLoadMs": 395.29999999993015,
+          "ttfbMs": 1.099999999976717,
+          "documentNavigationMs": 395
+        },
+        {
+          "run": 4,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/chat",
+              "kind": "document",
+              "bytes": 4916,
+              "gzipBytes": 1987
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4916,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 4.661448000006203,
+          "firstActionMs": 120.09999999997672,
+          "cls": 0,
+          "labInpMs": 24,
+          "documentLoadMs": 414.0999999999767,
+          "ttfbMs": 1,
+          "documentNavigationMs": 397.10000000009313
+        },
+        {
+          "run": 5,
+          "initialAssets": [
+            {
+              "path": "/assets/main-B4sy92Ix.js",
+              "kind": "script",
+              "bytes": 98515,
+              "gzipBytes": 28147
+            },
+            {
+              "path": "/assets/styles-XTlQ4E1n.css",
+              "kind": "stylesheet",
+              "bytes": 37415,
+              "gzipBytes": 7700
+            },
+            {
+              "path": "/examples/chat",
+              "kind": "document",
+              "bytes": 4916,
+              "gzipBytes": 1987
+            }
+          ],
+          "initialJsGzipBytes": 28147,
+          "htmlBytes": 4916,
+          "cssBytes": 37415,
+          "bootJsonBytes": 0,
+          "ssrRoundTripMs": 2.6938690000024508,
+          "firstActionMs": 115.5,
+          "cls": 0,
+          "labInpMs": 16,
+          "documentLoadMs": 396.30000000004657,
+          "ttfbMs": 0.9000000000232831,
+          "documentNavigationMs": 415.0999999999767
+        }
+      ],
+      "median": {
+        "initialJsGzipBytes": 28147,
+        "htmlBytes": 4916,
+        "cssBytes": 37415,
+        "bootJsonBytes": 0,
+        "ssrRoundTripMs": 3.05326100000093,
+        "firstActionMs": 115.5,
+        "cls": 0,
+        "labInpMs": 24,
+        "documentLoadMs": 395.29999999993015,
+        "ttfbMs": 1.099999999976717,
+        "documentNavigationMs": 398.80000000004657
+      }
+    }
+  ]
+}

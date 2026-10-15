@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: Draft — 단계 0 착수 전 실행 체크리스트
+상태: 단계 0 완료 — 다음은 단계 1 서버 코어·어댑터
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -61,18 +61,18 @@
 DESIGN이 "구현에서 정한다"로 남긴 세부 선택이다. 표시한 단계 착수 시 결정하고 근거를 이 표에 기록한다. 결정 전까지
 TBD다.
 
-| ID    | 내용                                                                        | 결정 시점    | 기본안                                                              | 상태 |
-| ----- | --------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------- | ---- |
-| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정 | TBD  |
-| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                       | TBD  |
-| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                     | TBD  |
-| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                     | TBD  |
-| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                           | TBD  |
-| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀            | TBD  |
-| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | fixture 앱 1개를 각 어댑터로 띄워 같은 HTTP 시나리오 실행           | TBD  |
-| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright 스크립트, GitHub Actions ubuntu 러너             | TBD  |
-| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                  | TBD  |
-| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정     | TBD  |
+| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                     | 상태                                                            |
+| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                        | TBD                                                             |
+| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                              | TBD                                                             |
+| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                            | TBD                                                             |
+| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                            | TBD                                                             |
+| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                  | TBD                                                             |
+| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                   | TBD                                                             |
+| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | fixture 앱 1개를 각 어댑터로 띄워 같은 HTTP 시나리오 실행                                                                  | TBD                                                             |
+| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록 | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용 |
+| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                         | TBD                                                             |
+| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                            | TBD                                                             |
 
 ---
 
@@ -103,27 +103,27 @@ Lithent 저장소에서 고친다.
 
 #### 작업
 
-- [ ] 기준 커밋에서 `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm build`, `pnpm format:check`를 실행하고
+- [x] 기준 커밋에서 `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm build`, `pnpm format:check`를 실행하고
       테스트 파일 수·테스트 수·빌드 산출물 크기를 기록한다(이전 기록: 6742026에서 34개 파일/458개 테스트).
-- [ ] 성능 하네스(IC-08): production 빌드(`pnpm build && pnpm start`)를 띄우고 홈 `/`, 가이드 `/guide/quickstart`,
+- [x] 성능 하네스(IC-08): production 빌드(`pnpm build && pnpm start`)를 띄우고 홈 `/`, 가이드 `/guide/quickstart`,
       검색 `/examples/search`, 채팅 `/examples/chat`을 측정한다. 조건은 Chromium, CPU 4배 스로틀, Fast 4G, 압축·캐시
       고정, 5회 중앙값(DC-17).
-- [ ] 기록 항목: 초기 실행 JS(gzip, 파일별·합계), HTML·CSS 전송량, SSR 시간, 첫 액션(클릭 → 첫 DOM 반영), 랩 INP,
+- [x] 기록 항목: 초기 실행 JS(gzip, 파일별·합계), HTML·CSS 전송량, SSR 시간, 첫 액션(클릭 → 첫 DOM 반영), 랩 INP,
       CLS, 문서 로드 이동 시간. `perf/baseline.json`과 6장 실행 기록에 남긴다. 70% 감소 판정의 기준값이다.
-- [ ] CI에 성능 측정 job을 **보고 전용**으로 추가한다(실패하지 않음). 게이트는 단계 10에서 켠다.
-- [ ] 데모 동등성 e2e(`e2e/demo-parity`)를 작성한다: 언어 전환, 가이드 boot 스트리밍, 채팅 abort·스트리밍, streaming
+- [x] CI에 성능 측정 job을 **보고 전용**으로 추가한다(실패하지 않음). 게이트는 단계 10에서 켠다.
+- [x] 데모 동등성 e2e(`e2e/demo-parity`)를 작성한다: 언어 전환, 가이드 boot 스트리밍, 채팅 abort·스트리밍, streaming
       예제(full·partial·removed·error), ui-patch 예제, actions 예제(버튼·폼·scoped pending), search, view-transition 예제,
       BASE_PATH(`BASE_PATH=/demo`), 플러그인(Prism·목차·채팅 스크롤). 사용자 관점 결과(DOM 텍스트·URL·요청 수)만
       검증하고 내부 구조에 의존하지 않는다.
-- [ ] 위험 선확인(spike, 결과를 실행 기록에 남김): IC-01 namespaced 지시자 통과, Lithent hydration이 사용자 입력
+- [x] 위험 선확인(spike, 결과를 실행 기록에 남김): IC-01 namespaced 지시자 통과, Lithent hydration이 사용자 입력
       value·커서를 SSR 값으로 되돌리지 않는지(V-04 전제), `moveBefore` 지원 브라우저 범위(DC-19), idiomorph 아일랜드
       경계 제외(IC-06).
 
 #### Baseline 테스트
 
-- [ ] 기존 `pnpm test` 전체 통과.
-- [ ] 데모 동등성 e2e가 현재 코드의 production 빌드에서 통과.
-- [ ] 성능 하네스 2회 실행의 중앙값 차이가 기록됨(측정 노이즈 범위 확인).
+- [x] 기존 `pnpm test` 전체 통과.
+- [x] 데모 동등성 e2e가 현재 코드의 production 빌드에서 통과.
+- [x] 성능 하네스 2회 실행의 중앙값 차이가 기록됨(측정 노이즈 범위 확인).
 
 ---
 
@@ -139,7 +139,7 @@ layout이지만 사용자 API는 `ctx` 기반으로 일괄 전환한다. DESIGN 
 #### 코어
 
 - [ ] `engine/server/core/`(가칭)에 `createHandler({ manifest, basePath, security, bodyLimit, logger, onError,
-  middleware })` → `{ fetch(request, platform) }`를 만든다.
+middleware })` → `{ fetch(request, platform) }`를 만든다.
 - [ ] 라우팅: 빌드 manifest의 경로 패턴으로 페이지 GET·`POST /transition/:name`·404를 처리한다. 지연 슬롯·액션·
       prerender 경로는 단계 4·5·7에서 추가한다.
 - [ ] `SurfaceContext`: `request`·`url`·`params`·`cookies`(get/set/delete → `Set-Cookie`)·`locals`·`env`·`signal`
@@ -451,6 +451,7 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 
 - [ ] scheduler 시점별·미지원 대체·조작 시 즉시 활성화, 로드 실패 재시도.
 - [ ] 휴면 delta 후 활성화(snapshot → 최신), 제거 후 로드 완료 시 mount 안 함, resetKey·reset.
+- [ ] 단계 0 spike에서 확인한 입력값·커서 덮어쓰기를 보완하고 V-04 브라우저 회귀 테스트로 검증한다.
 - [ ] 동시성 매트릭스: 같은 이름, 겹치는 targets, 겹치지 않는 targets, targets 생략, queue.
 - [ ] PRG: 303·flash·리다이렉트 검증·크기 한도·file 제외, JS 있음과 없음의 결과 동일.
 
@@ -501,7 +502,8 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 
 - [ ] e2e: 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 같음.
 - [ ] e2e: 100회 이동 후 리스너·Lithent 인스턴스·옵저버·플러그인 수 불변, heap 수렴.
-- [ ] e2e: persist iframe·video·입력 포커스 유지(iframe 재로드 없음), 짝 없는 요소 cleanup.
+- [ ] e2e: persist iframe·video·입력 포커스·선택 범위 유지(iframe 재로드 없음), 짝 없는 요소 cleanup.
+      단계 0 Chromium spike에서 선택 범위 초기화를 확인했으므로 명시적 snapshot/복원을 포함한다.
 - [ ] e2e: GTM식 fixture(head·body 동적 script·iframe 주입) 20회 이동 후 노드 보존, page_view 20회, CSP 위반 0.
 - [ ] 단위: 전역 API 캐시 금지(나중에 래핑한 `fetch`·`history`가 호출됨).
 
@@ -711,14 +713,37 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 ### 실행 기록
 
-| 단계 | 날짜 | 커밋 | `pnpm test`(파일/개수) | 측정·판정 | 비고 |
-| ---- | ---- | ---- | ---------------------- | --------- | ---- |
-| —    | —    | —    | —                      | —         | —    |
+| 단계 | 날짜       | 커밋                                  | `pnpm test`(파일/개수) | 측정·판정                                                                   | 비고                                                                       |
+| ---- | ---------- | ------------------------------------- | ---------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5` | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정 | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
+
+### 단계 0 실행 상세
+
+- Node 24.19.0, pnpm 10.13.1, Chromium 141.0.7390.37(Playwright 1.56.1). frozen install·전체 Vitest·format:check·전체 build 성공.
+- 클라이언트 JS 98,515 B / gzip(level 9, Node zlib) 28,147 B, CSS 37,415 B / gzip 7,700 B,
+  서버 번들 321,665 B / gzip 75,109 B. Vite 표시는 기본 압축 조건이 달라 JS gzip 약 28.21 kB다.
+- `perf/baseline.json`·`perf/repeat.json`: 네 페이지 각 5회, CPU 4x/Fast 4G/캐시 off/identity 전송.
+  첫 액션 중앙값 1차/2차(ms): 홈 155.8/143.9, 가이드 303.9/314.7, 검색 102.2/97.8, 채팅 118.9/115.5.
+  편차 -7.6%~+3.6%, 모든 전송 크기 중앙값 동일. CLS 중앙값은 모두 0. 짧은 랩 INP는 field p75 판정이 아니다.
+- SSR 수치는 순수 렌더 시간 대신 loopback 전체 HTML 수신 시간임을 명시했다. 파일별 JS·HTML·CSS·boot JSON,
+  문서 로드·문서 이동 원시값과 조건을 보존했다. 2.0 청크 분할 전에는 공통 JS를 엔진·앱·플러그인별로 분리 계측할 수 없다.
+- 브라우저 parity 9개: 언어/쿠키, guide boot·Prism·목차, 검색, 버튼·폼·scoped pending, 스트리밍·removed·error,
+  UI 패치·clear, view-transition 갤러리, 채팅 스트리밍·abort·스크롤, 모바일 목차. 루트와 `/demo`에서 전부 통과.
+- `/demo` 실브라우저에서 기존 production 정적 파일 404를 발견했다. `startProd` 정적 마운트에도 basePath를 적용했다(`3b556e5`).
+  테스트 모드의 기존 basePath 통합 테스트는 정적 파일을 서빙하지 않아 놓친 결함이다. 새 E2E는 JS·CSS HTTP 오류도 검사한다.
+  루트 성능 기준선은 이 접두사 수정 전 측정이며 루트 렌더·JS·CSS는 동일하다. scaffold 재생성 결과 추적 파일 변화 없음.
+- spike 4개는 관측 결과를 검증한다. IC-01 문법 체인 통과(최종 결정은 단계 2), hydration 입력 덮어쓰기와
+  `moveBefore` 선택 범위 초기화를 재현했고 DESIGN 및 단계 5·6의 필수 보완으로 연결했다. idiomorph 경계 제외 통과.
+  이는 V-04/V-21 통과가 아니다. Chrome 133+/Firefox 144+/Safari 미지원은 MDN BCD 자료이며 브라우저 실측은 Chromium뿐이다.
+- CI: 루트·`/demo` parity 필수 job과 루트 spike, 성능 보고 전용 job·실패 산출물 업로드를 추가했다.
+  현재 실행 증거는 로컬 클라우드 머신이며 GitHub Actions 실행 결과·다른 머신 복원 검증은 아직 없다.
+- 초기 하네스 실패(기본 브라우저 캐시 경로 누락, UI clear 기대값, 안정화 click 때문에 채팅 응답이 끝난 뒤 취소 시도)는
+  원인 확인 후 각각 cache export·실제 clear 계약·Enter submit으로 수정해 재검증했다. 활성화·persist 제약은 해결했다고 표시하지 않는다.
 
 ### 상태
 
-- **완료**: DESIGN의 DC-01~DC-32와 구현 단계 0~10을 실행 체크리스트로 옮겼다. 구현 선택 IC-01~IC-10과 외부 선행 작업
-  (Lithent 속성 이스케이프)을 정리했다. 수동 판정 항목은 MANUAL_TEST_CHECKLIST.md(MT-01~MT-18)에 작성했다.
-- **다음**: 단계 0(기준선 고정)을 시작한다.
-- **블로커**: 단계 2 진입 전에 Lithent `renderToString` 속성 이스케이프 보강 릴리스가 필요하다(3.1). 단계 0·1은 영향 없다.
-- **기준 커밋**: `69cafc1` (DC-32 결정 반영 시점).
+- **완료**: 단계 0 기준선·E2E·성능 하네스·위험 spike·CI 설정과 실행 기록. IC-08 결정.
+- **다음**: 단계 1 시작 시 IC-07(공통 적합성 fixture/어댑터 실행 방식)을 결정하고 웹 표준 서버 코어와 어댑터를 구현한다.
+- **블로커**: 단계 2 진입 전에 Lithent SSR 속성 이스케이프 보강 릴리스 필요. 단계 1은 진행 가능하다.
+  hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다.
+- **기준 커밋**: `94e4046` (단계 0 착수 직전). 이 단계의 변경·실행 증거는 해당 단계 0 커밋과 `perf/` 참조.

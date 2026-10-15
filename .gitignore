@@ -41,3 +41,8 @@ coverage/
 
 # Context artifacts
 .ctxbin/
+
+# Browser validation outputs
+playwright-report/
+test-results/
+perf/results/

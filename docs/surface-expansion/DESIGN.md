@@ -525,6 +525,9 @@ SSR 표시 / only fallback
   예정 시점과 무관하게 즉시 활성화를 시작한다. hydration은 기존 SSR DOM 노드를 재사용하므로 그 사이 입력한
   값·커서·포커스를 덮어쓰지 않아야 한다(Lithent hydration이 사용자 입력 value를 SSR 값으로 되돌리지 않는지
   검증, V-04). 활성화 전 클릭 자체는 재생하지 않는다. 첫 클릭부터 반드시 동작해야 하는 UI는 `client:load`를 쓰도록 가이드한다.
+- **단계 0 확인(2026-10-15)**: Lithent 1.21.7 단독 hydration은 입력 `user edited`를 SSR `snapshot`으로
+  되돌리고 선택 범위도 변경한다. 노드 재사용만으로 V-04가 충족되지 않는다. 단계 5에서 hydration 전 입력값·선택·포커스
+  snapshot과 복원(또는 같은 계약의 업스트림 보강)을 구현하고 실제 브라우저 회귀 검증을 추가한다.
 - **data-action 첫 조작**(DC-04·DC-11 결정): `data-action` 위임은 공통 로더에 있으므로 아일랜드 활성화와 무관하게
   첫 click/submit부터 동작하며 submit은 이벤트 시점에 폼 값을 snapshot한다(7장). 임의 이벤트·trusted user
   activation의 재현은 지원하지 않는다. clipboard/fullscreen 등은 `client:load`나 다음 명시적 조작을 사용한다.
@@ -1052,6 +1055,9 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   순서를 쓰지 않는다. 새 body 콘텐츠를 이전 콘텐츠 옆에 삽입하고, 새 콘텐츠의 같은 persist ID 노드 자리로 이전
   노드를 `moveBefore()`로 옮긴 뒤 새 쪽의 짝 노드와 이전 콘텐츠를 제거한다. 미지원이면 같은 순서로 `insertBefore`를
   쓰며, 이때 iframe 재로드·미디어 일시 정지가 생길 수 있음을 가이드에 명시한다.
+- **단계 0 확인(2026-10-15)**: Chromium 141의 연결된 `moveBefore`는 iframe 문서 동일성과 입력 포커스는
+  보존하지만 선택 범위가 초기화됐다. 단계 6은 이동 전 선택 범위를 snapshot하고 이동 후 복원한다. MDN BCD 확인 기준
+  Chrome 133·Firefox 144부터 지원하며 Safari는 미지원이므로 런타임 기능 감지와 기존 fallback을 유지한다.
 - view-transition-name과 persist는 독립이다. persist 요소에도 모핑 애니메이션을 지정할 수 있다.
 
 ### 10.3 Prefetch (R-19, DC-20 결정)
