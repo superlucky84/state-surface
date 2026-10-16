@@ -653,7 +653,7 @@ wire 검증 → JSON/NDJSON 구조를 권고한다. 기존 generator는 명시�
   {"slot":"article:body","ui":{"classAdd":["is-new"]}}
 ]}
 {"type":"done"}
-{"type":"error","message":"…","slot":"system:error"}
+{"type":"error","message":"…","slot":"system:error","html":"<p>…</p>"}
 ```
 
 | op/필드       | 대상        | 의미                                                                              |
@@ -676,7 +676,9 @@ wire 검증 → JSON/NDJSON 구조를 권고한다. 기존 generator는 명시�
   `title`·`redirect`·`flush`다. 모르는 op는 버전 불일치로 간주한다.
 - **bootstrap**: `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`를 `<script type="application/json"
 id="__SURFACE__">` 하나로 통합한다. 내용은 `{ buildId, pageId, basePath, slots:[{ id, component, mode,
-activation, props }], ui, boot:[{ transition, params }] }`이며 실제 렌더된 슬롯과 `<Boot>`(2.5)만 담는다. server 슬롯은 props 없이 존재·모드만 기록한다.
+activation, props }], boot:[{ transition, params }], plugins }`이며 실제 렌더된 슬롯·아일랜드와 `<Boot>`(2.5)만 담는다. server
+  슬롯은 props 없이 존재·모드(`swap`·`viewTransition`·지연 토큰)만 기록한다. SSR 초기 UI는 호스트 `class`·`style`로 쓰므로 `ui`
+  필드는 두지 않는다(IMPLEMENT 단계 4 계획 조정).
 - **html op 안의 아일랜드**: server 슬롯 HTML 안에 직접 지시자 아일랜드가 있으면(DC-08) `html` op의 `islands`에
   bootstrap `slots`와 같은 형식으로 메타데이터를 담는다. 지연 슬롯 응답(10.4)도 같은 형식을 쓴다. 브라우저는 교체
   직후 이 목록으로 아일랜드를 활성화하며 loader 맵은 `virtual:state-surface/islands`를 그대로 쓴다.
@@ -731,7 +733,9 @@ activation, props }], ui, boot:[{ transition, params }] }`이며 실제 렌더�
   오류 슬롯에 메시지를 표시하고 액션 상태를 error로 둔다. 앱은 액션 API의 재시도(같은 transition을 `reset`부터
   다시 실행) 또는 새로고침을 선택한다. 엔진은 자동 재실행하지 않는다(부작용 있는 액션의 중복 실행 방지).
   다음 요청은 항상 `reset`으로 시작하므로 상태는 자연히 재동기화된다.
-- 오류 표시는 `error` 프레임의 `slot`이 가리키는 오류 슬롯으로 한정한다. 다른 슬롯을 제거하지 않는다.
+- 오류 표시는 `error` 프레임의 `slot`이 가리키는 오류 슬롯으로 한정한다. 다른 슬롯을 제거하지 않는다. 서버가 그 슬롯을 렌더해
+  `error` 프레임에 함께 싣고(server 슬롯 `html`, client 슬롯 `props`) 다음 요청의 baseline에서 브라우저가 비운다. 오류 슬롯은
+  `system:error`가 기본이며 `createHandler({ errorSlot })`로 바꾼다. 사용자에게 보일 메시지는 `TransitionError`로 던진다.
   오류 슬롯은 액션 targets와 무관하게 `error` 프레임만 쓸 수 있다. 페이지(레이아웃)에 오류 슬롯이 없으면 화면에
   표시하지 않고 액션 핸들의 `error`(7장)와 `reportError`(8.3)로만 전달하며 dev에서 경고한다. scaffold 레이아웃은
   오류 슬롯 `system:error`를 기본으로 둔다.
@@ -903,7 +907,8 @@ export default defineTransition({ viewTransition: true, handler: … });
 
 - **기본은 즉시 반영**한다. 현재 `sync()`가 모든 DOM 반영을 `startViewTransition()`으로 감싸는 동작을 바꾼다. 스트림
   프레임마다 전환이 시작·중단되며 깜빡이고 클릭이 막히는 문제를 없앤다.
-- **opt-in 두 단위**: 액션 단위 `defineTransition({ viewTransition: true })`·`data-view-transition`, 슬롯 단위
+- **opt-in 두 단위**: 액션 단위 `defineTransition({ viewTransition: true })`(응답 헤더 `X-Surface-View-Transition: 1`로 전달)·
+  `data-view-transition`, 슬롯 단위
   `<Slot viewTransition>`. 슬롯 단위는 **슬롯이 처음 나타날 때(remove→재등장, 빈 슬롯에 첫 내용, 지연 슬롯 채움)도**
   전환을 적용하므로 이미지 뷰어 열기 같은 첫 등장 모핑을 지원한다. 같은 patch에 전환 대상 슬롯이 하나라도 있으면
   그 patch 전체를 한 번의 `startViewTransition()`으로 감싸 `view-transition-name` 모핑이 슬롯 사이에서도 이어지게 한다.

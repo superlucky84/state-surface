@@ -377,7 +377,8 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
   시점 중복, 알 수 없는 지시자, 이름 형식·`#`·비리터럴, 모드·지시자 모순, Slot 밖·client Slot·아일랜드의
   `defineServerComponent`, client 아일랜드 안 `<Boot>`·아일랜드, 아일랜드 children 안 Slot)이 `[state-surface] 파일:줄:열`과
   함께 보고된다. 편집기 자동 완성·dev 오버레이 화면·`state-surface check`는 아직 확인하지 않았다(단계 8).
-- MT-18 관련 자동 검사: Slot props의 속성 탈출 payload가 `data-params`·`__STATE__`에서 원문 왕복하고 `<script>`를 만들지 않는다.
+- MT-18 관련 자동 검사: Slot props의 속성 탈출 payload가 `data-params`·`__STATE__`(단계 4부터 `__SURFACE__`)에서 원문 왕복하고
+  `<script>`를 만들지 않는다.
   `</script>` 포함 `<Boot>` params가 JSON 밖으로 나가지 않는다. Chromium 왕복은 spike로 확인했다.
 - 단계 1 production 산출물과 의미 비교(SSR 20개 문서·transition 3개), 루트·`/demo` 브라우저 parity, 5개 런타임 적합성은 계속 통과한다.
   MT-01~MT-18 수동 판정으로 계산하지 않는다.
@@ -392,3 +393,19 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
   빌드가 import 경로 체인과 함께 실패한다. dev 오버레이 화면은 확인하지 않았다.
 - 데모는 언어 전환 때문에 전 슬롯이 `client:load`라 페이지별 JS 감소는 부분적이다(홈 초기 JS gzip 16,807 B, 단계 0 28,147 B).
   MT-01 수동 판정으로 계산하지 않는다.
+
+### 단계 4 자동 선행 검증 (2026-10-16)
+
+- MT-03 관련 자동 검사: server 슬롯 `html` op의 replace가 `id` 기준 포커스·선택·스크롤을 복원하고(happy-dom), 검색 입력
+  `swap="morph"`가 Chromium에서 입력 노드·값·포커스를 유지한다(demo-parity). 같은 componentId·props의 아일랜드는 morph 중
+  인스턴스를 유지하고 바뀐 아일랜드는 새로 활성화된다. 적용 HTML의 `<script>`는 실행되지 않는다. 실제 사용자 조작 판정은 미실행이다.
+- MT-06 관련 자동 검사: 상태표(빈 성공·reset 없는 patch·EOF·모르는 op·모드 불일치), generation 무효화(abort previous),
+  오류 슬롯 표시와 다음 baseline의 정리, `X-Surface-Build` 불일치 409 → 재로드, idle·전체 타임아웃과 한도. 배포 교체 수동 판정은 미실행이다.
+- MT-07 관련 자동 검사: 인페이지 View Transition은 기본 즉시 반영이고 액션 헤더·`data-view-transition`·`<Slot viewTransition>`에서만
+  첫 patch를 한 번 감싸며 reduced motion이면 생략한다(가짜 API). 실제 애니메이션 체감은 미실행이다.
+- MT-11 관련 자동 검사: 지연 슬롯 fallback SSR, props가 HTML에 없는 AES-GCM 토큰, island 엔드포인트의 미들웨어·`cache`·POST
+  `no-store`·변조 400·다른 빌드 409(5개 런타임), 병렬 요청·늦은 응답 폐기·1초 후 1회 재시도. 실제 네트워크 지연 체감은 미실행이다.
+- MT-18 관련 자동 검사: 속성 탈출 payload, `javascript:`·`data:`·제어 문자 섞인 URL 제거, strict·rich 슬롯의 raw HTML 거부,
+  Markdown raw HTML·위험 링크 제거, unsafe의 inert script와 sandbox iframe, UI 클래스 토큰·cssVars 값 검증(`url(`·`expression(`·
+  `;`·`{}`·`\`), `__SURFACE__` JSON의 `</script>` 이스케이프. 수동 보안 스모크는 미실행이다.
+- 데모의 transition 갱신 슬롯이 server 모드로 바뀌어 홈 초기 JS gzip 10,448 B(단계 0 28,147 B)다. MT-01 수동 판정으로 계산하지 않는다.

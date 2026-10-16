@@ -25,9 +25,9 @@
 - 단계 6과 7은 단계 5 종료 후 병렬로 진행할 수 있다. 둘 다 끝나야 단계 8에 들어간다.
 - 단계 사이의 내부 연결(예: 단계 2의 `<Boot>`를 단계 4 전까지 기존 boot 전달 경로로 잇는 것)은 사용자 API가 아니며
   표시한 단계에서 반드시 제거한다. 하위 호환 레이어는 두지 않는다(AG-08).
-- 남은 임시 연결: `<h-state data-component data-activation data-media data-only>`·`<h-island data-props …>` 호스트 속성,
-  `__BOOT__` 배열과 `__PLUGINS__` JSON(단계 4 `__SURFACE__`로 교체). 단계 2의 "`mode` 생략 Slot = client"와 eager islands
-  모듈은 단계 3에서 제거했다.
+- 남은 임시 연결: 단계 4의 `defineTransition(name, …)` 이름 인자(단계 5 DC-22·DC-16 ③에서 제거)와 첫 patch에서 pending을
+  해제하는 동작(단계 5). 단계 2·3의 호스트 속성(`data-component`·`data-props`·`data-activation`·`data-media`·`data-only`)과
+  `__STATE__`·`__BOOT__`·`__BASE_PATH__`·`__PLUGINS__` JSON은 단계 4에서 `__SURFACE__`로 교체했다.
 
 ### 1.2 모든 단계 공통 Exit
 
@@ -64,18 +64,18 @@
 DESIGN이 "구현에서 정한다"로 남긴 세부 선택이다. 표시한 단계 착수 시 결정하고 근거를 이 표에 기록한다. 결정 전까지
 TBD다.
 
-| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                                                                                                                                                                                                                                                     |
-| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | 결정 (2026-10-16): namespaced 표기 유지, oxc→esbuild→Lithent 실행 통과                                                                                                                                                                                                                                   |
-| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증                                                                                                                                                                                                                                                    |
-| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | 결정 (2026-10-16): 서버가 children을 한 번 렌더해 `<h-children style="display:contents" innerHTML>`로 컴포넌트에 넘김. 컴포넌트가 출력하지 않았거나 `client:only`면 `<template data-surface-children>`로 운반                                                                                            |
-| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | 결정 (2026-10-16): 기본안. Date·Map·클래스 인스턴스·함수·BigInt·NaN/Infinity·배열 안 undefined·순환은 경로와 함께 SSR 오류, 객체의 undefined 속성은 양쪽에서 생략되므로 허용                                                                                                                             |
-| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                                                                                                                                                                                                                                                      |
-| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | 결정 (2026-10-16): idiomorph `0.7.4` 정확 고정. `beforeNodeMorphed(old, new)`에서 old가 `h-island`이고 new의 `data-component`·`data-props`가 같으면 건너뛰어 로컬 상태 유지, 다르면 교체해 기존 아일랜드 dispose 후 `islands`로 재활성화(DC-08). `instanceof Element` 가드                               |
-| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교                                                                                                                                                                                                                        |
-| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                                                                                                                                                                                                                                          |
-| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | 결정 (2026-10-16): HKDF-SHA256으로 루트 시크릿에서 용도별 키 파생(info `state-surface/defer/v1` → AES-GCM-256, `state-surface/flash/v1` → HMAC-SHA256). `SURFACE_SECRET_PREVIOUS`도 같은 방식으로 파생해 복호화·검증에만 사용. 환경 변수가 없으면 빌드 생성 루트 키, 32바이트 미만 시크릿은 시작 시 오류 |
-| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                                                                                                                                                                                                                                                      |
+| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                                                                                                                                                                                                                                                                                                               |
+| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | 결정 (2026-10-16): namespaced 표기 유지, oxc→esbuild→Lithent 실행 통과                                                                                                                                                                                                                                                                                             |
+| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증                                                                                                                                                                                                                                                                                                              |
+| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | 결정 (2026-10-16): 서버가 children을 한 번 렌더해 `<h-children style="display:contents" innerHTML>`로 컴포넌트에 넘김. 컴포넌트가 출력하지 않았거나 `client:only`면 `<template data-surface-children>`로 운반                                                                                                                                                      |
+| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | 결정 (2026-10-16): 기본안. Date·Map·클래스 인스턴스·함수·BigInt·NaN/Infinity·배열 안 undefined·순환은 경로와 함께 SSR 오류, 객체의 undefined 속성은 양쪽에서 생략되므로 허용                                                                                                                                                                                       |
+| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                                                                                                                                                                                                                                                                                                                |
+| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | 결정 (2026-10-16): idiomorph `0.7.4` 정확 고정. `beforeNodeMorphed(old, new)`에서 old가 `h-island`이고 new 아일랜드의 `islands` 메타데이터(componentId·props)가 기존 인스턴스와 같으면 건너뛰어 로컬 상태 유지, 다르면 교체해 기존 아일랜드 dispose 후 `islands`로 재활성화(DC-08). `instanceof Element` 가드                                                      |
+| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교                                                                                                                                                                                                                                                                                  |
+| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                                                                                                                                                                                                                                                                                                    |
+| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | 결정 (2026-10-16): HKDF-SHA256으로 루트 시크릿에서 용도별 키 파생(info `state-surface/defer/v1` → AES-GCM-256, `state-surface/flash/v1` → HMAC-SHA256). `SURFACE_SECRET_PREVIOUS`도 같은 방식으로 파생해 복호화·검증에만 사용. 환경 변수가 없으면 빌드 생성 루트 키, 32바이트 미만 시크릿은 오류(옵션은 handler 생성 시, Workers binding 등 요청 env는 첫 사용 시) |
+| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -371,77 +371,102 @@ server 모드 HTML로 동작한다.
 
 #### 서버: 작성 층·projection
 
-- [ ] 작성 층 validator: full은 targets 범위 교체, 첫 상태 프레임은 full, `done` 작성 금지, changed·removed 규칙. dev는
+- [x] 작성 층 validator: full은 targets 범위 교체, 첫 상태 프레임은 full, `done` 작성 금지, changed·removed 규칙. dev는
       원본 위치와 함께 throw, production은 `error` 프레임 후 종료(DC-14).
-- [ ] 요청 reducer(`applyFrame` 재사용)와 슬롯 모드별 projection: server → `html`(렌더마다 `load` 재실행),
+- [x] 요청 reducer(`applyFrame` 재사용)와 슬롯 모드별 projection: server → `html`(렌더마다 `load` 재실행),
       client → `props`·`merge`. 혼합 프레임은 patch 하나. server 렌더는 첫 갱신 즉시·이후 최대 33ms 1회·done/error 전
       최종 렌더(DC-10).
-- [ ] targets: 선언 targets 또는 첫 full 프레임 키로 고정하고 대상 밖 op를 거부한다.
-- [ ] handler 정상 종료 시 엔진이 `done`을 보낸다. async 함수 반환은 `{ frames: [patch, done] }` JSON 단건.
-- [ ] pageId: 빌드가 페이지별 page manifest(slot → componentId·mode·swap·capability)를 만들고 `X-Surface-Page`로
+- [x] targets: 선언 targets 또는 첫 full 프레임 키로 고정하고 대상 밖 op를 거부한다.
+- [x] handler 정상 종료 시 엔진이 `done`을 보낸다. async 함수 반환은 `{ frames: [patch, done] }` JSON 단건.
+- [x] pageId: 빌드가 페이지별 page manifest(slot → componentId·mode·swap·capability)를 만들고 `X-Surface-Page`로
       해석한다. 누락·미등록은 400.
-- [ ] `html` op의 `islands`(server 슬롯 안 직접 지시자 아일랜드 메타데이터).
-- [ ] 오류 슬롯 규칙: `error` 프레임의 slot은 targets와 무관하게 허용.
-- [ ] 타임아웃 idle 30초·전체 5분, 한도(body 100KB·한 줄 1MB·총 32MB·op 1만·html op 512KB), dev 80% 경고, 초과 시
+- [x] `html` op의 `islands`(server 슬롯 안 직접 지시자 아일랜드 메타데이터).
+- [x] 오류 슬롯 규칙: `error` 프레임의 slot은 targets와 무관하게 허용.
+- [x] 타임아웃 idle 30초·전체 5분, 한도(body 100KB·한 줄 1MB·총 32MB·op 1만·html op 512KB), dev 80% 경고, 초과 시
       `error` + `generator.return()`(DC-14). dev server 재렌더 경고 임계치.
-- [ ] 외부 프레임 헬퍼 `ctx.external(source)`: `external` 슬롯·Standard Schema 강제, 위반 프레임은 버리고 trace.
+- [x] 외부 프레임 헬퍼 `ctx.external(source)`: `external` 슬롯·Standard Schema 강제, 위반 프레임은 버리고 trace.
 
 #### 서버: bootstrap·버전
 
-- [ ] `__SURFACE__` JSON 하나(`buildId`·`pageId`·`basePath`·`slots`·`ui`·`boot`)로 통합하고 `<`·`>`·`&`·U+2028·U+2029를
+- [x] `__SURFACE__` JSON 하나(`buildId`·`pageId`·`basePath`·`slots`·`ui`·`boot`)로 통합하고 `<`·`>`·`&`·U+2028·U+2029를
       이스케이프한다. 단계 2의 `<Boot>` 임시 연결을 `__SURFACE__.boot`로 바꾼다.
-- [ ] `X-Surface-Build` 헤더 검사: 불일치 409 → 브라우저가 현재 URL을 문서 로드로 다시 연다.
+- [x] `X-Surface-Build` 헤더 검사: 불일치 409 → 브라우저가 현재 URL을 문서 로드로 다시 연다.
 
 #### 브라우저: 적용 파이프라인
 
-- [ ] op를 배열 순서대로 실행하고 상태표(awaiting-baseline → active → completed·failed·aborted, done만 오는 빈 성공)를
+- [x] op를 배열 순서대로 실행하고 상태표(awaiting-baseline → active → completed·failed·aborted, done만 오는 빈 성공)를
       따른다. 콘텐츠 op 위반은 중단, `ui` op 위반은 건너뛰고 trace. coalesce(슬롯별 마지막 `html`·`props`, `merge` 합침),
       요청 generation 무효화.
-- [ ] server 슬롯 HTML(DC-03): `swap="replace"`(플러그인 cleanup → 교체 → attach, 내부 아일랜드 dispose →
+- [x] server 슬롯 HTML(DC-03): `swap="replace"`(플러그인 cleanup → 교체 → attach, 내부 아일랜드 dispose →
       `islands`로 재활성화, `id` 기반 포커스·선택·스크롤 복원), `swap="morph"`(idiomorph, 아일랜드 경계 제외, 해당
       페이지에서만 로드), HTML 안 `<script>` 미실행과 dev 경고.
-- [ ] 오류 슬롯이 없는 페이지: 화면 표시 없이 액션 오류·`reportError`로 전달하고 dev 경고.
-- [ ] 인페이지 View Transition(DC-06): 기본 즉시 반영(현재 `sync()`의 전면 `startViewTransition` 제거), 액션
+- [x] 오류 슬롯이 없는 페이지: 화면 표시 없이 액션 오류·`reportError`로 전달하고 dev 경고.
+- [x] 인페이지 View Transition(DC-06): 기본 즉시 반영(현재 `sync()`의 전면 `startViewTransition` 제거), 액션
       `viewTransition`·`data-view-transition`, `<Slot viewTransition>`(첫 등장 포함), patch 단위 1회, 진행 중 후속 프레임
       즉시 적용, reduced motion·미지원 시 즉시.
-- [ ] transition 요청은 호출 시점에 전역 `fetch`를 조회하고 예상 밖 오류를 `reportError`로 전달한다(8.3-2·3).
+- [x] transition 요청은 호출 시점에 전역 `fetch`를 조회하고 예상 밖 오류를 `reportError`로 전달한다(8.3-2·3).
 
 #### capability·안전성 (DC-13)
 
-- [ ] strict: 텍스트·속성 이스케이프(Lithent 보강)와 URL 속성(`href`·`src`·`action`·`formaction`) scheme 검사.
-- [ ] rich: mdast → hast allowlist 렌더러(raw HTML 차단). 단계 7 콘텐츠 컬렉션과 공유한다.
-- [ ] unsafe: 명시 opt-in, `<script>` 미실행, `sandbox="iframe"`이면 `srcdoc` 격리.
-- [ ] UI 패치 검증: 클래스 토큰 `[A-Za-z0-9_:/\[\].-]+`, `cssVars` 키 `--` 시작·값 금지 문자, 잘못된 `ui.classAdd` 타입
+- [x] strict: 텍스트·속성 이스케이프(Lithent 보강)와 URL 속성(`href`·`src`·`action`·`formaction`) scheme 검사.
+- [x] rich: mdast → hast allowlist 렌더러(raw HTML 차단). 단계 7 콘텐츠 컬렉션과 공유한다.
+- [x] unsafe: 명시 opt-in, `<script>` 미실행, `sandbox="iframe"`이면 `srcdoc` 격리.
+- [x] UI 패치 검증: 클래스 토큰 `[A-Za-z0-9_:/\[\].-]+`, `cssVars` 키 `--` 시작·값 금지 문자, 잘못된 `ui.classAdd` 타입
       결함 수정, SSR UI 속성 이스케이프.
 
 #### 지연 server 슬롯 (DC-21)
 
-- [ ] SSR: `server:defer` 슬롯에 fallback과 AES-GCM 토큰(componentId·slotId·buildId 포함)을 출력한다. 루트 키는 빌드 자동
+- [x] SSR: `server:defer` 슬롯에 fallback과 AES-GCM 토큰(componentId·slotId·buildId 포함)을 출력한다. 루트 키는 빌드 자동
       생성, `SURFACE_SECRET`(+`SURFACE_SECRET_PREVIOUS`)이 있으면 사용, IC-09 HKDF로 flash 키와 분리(32바이트 미만 오류).
-- [ ] `GET {BASE_PATH}/_surface/island/:componentId?p=`(토큰 2KB 초과 시 POST): 복호화·검증, 미들웨어 통과(쿠키·권한
+- [x] `GET {BASE_PATH}/_surface/island/:componentId?p=`(토큰 2KB 초과 시 POST): 복호화·검증, 미들웨어 통과(쿠키·권한
       재확인), `load` 실행, HTML + `islands` 응답. 기본 `Cache-Control: private, no-store`, `cache` 속성으로 opt-in.
-- [ ] 브라우저: 페이지의 지연 슬롯 병렬 요청, revision 비교로 늦은 응답 폐기, 1초 뒤 1회 재시도 후 fallback 유지와
+- [x] 브라우저: 페이지의 지연 슬롯 병렬 요청, revision 비교로 늦은 응답 폐기, 1초 뒤 1회 재시도 후 fallback 유지와
       `reportError`.
 
 #### 데모·문서
 
-- [ ] 데모의 서버 갱신 슬롯(검색 결과, streaming 예제 등)을 server 모드로 바꾼다. 토큰 스트리밍(채팅 메시지 등)은
+- [x] 데모의 서버 갱신 슬롯(검색 결과, streaming 예제 등)을 server 모드로 바꾼다. 토큰 스트리밍(채팅 메시지 등)은
       client 모드 `merge`를 유지한다. 데모 transition의 작성 프레임을 새 규칙(첫 full, done yield 없음)으로 고친다.
-- [ ] `PROTOCOL.md`를 두 층 계약으로 다시 쓰고, `docs/ui-protocol/DESIGN.md`에 대체 관계를 표시한다.
+- [x] `PROTOCOL.md`를 두 층 계약으로 다시 쓰고, `docs/ui-protocol/DESIGN.md`에 대체 관계를 표시한다.
 
 #### Baseline 테스트
 
-- [ ] protocol: 작성 층 위반 사례(partial first, done yield, targets 밖, changed/removed 충돌), reducer·projection 스냅샷,
+- [x] protocol: 작성 층 위반 사례(partial first, done yield, targets 밖, changed/removed 충돌), reducer·projection 스냅샷,
       coalesce·한도·타임아웃.
-- [ ] 브라우저 런타임: 상태표 전이, 빈 성공, 콘텐츠·ui op 위반 처리, generation 무효화, replace·morph 포커스 보존.
-- [ ] 적합성 스위트에 지연 슬롯·pageId·409 시나리오 추가.
-- [ ] 악성 입력 1차 세트(속성 breakout, `javascript:` URL, rich 우회, cssVars) 차단.
+- [x] 브라우저 런타임: 상태표 전이, 빈 성공, 콘텐츠·ui op 위반 처리, generation 무효화, replace·morph 포커스 보존.
+- [x] 적합성 스위트에 지연 슬롯·pageId·409 시나리오 추가.
+- [x] 악성 입력 1차 세트(속성 breakout, `javascript:` URL, rich 우회, cssVars) 차단.
 
 #### 제거 확인
 
 구 StateFrame 직접 적용 경로(브라우저의 full·partial 해석), `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`, `sync()`의
 전면 View Transition 래핑, 단계 2의 `<Boot>` 임시 연결, 단계 2·3의 `data-component`·`data-props`·`data-activation`·
 `data-media`·`data-only` 호스트 속성과 `__PLUGINS__` JSON.
+
+#### 임시 연결과 계획 조정 (2026-10-16)
+
+- `defineTransition` 형태: 단계 5(DC-22)의 객체형 전에 `defineTransition(name, handler | { targets, viewTransition, handler })`
+  로 targets·액션 단위 View Transition을 받는다. 단계 5에서 이름 인자를 없애고 `input`·`mode`·`flash`를 더한다.
+- 오류 슬롯: 페이지 manifest에 `system:error`(설정 `createHandler({ errorSlot })`)가 있으면 `error` 프레임이 그 슬롯의
+  렌더 결과를 함께 싣는다(server 슬롯은 `html`, client 슬롯은 `props`). 다음 요청의 baseline에서 브라우저가 비운다.
+  공개 메시지는 `TransitionError`(state-surface/server)로 던지고, 그 밖의 오류는 production에서 `Transition failed`다.
+- 액션 단위 View Transition은 응답 헤더 `X-Surface-View-Transition: 1`로 알린다(프레임 형식 변경 없음).
+- `__SURFACE__`: `{ buildId, pageId, basePath, slots, boot, plugins }`. 단계 3의 `__PLUGINS__`를 `plugins`로 옮겼고, SSR 초기
+  UI를 만드는 경로가 단계 2 이후 없으므로(호스트 `class`·`style`로 대체) `ui` 필드는 쓰지 않는다. 아일랜드 id는 페이지 수준
+  `$N`, 슬롯 안 `<slot>$N`이며 슬롯 메타데이터와 같은 배열에 둔다. 엔진이 없는 페이지에 앱 엔트리만 있으면 build·page·basePath만
+  쓴다(`__BASE_PATH__` 대체). 지연 슬롯 메타데이터에는 엔드포인트 경로용 componentId를 둔다.
+- buildId: build는 client 자산 manifest의 SHA-256 앞 16자, dev는 서버 시작마다 무작위. 빌드 생성 루트 비밀은 빌드마다 32바이트
+  무작위로 서버 번들에 넣는다. `X-Surface-Build`가 없거나 다르면 409, `X-Surface-Page`가 없거나 모르면 400이다.
+- IC-06 구현: 단계 4에서 호스트 `data-component`·`data-props`를 없앴으므로 morph 비교는 `islands` 메타데이터(componentId·props)와
+  기존 인스턴스를 비교한다. 같으면 인스턴스를 새 id로 옮기고, 포커스된 입력의 값은 idiomorph `ignoreActiveValue`로 유지한다.
+- 브라우저 클라이언트 타임아웃(30초)은 제거했다. 서버의 idle 30초·전체 5분이 정본이다(DC-14). 첫 프레임 전 실패는 500에
+  오류 프레임 본문을 담는다.
+- 데모: 모든 슬롯이 server 모드다. 채팅만 `chat:current`를 client 슬롯(`merge` 토큰 스트리밍)으로 둔다. 서버가 요청마다 빈
+  상태에서 시작하므로(DC-10) 채팅 기록은 데모용 서버 저장소(`history.server.ts`, 세션 쿠키)에서 읽고, 검색 입력은 `swap="morph"`로
+  입력·포커스를 유지한다. `guide-load`는 targets를 선언하고, `vt-demo`는 `viewTransition: true`다.
+- 가이드 본문(`shared/content.ts`)의 `__UI__`·`__STATE__` 설명은 단계 7의 가이드 재작성 범위다(코드 사용처는 0).
+- capability strict의 URL 정화는 서버 렌더(SSR·`html` op·지연 응답)에서 한다. 브라우저 Lithent 렌더(client 슬롯) 경로는
+  대상이 아니다. rich 렌더러는 `state-surface/rich`의 `Markdown`(mdast-util-from-markdown 2.0.3·mdast-util-to-hast 13.2.1)이다.
 
 **검증 ID**: V-02, V-07, V-08, V-09, V-10, V-23.
 
@@ -769,6 +794,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                                                                              | IC-07 결정; portable core/type guard 통과                                  |
 | 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                           |
 | 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                    |
+| 4    | 2026-10-16 | 단계 종료 커밋(Git 기록), 기준 `07bb893` | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B   |
 
 ### 단계 0 실행 상세
 
@@ -887,12 +913,46 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   이후 판정한다. 공용 청크: 로더 4,818 B, 액션 런타임 3,313 B, Lithent 4,716 B, bridge 837 B.
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
 
+### 단계 4 실행 상세 (2026-10-16)
+
+- 두 층 계약: `shared/protocol.ts`에 작성 층(`StateFrame`, done·error yield 금지, UI 토큰·cssVars 검증)과 전송 층(`patch`·`done`·
+  `error`, op `html`·`props`·`merge`·`remove`·`ui`)을 두고 브라우저용 가벼운 검사(`checkWireFrame`)를 둔다. 서버
+  `projection.ts`가 요청 상태를 빈 값에서 시작해 `applyFrame`으로 줄이고 슬롯 모드별로 투영한다(server → `renderSlotHtml`, client →
+  props·merge). targets(선언 또는 첫 full 프레임)·페이지·static 위반은 작성 오류다. server 렌더는 슬롯별 첫 갱신 즉시·이후 33ms 1회·
+  종료 전 전부. `transitionResponse.ts`가 generator·async 결과를 wire 프레임으로 바꾸고 엔진이 `done`을 붙이며 idle 타임아웃·줄·
+  총량 한도를 건다. dev는 80% 경고와 server 재렌더 경고를 낸다. `ctx.external(source)`는 `external` 슬롯과 Standard Schema만 통과시킨다.
+- 빌드: analyzer가 Slot 리터럴 옵션(swap·capability·sandbox·viewTransition·server:defer·cache·external·schema)과 정규화된 mode를 읽고,
+  app이 페이지별 슬롯 표를 만든다. 서버 manifest에 page manifest(`pageId` = 라우트 파일 경로), server 슬롯 컴포넌트 registry,
+  buildId, 빌드 생성 루트 비밀을 넣는다.
+- SSR: `__SURFACE__` 하나로 통합하고 호스트 속성을 없앴다. capability strict·rich는 슬롯 콘텐츠의 `innerHTML`을 오류로, URL 속성의
+  비허용 scheme을 제거하고, rich는 `state-surface/rich`의 Markdown allowlist 렌더러, unsafe는 script를 inert `template`로 바꾸고
+  `sandbox="iframe"`이면 `srcdoc`에 담는다. `server:defer`는 fallback과 AES-GCM 토큰(IC-09 HKDF)을 쓰고
+  `/_surface/island/:componentId`(GET, 2KB 초과 POST)가 미들웨어를 거쳐 `load`·렌더 후 `{ html, islands }`를 준다.
+- 브라우저: `stateSurface.ts`가 상태표(awaiting-baseline → active → completed·failed·aborted, 빈 성공, EOF 오류)·op 검사(콘텐츠 위반
+  중단, ui 위반 skip)·슬롯별 coalesce·generation 무효화·opt-in View Transition(액션 헤더·`data-view-transition`·`<Slot viewTransition>`,
+  요청당 1회, reduced motion 생략)·오류 슬롯·409 재로드·전역 `fetch` 호출 시점 조회·지연 슬롯(병렬, revision 폐기, 1초 후 1회
+  재시도)을 맡는다. `slotDom.ts`는 replace(플러그인 cleanup → 아일랜드 dispose → innerHTML → `id` 기준 포커스·선택·스크롤 복원 →
+  attach → 아일랜드 활성화)·morph(`morph.ts` 청크, IC-06)·remove·UI 패치를 맡는다. `sync()`의 전면 `startViewTransition`은 없앴다.
+- 데모: 모든 슬롯을 server 모드로 옮기고(채팅 `chat:current`만 client), transition에서 `done`·`error` yield를 없앴다(오류는
+  `TransitionError`). 홈·스트리밍 예제는 Lithent를 로드하지 않는다.
+- 검증: Vitest 36개 파일/567개(새 projection·capability·slotDom·브라우저 상태표 테스트, 서버→브라우저 통합 4개, 악성 입력 세트:
+  속성 탈출·`javascript:`/`data:` URL·Markdown raw HTML·cssVars), format:check, build, typecheck:server, 전체 tsc 오류 0(단계 3까지의
+  기존 5개 포함 해소). `pnpm test:parity` 20개 문서(부트스트랩은 basePath·boot·렌더 슬롯 집합 비교) + transition 3개(프레임별 대상
+  슬롯 비교), 루트 E2E 9(검색 morph 포커스·값 유지 추가) + spike 5, `/demo` 9, `pnpm test:modes` 4 + sentinel·경로 체인.
+  Node·Express·Bun 1.4.2·Deno 2.5.4·workerd 적합성 각 11개(지연 슬롯 토큰·island 엔드포인트·캐시 헤더, pageId 400, 409, production
+  오류 프레임·async 단건 server 슬롯 HTML 추가)와 5개 어댑터 앱 빌드 통과. portable core 번들 79,640 B. dev·production 서버에서
+  Chromium으로 데모 9개 흐름 확인.
+- 크기(gzip level 9, 실제 로드된 JS 합): 홈 10,448 B(로더 4,430 + 런타임 6,018)·가이드 19,995 B(Prism 9,119 포함)·검색 13,973 B
+  (morph 3,525 포함)·채팅 16,640 B(Lithent 4,716·bridge 837·chatCurrent 371 포함)·스트리밍 10,448 B. 단계 0의 28,147 B 대비 홈 63% 감소.
+  70% 게이트는 단계 10, 로더 2KB 목표는 단계 5에서 다시 본다.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3. IC-01~IC-04·IC-07·IC-08 결정.
-- **다음**: 단계 4(두 층 wire·요청 reducer·server HTML projection·검증·한도·capability·지연 server 슬롯·`__SURFACE__`
-  통합·버전 검사·인페이지 View Transition). IC-06·IC-09를 결정한다. 데모의 서버 갱신 슬롯을 server 모드로 옮긴다.
-- **블로커**: 없음. hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 남은 전체 tsc 오류 5개는
-  단계 8에서 추적한다. 데모 가이드 본문의 구 API 설명은 단계 7에서 다시 쓴다.
+- **완료**: 단계 0·1·2·3·4. IC-01~IC-04·IC-06~IC-09 결정.
+- **다음**: 단계 5(활성화 scheduler 완성·로컬 상태 수명·`useAction`·targets 동시성·pending 완료 기준·타입 지정 transition·
+  JS 없는 폼 PRG·DC-16 ③ transition 루트 이동). IC-05·IC-10은 단계 8·10에서 결정한다.
+- **블로커**: 없음. hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 데모 가이드 본문의
+  구 API 설명(`__UI__`·`__STATE__` 포함)은 단계 7에서 다시 쓴다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
-  단계 2 문서 `5a659cd`, 단계 3 `5c8f024`.
+  단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`.
