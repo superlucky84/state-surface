@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 2 착수 — Lithent 1.25.1 Entry 검증, Page/Slot 구현 예정
+상태: 단계 2 완료 — `.tsx` 페이지·`<Slot>`·호출 지점 변환·요청별 렌더 파이프라인. 다음은 단계 3
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -25,6 +25,9 @@
 - 단계 6과 7은 단계 5 종료 후 병렬로 진행할 수 있다. 둘 다 끝나야 단계 8에 들어간다.
 - 단계 사이의 내부 연결(예: 단계 2의 `<Boot>`를 단계 4 전까지 기존 boot 전달 경로로 잇는 것)은 사용자 API가 아니며
   표시한 단계에서 반드시 제거한다. 하위 호환 레이어는 두지 않는다(AG-08).
+- 단계 2가 남긴 임시 연결(4장 단계 2 "임시 연결"): `mode` 생략 Slot의 client 동작(단계 3 정규화에서 교체), eager
+  `virtual:state-surface/islands`(단계 3), `<h-state data-component>`·`<h-island data-props data-only>` 속성과 `__BOOT__`
+  배열(단계 4 `__SURFACE__`로 교체).
 
 ### 1.2 모든 단계 공통 Exit
 
@@ -61,18 +64,18 @@
 DESIGN이 "구현에서 정한다"로 남긴 세부 선택이다. 표시한 단계 착수 시 결정하고 근거를 이 표에 기록한다. 결정 전까지
 TBD다.
 
-| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                              |
-| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | 결정 (2026-10-16): namespaced 표기 유지, oxc→esbuild→Lithent 실행 통과 |
-| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증 |
-| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | TBD                                                                               |
-| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | TBD                                                                               |
-| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                               |
-| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | TBD                                                                               |
-| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교 |
-| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                   |
-| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | TBD                                                                               |
-| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                               |
+| ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                                                                                                                                                          |
+| ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | 결정 (2026-10-16): namespaced 표기 유지, oxc→esbuild→Lithent 실행 통과                                                                                                                                        |
+| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증                                                                                                                                                         |
+| IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | 결정 (2026-10-16): 서버가 children을 한 번 렌더해 `<h-children style="display:contents" innerHTML>`로 컴포넌트에 넘김. 컴포넌트가 출력하지 않았거나 `client:only`면 `<template data-surface-children>`로 운반 |
+| IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | 결정 (2026-10-16): 기본안. Date·Map·클래스 인스턴스·함수·BigInt·NaN/Infinity·배열 안 undefined·순환은 경로와 함께 SSR 오류, 객체의 undefined 속성은 양쪽에서 생략되므로 허용                                  |
+| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                                                                                                                                                           |
+| IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | TBD                                                                                                                                                                                                           |
+| IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교                                                                                                                             |
+| IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                                                                                                                                               |
+| IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | TBD                                                                                                                                                                                                           |
+| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                                                                                                                                                           |
 
 ---
 
@@ -215,56 +218,78 @@ middleware })` → `{ fetch(request, platform) }`를 만든다.
 
 #### 페이지·공개 API
 
-- [ ] 라우트 탐색: `routes/**/*.tsx`(`_`로 시작하는 파일·폴더 제외), 같은 URL 충돌과 default export 없음은 빌드
+- [x] 라우트 탐색: `routes/**/*.tsx`(`_`로 시작하는 파일·폴더 제외), 같은 URL 충돌과 default export 없음은 빌드
       오류(DC-16).
-- [ ] 페이지 계약 `export default async (ctx) => JSX`, named export `prerender`·`getStaticPaths`·`plugins` 타입.
-- [ ] `state-surface` 공개 API: `Slot`, `Boot`, JSX 타입 선언(namespaced 지시자, Slot 속성, Promise 반환 컴포넌트 거부).
-- [ ] `state-surface/server`: `defineServerComponent({ load, render })`(DC-29), `SurfaceContext` 타입.
+- [x] 페이지 계약 `export default async (ctx) => JSX`, named export `prerender`·`getStaticPaths`·`plugins` 타입.
+- [x] `state-surface` 공개 API: `Slot`, `Boot`, JSX 타입 선언(namespaced 지시자, Slot 속성, Promise 반환 컴포넌트 거부).
+- [x] `state-surface/server`: `defineServerComponent({ load, render })`(DC-29), `SurfaceContext` 타입.
 
 #### 빌드 플러그인(최소판)
 
-- [ ] oxc-parser pre transform: 직접 지시자 엘리먼트와 `<Slot>`의 자식 엘리먼트를 디스크립터 생성 호출로 바꾼다
+- [x] oxc-parser pre transform: 직접 지시자 엘리먼트와 `<Slot>`의 자식 엘리먼트를 디스크립터 생성 호출로 바꾼다
       (DESIGN 3장). 정적 import 식별자만 허용하고 componentId(모듈 경로 + export 이름)를 만든다. 소스맵을 유지한다.
-- [ ] 기본 진단: Slot 자식 0개·2개 이상·children·Slot-in-Slot·계산된 아일랜드·Slot 밖 `defineServerComponent`·
+- [x] 기본 진단: Slot 자식 0개·2개 이상·children·Slot-in-Slot·계산된 아일랜드·Slot 밖 `defineServerComponent`·
       client 아일랜드 안 `<Boot>`·이름 형식. 메시지 형식 완성은 단계 8.
 
 #### 렌더 파이프라인
 
-- [ ] 페이지 함수 await → 반환 트리를 동기 순회해 Slot·아일랜드·`<Boot>`·`defineServerComponent`를 수집한다. 렌더 중
+- [x] 페이지 함수 await → 반환 트리를 동기 순회해 Slot·아일랜드·`<Boot>`·`defineServerComponent`를 수집한다. 렌더 중
       부수효과 등록이나 모듈 전역 수집기를 쓰지 않는다.
-- [ ] server 슬롯의 `load`를 모아 `Promise.all`로 기다린 뒤 렌더한다. `load` 실패는 오류 응답·`onError`로 처리한다.
-- [ ] 문서 조립(4.4): 자리표시 토큰 치환, `<!doctype html>`, head·body 주석 마커, 관리 태그 순서(CSS → modulepreload →
+- [x] server 슬롯의 `load`를 모아 `Promise.all`로 기다린 뒤 렌더한다. `load` 실패는 오류 응답·`onError`로 처리한다.
+- [x] 문서 조립(4.4): 자리표시 토큰 치환, `<!doctype html>`, head·body 주석 마커, 관리 태그 순서(CSS → modulepreload →
       bootstrap JSON → 앱 엔트리 → 엔진 엔트리), 엔진 script에 nonce, html·head·body 누락·중복 진단.
-- [ ] Slot 이름 규칙(DC-08): 형식, 페이지 단위 중복(빌드·SSR), `#` 예약.
-- [ ] client 아일랜드 props 직렬화: 공개 props만, JSON 불가 값 진단(IC-04). children 정적 조각 전달(IC-03).
+- [x] Slot 이름 규칙(DC-08): 형식, 페이지 단위 중복(빌드·SSR), `#` 예약.
+- [x] client 아일랜드 props 직렬화: 공개 props만, JSON 불가 값 진단(IC-04). children 정적 조각 전달(IC-03).
 
 #### 클라이언트 연결
 
-- [ ] `defineTemplate` 이름 registry와 `engine/client/templates/auto.ts` eager glob을 componentId registry로 바꾼다.
+- [x] `defineTemplate` 이름 registry와 `engine/client/templates/auto.ts` eager glob을 componentId registry로 바꾼다.
       단계 3 전까지는 가상 모듈이 모든 아일랜드를 eager로 담는다(단계 3에서 동적 청크로 교체).
-- [ ] `<Boot>`(DC-31): 수집 결과를 단계 4 전까지 기존 boot 전달 경로로 넘기고, 클라이언트 boot 실행부를 배열·문서
+- [x] `<Boot>`(DC-31): 수집 결과를 단계 4 전까지 기존 boot 전달 경로로 넘기고, 클라이언트 boot 실행부를 배열·문서
       순서 실행으로 확장한다. 단계 4에서 `__SURFACE__.boot`로 교체한다.
 
 #### 데모 전환
 
-- [ ] `routes/**/*.ts`와 `layouts/surface.ts`(`stateSlots`·`joinSurface`·`surfaceDocument`·`baseSurface`)를
+- [x] `routes/**/*.ts`와 `layouts/surface.ts`(`stateSlots`·`joinSurface`·`surfaceDocument`·`baseSurface`)를
       `routes/**/*.tsx` 페이지와 `layouts/Layout.tsx`로 바꾼다. 기존 `templates/*.tsx`는 Slot 자식 컴포넌트로 옮긴다.
-- [ ] `initialStates.ts`(initial > transition > empty)를 제거한다. 초기값은 페이지 함수가 props로 준다. 가이드 페이지는
+- [x] `initialStates.ts`(initial > transition > empty)를 제거한다. 초기값은 페이지 함수가 props로 준다. 가이드 페이지는
       로딩 상태 SSR + `<Boot transition="guide-load" …/>`로 현재 동작을 유지한다(단계 7에서 prerender로 대체).
-- [ ] scaffold overrides의 route·layout도 같은 형식으로 바꾼다.
+- [x] scaffold overrides의 route·layout도 같은 형식으로 바꾼다.
 
 #### Baseline 테스트
 
-- [ ] 플러그인 변환 fixture 스냅샷(지시자·Slot 자식·import 형태별)과 진단 fixture.
-- [ ] 병렬 요청 교차: 두 요청이 await 사이에서 교차해도 각 응답의 슬롯·props·boot가 자기 것만 담긴다.
-- [ ] `client:only` 컴포넌트가 서버에서 호출되지 않음(호출 감지 spy).
-- [ ] `load` 병렬 대기(동시 시작 확인)와 실패 시 오류 응답.
-- [ ] 문서 조립 스냅샷(마커·순서·nonce)과 Lithent 속성 이스케이프 회귀(`data-params` JSON 왕복).
+- [x] 플러그인 변환 fixture 스냅샷(지시자·Slot 자식·import 형태별)과 진단 fixture.
+- [x] 병렬 요청 교차: 두 요청이 await 사이에서 교차해도 각 응답의 슬롯·props·boot가 자기 것만 담긴다.
+- [x] `client:only` 컴포넌트가 서버에서 호출되지 않음(호출 감지 spy).
+- [x] `load` 병렬 대기(동시 시작 확인)와 실패 시 오류 응답.
+- [x] 문서 조립 스냅샷(마커·순서·nonce)과 Lithent 속성 이스케이프 회귀(`data-params` JSON 왕복).
 
 #### 제거 확인
 
 `layout(stateScript)`, `stateSlots`, `joinSurface`, `surfaceDocument`, `baseSurface`, `fillHState` 정규식,
 `initialStates.ts`, `defineTemplate`, `auto.ts` eager glob.
+
+#### 임시 연결 (단계 3·4에서 제거)
+
+- `mode`를 생략한 Slot은 단계 3 모드 정규화 전까지 기존과 같이 SSR + `__STATE__` hydration + 클라이언트 갱신으로 동작한다.
+  명시한 `mode="server"`·`mode="static"`은 SSR 전용이며(server HTML 갱신은 단계 4) 클라이언트 상태를 보내지 않는다.
+- 슬롯 호스트는 `<h-state name data-component="componentId">`로 컴포넌트를 알린다. 직접 지시자 아일랜드는
+  `<h-island data-island="$N" data-component data-props [data-only]>`이며 시점과 무관하게 로드 시 활성화한다(scheduler는 단계 5).
+  단계 4의 `__SURFACE__.slots`가 이 속성들을 대체한다.
+- `<Boot>`는 `__BOOT__` JSON 배열(문서 순서)로 전달하고 클라이언트가 순서대로 실행한다. targets 없는 boot가 둘 이상이면
+  서로 abort하므로 dev에서 경고한다. 단계 4에서 `__SURFACE__.boot`, 단계 5에서 액션 런타임으로 옮긴다.
+
+#### 계획 조정 (2026-10-16)
+
+- 빌드 fixture는 `engine/build/transform.test.ts`의 메모리 프로젝트(가상 파일 + 해석기)와 스냅샷
+  (`engine/build/__snapshots__/`)으로 둔다. 진단 fixture가 의도적으로 잘못된 코드라 저장소 `tsc` 대상에 넣지 않기 위해서다.
+- DC-16 ③(transition을 루트 `transitions/**/*.ts`로 옮기고 경로를 이름으로 쓰는 규칙)은 어느 단계에도 배정되지 않았다.
+  transition 이름·입력 타입을 바꾸는 단계 5(`defineTransition({ input, targets, … })`·`actions.d.ts`)에서 함께 수행한다.
+  단계 2는 `routes/**/transitions/*.ts` 탐색을 유지한다.
+- 데모 가이드 본문(`shared/content.ts`)의 구 API 설명은 단계 7 "가이드 본문을 2.0 API로 다시 쓴다"에서 콘텐츠 컬렉션 이행과
+  함께 고친다. 단계 2는 README·CLAUDE.md·AGENTS.md·scaffold README·서버 가이드를 갱신한다(PROTOCOL은 wire 불변).
+- 단계 1의 정확한 Express 문자열 비교(`conformance/legacy.mjs`)는 의도된 속성 이스케이프 변경 이후 맞지 않으므로
+  단계 1 production 산출물 의미 비교(`pnpm test:parity`, `conformance/stage1-demo.json`)로 바꿨다.
 
 **검증 ID**: V-03, V-10(SSR 속성 이스케이프 부분), V-11, V-15.
 
@@ -308,7 +333,7 @@ static·server·client 모드를 나누고 컴포넌트별 동적 청크, 서버
 #### 제거 확인
 
 `auto.ts` eager 맵(단계 2의 임시 eager 가상 모듈 포함), `client/main.ts` 전역 플러그인 등록, `onInit`·
-`onTransitionStart/End`.
+`onTransitionStart/End`, 단계 2의 "`mode` 생략 Slot = client" 임시 동작.
 
 **검증 ID**: V-01, V-03, V-05, V-06.
 
@@ -394,7 +419,7 @@ server 모드 HTML로 동작한다.
 #### 제거 확인
 
 구 StateFrame 직접 적용 경로(브라우저의 full·partial 해석), `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`, `sync()`의
-전면 View Transition 래핑, 단계 2의 `<Boot>` 임시 연결.
+전면 View Transition 래핑, 단계 2의 `<Boot>` 임시 연결, 단계 2의 `data-component`·`data-props`·`data-only` 호스트 속성.
 
 **검증 ID**: V-02, V-07, V-08, V-09, V-10, V-23.
 
@@ -436,6 +461,8 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 - [ ] `defineTransition({ input, targets, mode, flash, handler })`, Standard Schema 검증(실패 시 handler 미실행·
       `fieldErrors`), form-urlencoded·multipart → 객체(같은 이름은 배열).
 - [ ] `.state-surface/actions.d.ts` 생성(dev는 파일 변경 시 갱신): 이름 → 입력·결과 타입. `useAction`·`<Boot>` 타입 연결.
+- [ ] DC-16 ③: transition을 루트 `transitions/**/*.ts`로 옮기고 디렉터리 기준 상대 경로를 이름으로 등록, 중복은 빌드 오류.
+      `routes/**/transitions/` 탐색과 `defineTransition(name, …)`의 이름 인자를 제거한다(단계 2 계획 조정).
 - [ ] `POST {BASE_PATH}/_surface/action/:name` → 실행(프레임 버림) → 303. `_redirect`는 같은 origin·BASE_PATH 경로만,
       아니면 같은 origin `Referer`, 그것도 아니면 BASE_PATH 루트.
 - [ ] flash: IC-09 키로 서명한 일회성 쿠키, 기본은 검증 오류·결과만, 입력값은 `flash.input`에 명시한 필드만, file 값
@@ -457,7 +484,8 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 
 #### 제거 확인
 
-첫 프레임 pending 해제, 전역 abort-previous(targets 선언 액션 기준), debug용 `window.__surface` 의존.
+첫 프레임 pending 해제, 전역 abort-previous(targets 선언 액션 기준), debug용 `window.__surface` 의존,
+`routes/**/transitions/` 관례.
 
 **검증 ID**: V-04, V-12, V-13, V-24.
 
@@ -713,10 +741,11 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 ### 실행 기록
 
-| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                         | 비고                                                                       |
-| ---- | ---------- | ---------------------------------------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정       | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
-| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9 | IC-07 결정; portable core/type guard 통과                                  |
+| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                                        | 비고                                                                       |
+| ---- | ---------- | ---------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정                      | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
+| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                | IC-07 결정; portable core/type guard 통과                                  |
+| 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                           |
 
 ### 단계 0 실행 상세
 
@@ -775,10 +804,41 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - Lithent 패키지 CommonJS 진입점 변경에 맞춰 브라우저 probe는 `.cjs`·`.umd.js` 모두에서 ESM 파일을 찾는다. 수정 후 spike 전부 통과. hydration 입력·선택 범위 초기화는 여전히 재현된다(V-04 미충족).
 - 이 기록은 단계 2 Entry 완료다. Page/Slot 및 데모 전환 체크박스는 아직 완료하지 않았다. 단계 1의 정확한 문자열 기준선은 역사 기록으로 보존하며, 속성 이스케이프는 의도된 보안 변경이다.
 
+### 단계 2 실행 상세 (2026-10-16)
+
+- 공개 API: `state-surface`의 `Slot`·`Boot`와 JSX 전역 타입(`client:*` 지시자, `key`, Promise 반환 컴포넌트를 거부하는
+  `JSX.ElementType`), `state-surface/server`의 `defineServerComponent`·`PageModule`·`PageFunction`. `defineTemplate`·
+  `RouteModule`·`BootConfig`를 제거했다. 빈 슬롯은 `<Slot name component={X} />`, 호스트 속성은 `class`·`style`·`id`·`data-*`·
+  `aria-*`로 정했다(DESIGN 2.1 보완).
+- 빌드: `engine/build/analyze.ts`(oxc 분석), `transform.ts`(MagicString 호출 지점 변환·소스맵), `app.ts`(페이지 import 그래프,
+  componentId, 모듈 간 진단), `routeScanner.ts`(`routes/**/*.tsx`, `_` 제외, URL 충돌), `diagnostics.ts`(`파일:줄:열`·코드 프레임).
+  `engine/vite.ts`는 `enforce: 'pre'`로 바뀌고 manifest와 `virtual:state-surface/islands`(eager 23개)를 같은 분석으로 만든다.
+  dev는 분석 대상 파일 변경 시 가상 모듈을 무효화하고 전체 재로드한다. `oxc-parser`·`magic-string`을 런타임 의존성으로 옮겼다.
+- 렌더: `engine/server/ssrRenderer.ts`가 페이지 await → 페이지 트리 슬롯 수집(이름 중복·server 컴포넌트 위치 검사) →
+  server `load` 동시 시작·`Promise.all` → 마커 투영(트리를 변경하지 않고 바뀐 경로만 복사해 모듈 전역 JSX 공유에도 안전) →
+  무작위 토큰 자리표시 치환·doctype 순으로 문서를 만든다. 관리 태그는 CSS → bootstrap JSON → 엔진 엔트리(nonce) 순이다.
+  Promise를 반환한 컴포넌트, html/head/body 개수, client 트리·정적 조각 안의 Slot·아일랜드·`<Boot>`를 SSR 오류로 진단한다.
+  `routeHandler.ts`·`initialStates.ts`·`fillHState`·`templateRegistry`·`templateCheck`·`auto.ts`를 제거했다.
+- 클라이언트: `lithentBridge`가 `data-component`로 registry에서 컴포넌트를 찾고, `islands.ts`가 `<h-island>`를 hydrate(`client:only`는
+  render)한다. `__BOOT__` 배열을 문서 순서로 실행한다.
+- 데모: 9개 페이지를 `.tsx`로, `layouts/surface.ts`를 `layouts/Layout.tsx`로, `templates/`를 `_components/`(공통은
+  `_shared/components/`)로 옮겼다. 초기에 비어 있던 `search:results`·`chat:current`·`chat:typing`·`system:error`는
+  `component` 빈 슬롯이다. 가이드는 로딩 SSR + `<Boot transition="guide-load">`다. scaffold를 재생성했다.
+- 검증: Vitest 35개 파일/480개, format:check, build, typecheck:server 통과. 전체 `tsc --noEmit` 오류는 40 → 5개이며 남은 5개는
+  기존 `abort.test.ts`·`actionDelegation.test.ts` 타입 문제다(단계 8). 단계 1 production 산출물 의미 비교 20개 문서(en·ko 각 10
+  페이지, 404 제외)와 transition 3개 통과(비교 도구 자체는 텍스트·JSON·속성 변경을 잡는지 변형 입력으로 확인).
+  Chromium E2E 루트 9 + spike 5, `BASE_PATH=/demo` 9 통과, dev 서버 브라우저 확인(가이드 boot·검색 빈 슬롯 채움, 콘솔 오류 0).
+  Node 22.22.0·Express 5.2.1·Bun 1.4.2·Deno 2.5.4·Wrangler 4.151.0/workerd 적합성 각 8개(총 40) 통과, 5개 어댑터 앱 빌드 통과.
+  portable core 번들 48,413 B(단계 1 38,498 B, 페이지 렌더러 포함), Node/Express/env/runtime 스캔 import 없음.
+- 크기: client JS 97,632 B / gzip(level 9) 28,474 B(단계 0 28,147 B), CSS 37,415 B / gzip 7,700 B, 서버 번들 337,923 B /
+  gzip 81,466 B. 감소 목표는 단계 3 이후의 청크 분리·모드 정규화로 판정한다.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과, Bun 1.3.0 고정 버전(이 머신은 1.4.2), 수동·실기기 검증은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0과 단계 1. IC-07(공통 fixture + 실제 runtime HTTP)·IC-08 결정.
-- **다음**: IC-01·IC-02 Entry 검증을 완료했다. 단계 2의 Page/Slot 호출 지점 변환·요청별 렌더·데모 `.tsx` 전환을 구현한다.
-- **블로커**: 단계 2의 외부 릴리스 선행 조건은 Lithent 1.25.1에서 해소했다. 단계 2 본체의 체크리스트는 아직 미완료다.
-  hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 클라이언트·템플릿의 기존 전체 tsc 오류는 단계 8에서 추적한다.
-- **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`. 단계 1 변경은 이번 단계 종료 커밋 및 `conformance/`·테스트 기록 참조.
+- **완료**: 단계 0·1·2. IC-01~IC-04·IC-07·IC-08 결정.
+- **다음**: 단계 3(모드 정규화·아일랜드별 동적 청크·서버 전용 보호·요청별 엔트리 선택·앱 엔트리·페이지별 플러그인).
+  단계 2 임시 연결(`mode` 생략 Slot의 client 동작, eager islands 모듈)을 이 단계에서 제거한다.
+- **블로커**: 없음. hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 남은 전체 tsc 오류 5개는
+  단계 8에서 추적한다. 데모 가이드 본문의 구 API 설명은 단계 7에서 다시 쓴다.
+- **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`.

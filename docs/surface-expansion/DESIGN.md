@@ -2,7 +2,7 @@
 
 작성일: 2026-10-13
 
-상태: 단계 1 구현 완료 — 이후 단계의 설계 계약 유지
+상태: 단계 2 구현 완료 — `.tsx` 페이지·`<Slot>`·호출 지점 변환·문서 조립 반영, 이후 단계의 설계 계약 유지
 
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md)를 따른다. 사용자와 합의한 목표,
 현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `Slot`, 지시자와 신규 프레임 필드는
@@ -130,7 +130,14 @@ export default async function Page(ctx: SurfaceContext) {
 - **fallback**: `client:only`·`server:defer` 등의 선표시 콘텐츠는 `fallback` prop으로 쓴다(`<Slot>`과 직접
   지시자 공통).
 - **Slot 속성**: `name`, `mode`(static/server/client, 생략 시 4.1 정규화 규칙), client 지시자, `server:defer`,
-  `fallback`, `capability`, `resetKey`, `swap`(server 모드 HTML 적용 방식, 4.3), `viewTransition`(9.1). 자식 props와 엔진 속성이 섞이지 않는다.
+  `fallback`, `capability`, `resetKey`, `swap`(server 모드 HTML 적용 방식, 4.3), `viewTransition`(9.1), `component`(빈 슬롯).
+  자식 props와 엔진 속성이 섞이지 않는다.
+- **빈 슬롯**(단계 2 보완, 2026-10-16): 처음에는 내용이 없고 프레임이 채우는 슬롯(오류 슬롯, 검색 결과, 스트리밍 중 문장)은
+  자식 대신 `<Slot name="search:results" component={SearchResults} />`로 컴포넌트만 선언한다. SSR은 빈 호스트를 출력하고
+  초기 슬롯 상태가 없다(remove op 이후의 상태와 같다). `component`는 정적 import 식별자여야 하며 자식 엘리먼트와 함께 쓰면
+  진단한다. 자식 props를 "무시되는 값"으로 두지 않기 위해 별도 속성으로 둔다(props = 슬롯 상태 규칙 유지).
+- **호스트 속성**(단계 2 보완): `class`·`style`·`id`·`data-*`·`aria-*`는 슬롯 호스트(`<h-state>`)에 그대로 출력한다. 레이아웃
+  배치와 `data-animate` 프리셋(9.1)을 위해서다. 그 밖의 속성은 진단한다(컴포넌트 데이터는 자식 props로 넘긴다).
 - **지시자 표기**: `client:visible` 같은 namespaced JSX 속성을 사용한다. TypeScript는 5.1부터 namespaced
   JSX 속성의 타입 검사를 지원한다. esbuild·Vite 변환 통과 여부를 2단계 시작 시 spike로 확인하고,
   막히면 대체 표기(예: `clientVisible`)를 정한다. `Slot`·지시자 타입은 `state-surface`가 JSX 타입 선언으로 제공한다.
@@ -408,7 +415,9 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
   로컬 상태는 초기화되며 이 수명을 가이드에 명시한다. 상태 보존(detach/reattach)은 후속 범위다.
 - **client 아일랜드 children**(DC-08 결정): client 아일랜드에 넘긴 JSX children은 서버에서 HTML로 렌더해
   정적 조각으로 전달한다(Astro 방식). 아일랜드는 지정한 위치에 그대로 출력만 하고 내부를 수정하지
-  않는다. children의 서버 전용 코드·데이터는 브라우저로 가지 않는다. 전달 형식(템플릿 요소 등)은 구현에서 정한다.
+  않는다. children의 서버 전용 코드·데이터는 브라우저로 가지 않는다. 전달 형식은 IMPLEMENT IC-03(2026-10-16 결정):
+  `<h-children>` 래퍼에 서버 렌더 HTML을 넣어 컴포넌트에 넘기고, 컴포넌트가 출력하지 않았거나 `client:only`면
+  `<template data-surface-children>`로 운반한다.
 - client 내부는 일반 Lithent 자식 컴포넌트로 작성한다. 외부 runtime이 그 내부 DOM을 HTML로 교체하지 않는다.
 - **이름 형식·구역**(DC-08 결정): `<Slot name>`은 `[a-z0-9-]+(:[a-z0-9-]+)*` 형식의 문자열 리터럴이다.
   레이아웃·페이지·컴포넌트 안의 모든 `<Slot>`이 한 페이지 안에서 하나의 이름 구역을 공유하며, 중복은
@@ -1786,9 +1795,11 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   이어서 [IMPLEMENT.md](./IMPLEMENT.md)에 단계 0~10의 작업·Entry/Exit·baseline 테스트·검증 ID 매핑과 IC-01~IC-10을
   작성했다. [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)에 MT-01~MT-18과 릴리스 판정 규칙을 작성해 네 문서를
   갖췄다.
-- 다음: IMPLEMENT.md 단계 0(기준선 고정)을 시작한다.
-- 블로커: 문서 작성의 외부 조건은 없다. 2단계 진입 전에 Lithent `renderToString`의 속성 이스케이프 보강이 필요하다.
-  공개 문법·입력 한도·브라우저 범위의 세부값은 구현 단계에서 확정한다.
+- 구현 진행(2026-10-16): IMPLEMENT 단계 0·1·2 완료. 단계 2에서 2.1에 빈 슬롯(`component`)과 호스트 속성을 보완했고
+  IC-01~IC-04를 결정했다. 실행 기록은 IMPLEMENT 6장이 정본이다.
+- 다음: IMPLEMENT 단계 3(모드·manifest).
+- 블로커: 없음. Lithent 속성 이스케이프 선행 조건은 1.25.1에서 해소했다. 공개 문법·입력 한도·브라우저 범위의 세부값은
+  해당 구현 단계에서 확정한다.
 - 현재 기준 커밋: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).
 - 기존 코드 검증 기준: `6742026cb91bd06b030ce503da387701f6e1fb6e`, Node 22.12.0,
   pnpm 10.13.1, Vite 7.3.1. 이번 문서 편집에서 runtime 테스트를 재실행한 결과는 아니다.

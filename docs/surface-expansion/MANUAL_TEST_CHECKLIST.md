@@ -370,3 +370,14 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
 - Lithent 1.25.1로 갱신했다. SSR 회귀 검사는 JSON 속성, 따옴표·마크업 탈출 방지, boolean·style·innerHTML 계약을 다룬다.
 - happy-dom 20.5.0은 속성의 `&lt;`·`&gt;`를 원래 문자로 복원하지 않는 별도 결함이 있어 전체 JSON·악성 title 왕복은 Chromium에서 검사한다.
 - MT-18 전체 보안 검증과 수동 브라우저 검증은 미완료다. Page/Slot 파이프라인과 hydration 입력 보존도 아직 구현하지 않았다.
+
+### 단계 2 자동 선행 검증 (2026-10-16)
+
+- MT-16 관련 자동 검사: 빌드 진단 21종(Slot 자식 0·2개·조건식·children, Slot-in-Slot, 계산된 아일랜드, HTML 요소 지시자,
+  시점 중복, 알 수 없는 지시자, 이름 형식·`#`·비리터럴, 모드·지시자 모순, Slot 밖·client Slot·아일랜드의
+  `defineServerComponent`, client 아일랜드 안 `<Boot>`·아일랜드, 아일랜드 children 안 Slot)이 `[state-surface] 파일:줄:열`과
+  함께 보고된다. 편집기 자동 완성·dev 오버레이 화면·`state-surface check`는 아직 확인하지 않았다(단계 8).
+- MT-18 관련 자동 검사: Slot props의 속성 탈출 payload가 `data-params`·`__STATE__`에서 원문 왕복하고 `<script>`를 만들지 않는다.
+  `</script>` 포함 `<Boot>` params가 JSON 밖으로 나가지 않는다. Chromium 왕복은 spike로 확인했다.
+- 단계 1 production 산출물과 의미 비교(SSR 20개 문서·transition 3개), 루트·`/demo` 브라우저 parity, 5개 런타임 적합성은 계속 통과한다.
+  MT-01~MT-18 수동 판정으로 계산하지 않는다.
