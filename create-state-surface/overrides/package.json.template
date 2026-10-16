@@ -18,7 +18,7 @@
     "format:check": "prettier --check 'client/**/*.ts' 'client/**/*.tsx' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts'"
   },
   "dependencies": {
-    "lithent": "^1.21.7",
+    "lithent": "^1.25.1",
     "prismjs": "^1.30.0",
     "state-surface": "__STATE_SURFACE_VERSION__"
   },

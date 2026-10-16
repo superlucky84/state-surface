@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 1 완료 — 단계 2 외부 선행 릴리스 확인 필요
+상태: 단계 2 착수 — Lithent 1.25.1 Entry 검증, Page/Slot 구현 예정
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -63,8 +63,8 @@ TBD다.
 
 | ID    | 내용                                                                        | 결정 시점    | 기본안                                                                                                                                 | 상태                                                                              |
 | ----- | --------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | TBD                                                                               |
-| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | TBD                                                                               |
+| IC-01 | namespaced 지시자(`client:visible`)의 oxc·esbuild·Lithent JSX 통과(DC-07 ⑥) | 단계 2 Entry | 통과하면 그대로, 막히면 `clientVisible` 등 대체 표기를 DC-07에 개정                                                                    | 결정 (2026-10-16): namespaced 표기 유지, oxc→esbuild→Lithent 실행 통과 |
+| IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증 |
 | IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | TBD                                                                               |
 | IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | TBD                                                                               |
 | IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                               |
@@ -81,12 +81,12 @@ TBD다.
 ### 3.1 Lithent SSR 속성 이스케이프 (단계 2 Entry 조건)
 
 DESIGN 1장에서 확인한 대로 lithent 1.21.7의 `renderToString`은 속성값을 이스케이프하지 않는다. StateSurface가 아닌
-Lithent 저장소에서 고친다.
+Lithent 저장소에서 고친다. 2026-10-16 npm 최신 배포 1.25.1에서 업스트림 수정을 확인했다.
 
-- [ ] `lithent/ssr`의 속성 직렬화(`makeProp`)에서 속성값의 `&`·`"`·`<`·`>`를 이스케이프한다.
-- [ ] 회귀 테스트: `data-params='{"mode":"full"}'` → `data-params="{&quot;mode&quot;:&quot;full&quot;}"`,
+- [x] `lithent/ssr`의 속성 직렬화(`makeProp`)에서 속성값의 `&`·`"`·`<`·`>`를 이스케이프한다.
+- [x] 회귀 테스트: `data-params='{"mode":"full"}'` → `data-params="{&quot;mode&quot;:&quot;full&quot;}"`,
       `title='a"b<c'`가 속성 하나로 직렬화, boolean·style·innerHTML 동작 불변.
-- [ ] 패치 릴리스 후 이 저장소의 lithent 의존 범위를 올리고(IC-02) `engine/server/ssrRenderer.test.ts`에 같은
+- [x] 패치 릴리스 후 이 저장소의 lithent 의존 범위를 올리고(IC-02) `engine/server/ssrRenderer.test.ts`에 같은
       회귀 사례를 추가한다.
 - [ ] (선택) async 컴포넌트가 Promise를 반환하면 dev에서 경고하는 기능을 Lithent에 제안한다(DESIGN 3.1 타입 진단 보완).
 
@@ -766,10 +766,19 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   이는 build·Vitest의 실패가 아니며 단계 8 타입 진단 완성 때 추적한다.
 - 문서·제거 검색·format:check·전체 build·frozen install을 검증했다. [서버 가이드](../server-adapters.md), PROTOCOL, README, AGENTS 및 4개 정본 문서를 갱신했다.
 
+### 단계 2 Entry 실행 상세 (2026-10-16)
+
+- npm 최신 Lithent 1.25.1 배포의 SSR 소스에서 `escapeAttr` 보강을 확인하고 의존 범위·lockfile·scaffold 원본을 갱신했다. 업스트림 패키지 무결성 검증을 유지했다.
+- `ssrRenderer.test.ts`에 JSON 속성·속성 탈출 payload·boolean/style/innerHTML 회귀 3개를 추가했다. 전체 35개 파일/462개 테스트, build·서버 타입 검사·format 검사 통과.
+- Chromium에서 JSON 및 악성 title 속성의 원문 왕복·추가 속성/스크립트 부재를 검증했다. 기존 데모 루트 9개·`/demo` 9개와 spike 5개 통과. IC-01(namespaced 표기 유지)·IC-02(^1.25.1)를 결정했다.
+- happy-dom 20.5.0은 단순 `title="&lt;&gt;"`도 원문으로 복원하지 않는다. 이 모델의 결함을 피하기 위해 완전한 파서 왕복은 실제 Chromium에서 검사하며 기대값을 약화하지 않았다.
+- Lithent 패키지 CommonJS 진입점 변경에 맞춰 브라우저 probe는 `.cjs`·`.umd.js` 모두에서 ESM 파일을 찾는다. 수정 후 spike 전부 통과. hydration 입력·선택 범위 초기화는 여전히 재현된다(V-04 미충족).
+- 이 기록은 단계 2 Entry 완료다. Page/Slot 및 데모 전환 체크박스는 아직 완료하지 않았다. 단계 1의 정확한 문자열 기준선은 역사 기록으로 보존하며, 속성 이스케이프는 의도된 보안 변경이다.
+
 ### 상태
 
 - **완료**: 단계 0과 단계 1. IC-07(공통 fixture + 실제 runtime HTTP)·IC-08 결정.
-- **다음**: 단계 2 진입 전에 IC-01(namespaced JSX 최종 선택)·IC-02(Lithent SSR 이스케이프 릴리스)를 확정하고 Page/Slot·JSX 구현에 들어간다.
-- **블로커**: 현재 고정 Lithent 1.21.7은 속성 이스케이프 보강이 없어 단계 2 Entry를 충족하지 않는다. 별도 upstream 릴리스 확인이 필요하다.
+- **다음**: IC-01·IC-02 Entry 검증을 완료했다. 단계 2의 Page/Slot 호출 지점 변환·요청별 렌더·데모 `.tsx` 전환을 구현한다.
+- **블로커**: 단계 2의 외부 릴리스 선행 조건은 Lithent 1.25.1에서 해소했다. 단계 2 본체의 체크리스트는 아직 미완료다.
   hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 클라이언트·템플릿의 기존 전체 tsc 오류는 단계 8에서 추적한다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`. 단계 1 변경은 이번 단계 종료 커밋 및 `conformance/`·테스트 기록 참조.

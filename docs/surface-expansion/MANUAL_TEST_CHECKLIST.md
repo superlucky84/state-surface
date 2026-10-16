@@ -364,3 +364,9 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
   HTML 속성 이스케이프는 아직 고치지 않았으며 단계 2의 Lithent upstream 선행 조건을 유지한다.
 - MT-16 관련 시작점: scaffold 원본/overrides·helper/타입 선언을 갱신·재생성했다. 독립 패키지 설치 검증은 단계 8이다.
 - 루트·/demo 브라우저 parity와 단계 0 기술 관측은 계속 통과한다. MT-01~MT-18 수동 릴리스 판정으로 계산하지 않는다.
+
+### 단계 2 Entry 검증 (2026-10-16)
+
+- Lithent 1.25.1로 갱신했다. SSR 회귀 검사는 JSON 속성, 따옴표·마크업 탈출 방지, boolean·style·innerHTML 계약을 다룬다.
+- happy-dom 20.5.0은 속성의 `&lt;`·`&gt;`를 원래 문자로 복원하지 않는 별도 결함이 있어 전체 JSON·악성 title 왕복은 Chromium에서 검사한다.
+- MT-18 전체 보안 검증과 수동 브라우저 검증은 미완료다. Page/Slot 파이프라인과 hydration 입력 보존도 아직 구현하지 않았다.

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       lithent:
-        specifier: ^1.21.7
-        version: 1.21.7
+        specifier: ^1.25.1
+        version: 1.25.1
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
@@ -1396,8 +1396,8 @@ packages:
     resolution: {integrity: sha512-utfs7Pr5uJyyvDETitgsaqSyjCb2qNRAtuqUeWIAKztsOYdcACf2KtARYXg2pSvhkt+9NfoaNY7fxjl6nuMjIQ==}
     engines: {node: '>= 12.0.0'}
 
-  lithent@1.21.7:
-    resolution: {integrity: sha512-o93x4xdGxVmCecBWgR1TB2GHiNx8kzDtdcjRxESOjyKAUOulZFHLPehMJwVVsqvya3g+ijDRxQSnOxcTpTsVww==}
+  lithent@1.25.1:
+    resolution: {integrity: sha512-AjpFa4CkMfd+H9Z1ngDx7xMRC2FIUJwWAy/9d2JlTokAfiS6xjGS+miCI0ikQ4Yd9SKNO8DhoFpt3VUaP+urNA==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -2898,7 +2898,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.30.2
       lightningcss-win32-x64-msvc: 1.30.2
 
-  lithent@1.21.7: {}
+  lithent@1.25.1: {}
 
   magic-string@0.30.21:
     dependencies:

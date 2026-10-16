@@ -21,3 +21,7 @@ must not be counted as V-04/V-21 compliance. Production parity tests separately
 verify the existing demo's user behavior. No runtime behavior was changed to make
 these probes pass. The pre-existing Lithent SSR attribute escaping prerequisite
 for stage 2 remains outstanding.
+
+## Stage 2 Entry update (2026-10-16)
+
+Lithent 1.25.1 now escapes SSR attribute values. A Chromium regression checks JSON and markup payload round-trips without adding attributes or script elements. Namespaced directives still pass; IC-01 is resolved in IMPLEMENT.md. The edited input/selection reset still reproduces with 1.25.1, so V-04 remains a stage 5 requirement. The other baseline observations remain historical evidence.

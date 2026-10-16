@@ -8,6 +8,22 @@ import { renderToString } from 'lithent/ssr';
 
 const require = createRequire(import.meta.url);
 
+test('SSR attributes round-trip JSON and markup payloads in Chromium', async ({ page }) => {
+  const params = { mode: 'full', query: 'a"b<c>d&e' };
+  const title = '\" onmouseover="alert(1)"><script>alert(1)</script>';
+  const html = renderToString(h('button', { title, 'data-params': JSON.stringify(params) }));
+  await page.setContent(html);
+  const button = page.locator('button');
+  await expect(button).toHaveCount(1);
+  await expect(button).toHaveAttribute('title', title);
+  expect(await button.evaluate(node => node.getAttributeNames().sort())).toEqual([
+    'data-params',
+    'title',
+  ]);
+  expect(JSON.parse((await button.getAttribute('data-params'))!)).toEqual(params);
+  await expect(page.locator('script')).toHaveCount(0);
+});
+
 test('namespaced JSX survives oxc, esbuild and Lithent component props', async () => {
   const source = 'export default <Widget client:visible server:defer />;';
   const parsed = parseSync('probe.tsx', source);
@@ -36,10 +52,12 @@ test('namespaced JSX survives oxc, esbuild and Lithent component props', async (
 });
 
 async function modules(page: import('@playwright/test').Page) {
-  const lithent = await readFile(require.resolve('lithent').replace('.umd.js', '.mjs'), 'utf8');
-  const ssr = (
-    await readFile(require.resolve('lithent/ssr').replace('.umd.js', '.mjs'), 'utf8')
-  ).replace('from "lithent"', 'from "/probe/lithent.js"');
+  const esmPath = (name: string) => require.resolve(name).replace(/(?:\.umd\.js|\.cjs)$/, '.mjs');
+  const lithent = await readFile(esmPath('lithent'), 'utf8');
+  const ssr = (await readFile(esmPath('lithent/ssr'), 'utf8')).replace(
+    'from "lithent"',
+    'from "/probe/lithent.js"'
+  );
   const idiomorph = await readFile(
     require.resolve('idiomorph').replace('idiomorph.cjs.js', 'idiomorph.esm.js'),
     'utf8'
@@ -58,7 +76,7 @@ async function modules(page: import('@playwright/test').Page) {
   await page.goto('./');
 }
 
-test('characterize Lithent 1.21.7 hydration resetting edited value and selection', async ({
+test('characterize installed Lithent hydration resetting edited value and selection', async ({
   page,
 }, info) => {
   await modules(page);
