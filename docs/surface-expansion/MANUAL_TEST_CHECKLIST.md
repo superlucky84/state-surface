@@ -381,3 +381,14 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
   `</script>` 포함 `<Boot>` params가 JSON 밖으로 나가지 않는다. Chromium 왕복은 spike로 확인했다.
 - 단계 1 production 산출물과 의미 비교(SSR 20개 문서·transition 3개), 루트·`/demo` 브라우저 parity, 5개 런타임 적합성은 계속 통과한다.
   MT-01~MT-18 수동 판정으로 계산하지 않는다.
+
+### 단계 3 자동 선행 검증 (2026-10-16)
+
+- MT-01 관련 자동 검사(`pnpm test:modes`, Chromium): static fixture 페이지의 JS 요청은 앱 엔트리 1개뿐이고 엔진 script·bootstrap
+  JSON이 없다. 액션 전용 페이지는 로더·액션 런타임만 받고 Lithent·bridge를 요청하지 않으며 frame이 static 슬롯 내용을 바꾸지
+  않는다. `client:visible` 아일랜드 청크는 스크롤 전 요청되지 않는다. 플러그인 청크는 선언한 페이지에서만 요청된다.
+  실기기·다른 브라우저·실제 네트워크 조건의 MT-01 판정은 아직 미실행이다.
+- MT-16·MT-18 관련: 서버 전용 모듈(파일명·마커)의 sentinel이 client 산출물 전체에 없고, client 아일랜드가 간접 import하면
+  빌드가 import 경로 체인과 함께 실패한다. dev 오버레이 화면은 확인하지 않았다.
+- 데모는 언어 전환 때문에 전 슬롯이 `client:load`라 페이지별 JS 감소는 부분적이다(홈 초기 JS gzip 16,807 B, 단계 0 28,147 B).
+  MT-01 수동 판정으로 계산하지 않는다.

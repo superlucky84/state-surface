@@ -2,7 +2,7 @@
 
 작성일: 2026-10-13
 
-상태: 단계 2 구현 완료 — `.tsx` 페이지·`<Slot>`·호출 지점 변환·문서 조립 반영, 이후 단계의 설계 계약 유지
+상태: 단계 3 구현 완료 — 모드 정규화·컴포넌트별 청크·요청별 엔트리 선택·서버 전용 보호·페이지별 플러그인 반영, 이후 단계의 설계 계약 유지
 
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md)를 따른다. 사용자와 합의한 목표,
 현재 코드의 사실, 구현 방식의 권고와 TBD를 구분한다. 예시의 `Slot`, 지시자와 신규 프레임 필드는
@@ -528,6 +528,8 @@ SSR 표시 / only fallback
 - **조합**: `client:only`는 ssr=false로 정규화하고 단독이면 `load`, 다른 시점 지시자와 조합할 수 있으며 그동안
   `fallback`을 표시한다. 시점 지시자를 둘 이상 붙이거나 모드와 모순되면 빌드 오류다.
 - **청크 선로드**: `client:load` 청크만 modulepreload한다. 나머지는 트리거 시 요청한다(라우터 prefetch는 DC-20).
+- **visible 관찰 대상**(단계 3 확인): 아일랜드 호스트는 `display: contents`라 박스가 없어 IntersectionObserver가 교차를
+  보고하지 않는다. 호스트와 그 자식 요소를 함께 관찰한다.
 - **로드 실패**(DC-04 결정): 1초 뒤 한 번 재시도한다. 그래도 실패하면 SSR HTML을 유지하고(`client:only`는
   fallback 유지) `reportError`로 관측 도구에 전달한다(8.3). 실패 원인이 배포 교체(buildId 불일치)면 다음 사용자
   조작 시 문서를 다시 로드한다.
@@ -1795,9 +1797,10 @@ hardening까지 검증을 미룬다는 의미가 아니다. scaffold는 원본·
   이어서 [IMPLEMENT.md](./IMPLEMENT.md)에 단계 0~10의 작업·Entry/Exit·baseline 테스트·검증 ID 매핑과 IC-01~IC-10을
   작성했다. [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)에 MT-01~MT-18과 릴리스 판정 규칙을 작성해 네 문서를
   갖췄다.
-- 구현 진행(2026-10-16): IMPLEMENT 단계 0·1·2 완료. 단계 2에서 2.1에 빈 슬롯(`component`)과 호스트 속성을 보완했고
-  IC-01~IC-04를 결정했다. 실행 기록은 IMPLEMENT 6장이 정본이다.
-- 다음: IMPLEMENT 단계 3(모드·manifest).
+- 구현 진행(2026-10-16): IMPLEMENT 단계 0·1·2·3 완료. 단계 2에서 2.1에 빈 슬롯(`component`)과 호스트 속성을 보완했고
+  IC-01~IC-04를 결정했다. 단계 3은 5.1 엔트리 선택과 DC-02·DC-12를 구현했다(구현 세부·조정은 IMPLEMENT 단계 3 "임시 연결과
+  계획 조정"). 실행 기록은 IMPLEMENT 6장이 정본이다.
+- 다음: IMPLEMENT 단계 4(projection·응답·검증).
 - 블로커: 없음. Lithent 속성 이스케이프 선행 조건은 1.25.1에서 해소했다. 공개 문법·입력 한도·브라우저 범위의 세부값은
   해당 구현 단계에서 확정한다.
 - 현재 기준 커밋: `63af971a91aa0309704b8bc93d8fe4f9b042c23a` (이번 개정의 기준).

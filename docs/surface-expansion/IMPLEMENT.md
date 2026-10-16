@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 2 완료 — `.tsx` 페이지·`<Slot>`·호출 지점 변환·요청별 렌더 파이프라인. 다음은 단계 3
+상태: 단계 3 완료 — 모드 정규화·컴포넌트별 동적 청크·요청별 엔트리 선택·서버 전용 보호·페이지별 플러그인. 다음은 단계 4
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -25,9 +25,9 @@
 - 단계 6과 7은 단계 5 종료 후 병렬로 진행할 수 있다. 둘 다 끝나야 단계 8에 들어간다.
 - 단계 사이의 내부 연결(예: 단계 2의 `<Boot>`를 단계 4 전까지 기존 boot 전달 경로로 잇는 것)은 사용자 API가 아니며
   표시한 단계에서 반드시 제거한다. 하위 호환 레이어는 두지 않는다(AG-08).
-- 단계 2가 남긴 임시 연결(4장 단계 2 "임시 연결"): `mode` 생략 Slot의 client 동작(단계 3 정규화에서 교체), eager
-  `virtual:state-surface/islands`(단계 3), `<h-state data-component>`·`<h-island data-props data-only>` 속성과 `__BOOT__`
-  배열(단계 4 `__SURFACE__`로 교체).
+- 남은 임시 연결: `<h-state data-component data-activation data-media data-only>`·`<h-island data-props …>` 호스트 속성,
+  `__BOOT__` 배열과 `__PLUGINS__` JSON(단계 4 `__SURFACE__`로 교체). 단계 2의 "`mode` 생략 Slot = client"와 eager islands
+  모듈은 단계 3에서 제거했다.
 
 ### 1.2 모든 단계 공통 Exit
 
@@ -306,34 +306,55 @@ static·server·client 모드를 나누고 컴포넌트별 동적 청크, 서버
 
 #### 작업
 
-- [ ] 모드 정규화(4.1): 지시자 없음 → static, client 지시자 → client, `client:only` → SSR 생략, 모순 조합 진단,
+- [x] 모드 정규화(4.1): 지시자 없음 → static, client 지시자 → client, `client:only` → SSR 생략, 모순 조합 진단,
       capability 기본 strict 메타데이터.
-- [ ] 아일랜드마다 동적 `import()` 청크, `virtual:state-surface/islands`(componentId → loader), 빌드 manifest의 청크
+- [x] 아일랜드마다 동적 `import()` 청크, `virtual:state-surface/islands`(componentId → loader), 빌드 manifest의 청크
       CSS·preload 연결. `client:load` 청크만 modulepreload. 요청에서 실제 렌더된 아일랜드만 bootstrap에 넣는다.
-- [ ] 서버 전용 보호(DC-02): `state-surface/server-only` 마커·`*.server.ts(x)`·`node:*`가 client 전이 의존성에 들어오면
+- [x] 서버 전용 보호(DC-02): `state-surface/server-only` 마커·`*.server.ts(x)`·`node:*`가 client 전이 의존성에 들어오면
       import 경로 체인과 함께 빌드 실패. 마커 모듈은 client에서 import되면 throw.
-- [ ] 요청별 엔트리 선택(5.1): 엔진 script 없음 / 액션 런타임 / scheduler + metadata / `client:load` 청크.
-- [ ] 앱 엔트리 `client/entry.ts`(DC-18 ①, 8.3-1): 있으면 모든 페이지에서 엔진 전에 실행. `surface({ clientEntry })`.
-- [ ] 클라이언트 플러그인(DC-12): `definePlugin({ name, slots, load, attach, update })`, 페이지·레이아웃
+- [x] 요청별 엔트리 선택(5.1): 엔진 script 없음 / 액션 런타임 / scheduler + metadata / `client:load` 청크.
+- [x] 앱 엔트리 `client/entry.ts`(DC-18 ①, 8.3-1): 있으면 모든 페이지에서 엔진 전에 실행. `surface({ clientEntry })`.
+- [x] 클라이언트 플러그인(DC-12): `definePlugin({ name, slots, load, attach, update })`, 페이지·레이아웃
       `export const plugins` 수집 → 플러그인별 청크 → 선언 페이지만 로드, 늦은 로드 시 표시된 슬롯 전부 attach.
       `client/main.ts`의 전역 플러그인 로드와 `onInit`·`onTransitionStart/End`를 제거하고 `onPage`·`onAction`(가칭)을
       제공한다. replace·morph 시점 훅은 단계 4, 라우터 시점은 단계 6에서 연결한다.
-- [ ] 데모 모드 지정: 갱신 없는 영역(홈 hero·concepts·features 등)은 static. transition으로 갱신되는 슬롯은 server HTML
+- [x] 데모 모드 지정: 갱신 없는 영역(홈 hero·concepts·features 등)은 static. transition으로 갱신되는 슬롯은 server HTML
       갱신이 생기는 단계 4 전까지 client 모드로 둔다.
-- [ ] dev와 build가 같은 분석·manifest 생성 함수를 호출한다(DC-16).
+- [x] dev와 build가 같은 분석·manifest 생성 함수를 호출한다(DC-16).
 
 #### Baseline 테스트
 
-- [ ] V-05 sentinel 스캔: 서버 전용 모듈에 넣은 sentinel 문자열이 client 산출물 전체에 없다.
-- [ ] 빌드 실패 fixture: 서버 전용 모듈을 client 아일랜드가 간접 import → 경로 체인 메시지.
-- [ ] e2e: 홈(static)의 엔진 JS 요청 0(라우터 없는 fixture), Lithent 청크는 아일랜드 페이지에서만, `client:load` 외
+- [x] V-05 sentinel 스캔: 서버 전용 모듈에 넣은 sentinel 문자열이 client 산출물 전체에 없다.
+- [x] 빌드 실패 fixture: 서버 전용 모듈을 client 아일랜드가 간접 import → 경로 체인 메시지.
+- [x] e2e: 홈(static)의 엔진 JS 요청 0(라우터 없는 fixture), Lithent 청크는 아일랜드 페이지에서만, `client:load` 외
       청크는 트리거 전 요청 없음.
-- [ ] 플러그인: 선언 페이지만 로드, 늦은 로드 attach, cleanup 호출 순서.
+- [x] 플러그인: 선언 페이지만 로드, 늦은 로드 attach, cleanup 호출 순서.
 
 #### 제거 확인
 
 `auto.ts` eager 맵(단계 2의 임시 eager 가상 모듈 포함), `client/main.ts` 전역 플러그인 등록, `onInit`·
 `onTransitionStart/End`, 단계 2의 "`mode` 생략 Slot = client" 임시 동작.
+
+#### 임시 연결과 계획 조정 (2026-10-16)
+
+- 데모 모드: `switch-lang` transition이 모든 페이지의 모든 슬롯을 full 프레임으로 갱신하므로 "transition으로 갱신되는 슬롯은
+  단계 4 전까지 client" 원칙에 따라 홈 hero·concepts·features를 포함한 데모 전 슬롯을 `client:load`로 둔다(작업 목록의
+  "홈 hero 등은 static" 예시는 이 원칙과 충돌). static·엔진 JS 0은 `e2e/modes` fixture 앱으로 검증한다. 단계 4의 server 모드
+  전환과 단계 7의 경로 기반 언어 전환에서 다시 줄인다.
+- 활성화 scheduler는 최소판이다: 시점(load·idle·visible·media)과 `client:only`만 구현했다. 활성화 전 첫 상호작용 즉시
+  활성화·청크 재시도·buildId 재로드는 단계 5다. 휴면 슬롯에 프레임이 오면 즉시 활성화하고 SSR snapshot으로 hydrate한 뒤
+  최신 props를 적용한다(DC-05의 일부를 미리 구현). `data-action` 첫 클릭·submit은 로더가 이벤트 시점에 snapshot해 런타임
+  로드 후 1회 실행한다(DC-04 ⑦).
+- 플러그인 시점: SSR 표시(static·server 슬롯)·client 활성화·render → `attach`, client props 갱신 → `update`, removed →
+  cleanup. replace·morph는 단계 4, 라우터는 단계 6. 페이지가 플러그인 모듈을 import하므로 플러그인 정의 모듈은 서버에서도
+  import된다(모듈 최상위에서 DOM에 접근하지 않는다). `load`·`slots`는 빌드가 읽는 리터럴이어야 한다.
+- 엔진 엔트리는 엔진 소유 `engine/client/loader.ts`다. `client/main.ts`와 `createStateSurface`를 제거했고 앱 코드는
+  `client/entry.ts`(선택)에 둔다. 플러그인이 client 빌드 입력(로더·styles·app entry)을 주입하고 Vite의 동적 import preload
+  helper 기본값을 끈다(`build.modulePreload: false`, 서버가 페이지별 modulepreload를 쓰므로).
+- 로더 크기: gzip 4,818 B(목표 2KB, DC-04 ⑥ 보고 항목). Vite의 동적 import 래퍼와 componentId 로더 맵이 대부분이다. 단계 5
+  scheduler 완성 때 다시 측정·축소한다.
+- 서버 전용 검사: build는 client 그래프 전체(`buildEnd`)에서 경로 체인을, dev는 import 시점에 importer를 보고한다(Vitest의
+  DOM 환경은 의도적으로 서버 코드를 섞으므로 제외).
 
 **검증 ID**: V-01, V-03, V-05, V-06.
 
@@ -419,7 +440,8 @@ server 모드 HTML로 동작한다.
 #### 제거 확인
 
 구 StateFrame 직접 적용 경로(브라우저의 full·partial 해석), `__STATE__`·`__UI__`·`__BOOT__`·`__BASE_PATH__`, `sync()`의
-전면 View Transition 래핑, 단계 2의 `<Boot>` 임시 연결, 단계 2의 `data-component`·`data-props`·`data-only` 호스트 속성.
+전면 View Transition 래핑, 단계 2의 `<Boot>` 임시 연결, 단계 2·3의 `data-component`·`data-props`·`data-activation`·
+`data-media`·`data-only` 호스트 속성과 `__PLUGINS__` JSON.
 
 **검증 ID**: V-02, V-07, V-08, V-09, V-10, V-23.
 
@@ -834,11 +856,42 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   gzip 81,466 B. 감소 목표는 단계 3 이후의 청크 분리·모드 정규화로 판정한다.
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과, Bun 1.3.0 고정 버전(이 머신은 1.4.2), 수동·실기기 검증은 관측하지 않았다.
 
+### 단계 3 실행 상세 (2026-10-16)
+
+- 모드: `<Slot>`은 명시 `mode`, 없으면 client 지시자 유무로 client/static을 정한다. static·server는 SSR만 하고
+  `data-component`·상태를 보내지 않으며, 브라우저는 그 슬롯의 콘텐츠 프레임을 무시하고(UI 패치는 적용, trace `dropped`)
+  내용을 유지한다(V-01). client 슬롯·아일랜드는 `data-activation`·`data-media`·`data-only`를 기록하고 `client:only`는 SSR을
+  건너뛰고 fallback을 출력한다. capability 기본값은 `strict`(메타데이터만).
+- 엔트리 선택: `renderPage`가 렌더된 client 컴포넌트(중복 제거·`client:load` 여부)·`data-action`·`<Boot>`·플러그인을 모아
+  `PageUsage`를 만들고, handler가 빌드 manifest로 CSS(전역 + 렌더된 컴포넌트·플러그인 청크 CSS)·modulepreload(client:load 청크와
+  정적 import, 액션 런타임)·앱 엔트리·엔진 로더를 고른다. 사용량이 없으면 엔진 script와 bootstrap JSON을 쓰지 않는다.
+- 빌드: `virtual:state-surface/islands`·`virtual:state-surface/plugins`가 componentId/plugin id → `import()` 로더다
+  (컴포넌트·플러그인마다 청크). `definePlugin` 리터럴 옵션과 `export const plugins`(페이지 + import한 모듈)를 분석해 route별
+  plugins를 manifest에 넣는다. client 빌드에서 `state-surface/server-only`(browser 조건은 throw 모듈)·`*.server.*`·Node builtin이
+  보이면 `routes/_components/Chart.tsx → lib/fmt.ts → server/db.server.ts` 형식으로 실패한다.
+- 클라이언트: `loader.ts`(엔트리) → `start.ts`가 bootstrap을 읽고 `componentHost`(Lithent bridge·컴포넌트 청크 지연 로드,
+  hydrate/render/update/unmount, 휴면 프레임 처리)·`pluginHost`(시점 로드, 늦은 attach, cleanup, onPage/onAction)를 시작하고,
+  `data-action`·`<Boot>`·debug가 있으면 `runtime.ts`(StateSurface·delegation·boot·devOverlay)를 로드한다. StateSurface의 플러그인
+  훅(`onMount`·`onTransitionStart/End`·`onInit`)을 제거하고 `onAction`·`isUpdatable`을 넣었다.
+- 브라우저 검증에서 `display:contents`인 `<h-island>`가 IntersectionObserver에 교차를 알리지 않는 결함을 찾아 호스트와 자식
+  요소를 함께 관찰하도록 고쳤다(scheduler 단위 테스트와 modes E2E로 회귀 고정).
+- 검증: Vitest 37개 파일/498개, format:check, build, typecheck:server 통과. 전체 tsc 오류는 기존 5개 그대로. `pnpm test:modes`:
+  fixture 빌드, V-05 sentinel 2종(파일명·마커)이 client 산출물 전체에 없음, 실패 fixture 경로 체인 2개, Chromium 4개(static 페이지
+  JS 요청은 앱 엔트리 1개뿐·액션 전용 페이지에 Lithent 요청 없음과 static 내용 유지·`client:visible` 청크는 스크롤 전 미요청·
+  플러그인은 선언 페이지만). 단계 1 의미 비교 20개 문서 + transition 3개(허용 차이에 modulepreload·`__PLUGINS__` 추가), 루트 E2E 9 +
+  spike 5, `/demo` 9, dev 서버 브라우저 확인. Node·Express·Bun 1.4.2·Deno 2.5.4·workerd 적합성 각 9개(static 페이지 시나리오 추가)와
+  5개 어댑터 앱 빌드 통과. portable core 번들 52,123 B.
+- 크기(gzip level 9, 파일별 합): 초기 JS 홈 16,807 B·가이드 18,878 B(Prism 플러그인 9 KB는 load 시점 별도)·검색 16,458 B·
+  채팅 16,954 B. 단계 0의 단일 번들 28,147 B 대비 홈 약 40% 감소. 70% 게이트(단계 10)는 데모 슬롯의 server 모드 전환(단계 4)
+  이후 판정한다. 공용 청크: 로더 4,818 B, 액션 런타임 3,313 B, Lithent 4,716 B, bridge 837 B.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2. IC-01~IC-04·IC-07·IC-08 결정.
-- **다음**: 단계 3(모드 정규화·아일랜드별 동적 청크·서버 전용 보호·요청별 엔트리 선택·앱 엔트리·페이지별 플러그인).
-  단계 2 임시 연결(`mode` 생략 Slot의 client 동작, eager islands 모듈)을 이 단계에서 제거한다.
+- **완료**: 단계 0·1·2·3. IC-01~IC-04·IC-07·IC-08 결정.
+- **다음**: 단계 4(두 층 wire·요청 reducer·server HTML projection·검증·한도·capability·지연 server 슬롯·`__SURFACE__`
+  통합·버전 검사·인페이지 View Transition). IC-06·IC-09를 결정한다. 데모의 서버 갱신 슬롯을 server 모드로 옮긴다.
 - **블로커**: 없음. hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 남은 전체 tsc 오류 5개는
   단계 8에서 추적한다. 데모 가이드 본문의 구 API 설명은 단계 7에서 다시 쓴다.
-- **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`.
+- **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
+  단계 2 문서 `5a659cd`, 단계 3 `5c8f024`.
