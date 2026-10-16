@@ -11,10 +11,10 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="vt:description" client:load>
+        <Slot name="vt:description" mode="server">
           <VTDescription {...content['vt:description']} />
         </Slot>
-        <Slot name="vt:gallery" client:load>
+        <Slot name="vt:gallery" mode="server">
           <VTGallery {...content['vt:gallery']} />
         </Slot>
       </main>

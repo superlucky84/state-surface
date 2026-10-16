@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { validateStateFrame, applyFrame, applyUi } from './protocol.js';
-import type { StateFrameState, UiPatch } from './protocol.js';
+import {
+  validateStateFrame,
+  applyFrame,
+  applyUi,
+  checkWireFrame,
+  mergeAccumulate,
+  uiPatchProblem,
+  frameSlots,
+} from './protocol.js';
+import type { StateFrame, UiPatch } from './protocol.js';
+
+type StateFrameState = StateFrame;
 
 describe('validateStateFrame', () => {
   // ── Valid frames ──
@@ -43,18 +53,19 @@ describe('validateStateFrame', () => {
     expect(result).toEqual({ valid: true });
   });
 
-  it('accepts an error frame', () => {
-    const result = validateStateFrame({
-      type: 'error',
-      template: 'system:error',
-      data: { message: 'db timeout' },
+  // Authoring layer (DESIGN 6.2): transitions never yield done or error.
+  it('rejects a yielded error frame (throw instead)', () => {
+    const result = validateStateFrame({ type: 'error', message: 'db timeout' });
+    expect(result).toEqual({
+      valid: false,
+      reason: 'Transitions do not yield "error"; throw an Error instead',
     });
-    expect(result).toEqual({ valid: true });
   });
 
-  it('accepts a done frame', () => {
+  it('rejects a yielded done frame (the engine sends it)', () => {
     const result = validateStateFrame({ type: 'done' });
-    expect(result).toEqual({ valid: true });
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toContain('the engine sends it');
   });
 
   // ── Invalid frames ──
@@ -160,8 +171,8 @@ describe('validateStateFrame', () => {
     expect(result).toEqual({ valid: true });
   });
 
-  it('accepts error frame without template', () => {
-    expect(validateStateFrame({ type: 'error', message: 'fail' })).toEqual({ valid: true });
+  it('rejects an unknown frame type', () => {
+    expect(validateStateFrame({ type: 'patch', ops: [] }).valid).toBe(false);
   });
 
   // ── Accumulate frames ──
@@ -646,5 +657,133 @@ describe('applyUi', () => {
     };
     ui = applyUi(ui, partial2);
     expect(ui.slot).toEqual({ classAdd: ['step2'], cssVars: { '--v': '2' } });
+  });
+});
+
+describe('UI patch validation (DESIGN 8.1)', () => {
+  it('accepts class tokens and custom properties', () => {
+    expect(
+      uiPatchProblem({
+        classAdd: ['tone-warning', 'md:grid', 'w-[10px]', 'a/b'],
+        classRemove: [],
+        cssVars: { '--card-accent': '#f59e0b', '--gap': 'calc(1rem + 2px)' },
+      })
+    ).toBeUndefined();
+  });
+
+  it.each([
+    [{ classAdd: 'tone-warning' }, 'must be an array'],
+    [{ classAdd: ['a b'] }, 'invalid class token'],
+    [{ classAdd: ['"><img>'] }, 'invalid class token'],
+    [{ classRemove: [1] }, 'invalid class token'],
+    [{ cssVars: { color: 'red' } }, 'custom property'],
+    [{ cssVars: { '--x': 'red; background: blue' } }, 'not allowed'],
+    [{ cssVars: { '--x': 'url(https://evil)' } }, 'not allowed'],
+    [{ cssVars: { '--x': 'URL ( x )' } }, 'not allowed'],
+    [{ cssVars: { '--x': 'expression(alert(1))' } }, 'not allowed'],
+    [{ cssVars: { '--x': '\\75 rl(x)' } }, 'not allowed'],
+    [{ cssVars: { '--x': '}' } }, 'not allowed'],
+    [{ style: 'color:red' }, 'unknown UI patch field'],
+  ])('rejects %j', (patch, reason) => {
+    expect(uiPatchProblem(patch)).toContain(reason);
+  });
+
+  it('rejects an invalid classAdd type in an authoring frame (old defect)', () => {
+    const result = validateStateFrame({
+      type: 'state',
+      states: { a: {} },
+      ui: { a: { classAdd: 'not-an-array' } },
+    });
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('frameSlots', () => {
+  it('lists content and UI slots of full, partial and accumulate frames', () => {
+    expect(frameSlots({ type: 'state', states: { a: {} }, ui: { b: null } })).toEqual(['a', 'b']);
+    expect(
+      frameSlots({
+        type: 'state',
+        full: false,
+        states: { a: {} },
+        changed: ['a'],
+        removed: ['c'],
+        uiChanged: ['d'],
+        ui: { d: null },
+      })
+    ).toEqual(['a', 'c', 'd']);
+    expect(frameSlots({ type: 'state', accumulate: true, states: { a: { t: 'x' } } })).toEqual([
+      'a',
+    ]);
+  });
+});
+
+describe('mergeAccumulate', () => {
+  it('concats arrays and strings, replaces other values shallowly', () => {
+    expect(
+      mergeAccumulate(
+        { items: [1], text: 'a', count: 1, nested: { x: 1 } },
+        { items: [2], text: 'b', count: 2, nested: { y: 2 } }
+      )
+    ).toEqual({ items: [1, 2], text: 'ab', count: 2, nested: { y: 2 } });
+    expect(mergeAccumulate(undefined, { a: 1 })).toEqual({ a: 1 });
+  });
+});
+
+describe('checkWireFrame (browser light check, DC-14 ②)', () => {
+  it('accepts patch, done and error frames', () => {
+    const patch = {
+      type: 'patch',
+      reset: true,
+      ops: [
+        { slot: 'a', html: '<p>a</p>', islands: [{ id: 'a$0', component: 'c#d', props: {} }] },
+        { slot: 'b', props: { x: 1 } },
+        { slot: 'b', merge: { x: 2 } },
+        { slot: 'c', remove: true },
+        { slot: 'a', ui: null },
+        { slot: 'a', ui: { classAdd: ['ok'] } },
+      ],
+    };
+    const checked = checkWireFrame(patch);
+    expect(checked).toEqual({ ok: true, frame: patch, skipped: [] });
+    expect(checkWireFrame({ type: 'done' })).toEqual({
+      ok: true,
+      frame: { type: 'done' },
+      skipped: [],
+    });
+    expect(checkWireFrame({ type: 'error', message: 'x', slot: 'e', html: '<p>x</p>' }).ok).toBe(
+      true
+    );
+  });
+
+  it('skips an invalid ui op and keeps the rest', () => {
+    const checked = checkWireFrame({
+      type: 'patch',
+      ops: [
+        { slot: 'a', ui: { classAdd: ['bad token'] } },
+        { slot: 'a', html: '<p></p>' },
+      ],
+    });
+    expect(checked.ok).toBe(true);
+    if (checked.ok) {
+      expect(checked.frame).toEqual({ type: 'patch', ops: [{ slot: 'a', html: '<p></p>' }] });
+      expect(checked.skipped).toHaveLength(1);
+    }
+  });
+
+  it.each([
+    [{ type: 'patch', ops: [{ slot: 'a', html: 1 }] }, 'must carry a string'],
+    [{ type: 'patch', ops: [{ slot: 'a', props: [] }] }, 'must carry an object'],
+    [{ type: 'patch', ops: [{ slot: 'a', remove: 'yes' }] }, 'must be true'],
+    [{ type: 'patch', ops: [{ slot: 'a', append: '<li>' }] }, 'version mismatch'],
+    [{ type: 'patch', ops: [{ slot: 'a', html: '', props: {} }] }, 'version mismatch'],
+    [{ type: 'patch', ops: [{ html: '' }] }, 'slot name'],
+    [{ type: 'patch', ops: [{ slot: 'a', html: '', islands: [{ id: 1 }] }] }, 'island metadata'],
+    [{ type: 'state', states: {} }, 'unknown frame type'],
+    [{ type: 'error' }, 'needs a message'],
+  ])('stops on %j', (frame, reason) => {
+    const checked = checkWireFrame(frame);
+    expect(checked.ok).toBe(false);
+    if (!checked.ok) expect(checked.reason).toContain(reason);
   });
 });

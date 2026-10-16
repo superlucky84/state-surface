@@ -7,6 +7,8 @@ export interface ActionInvocation {
   action: string;
   params: Record<string, unknown>;
   pendingTargets?: string[];
+  /** `data-view-transition` on the action element (DC-06). */
+  viewTransition?: boolean;
 }
 
 export type ActionError = (message: string) => void;
@@ -39,6 +41,7 @@ export function readAction(
   };
   const pendingTargets = parsePendingTargets(element);
   if (pendingTargets) invocation.pendingTargets = pendingTargets;
+  if (element.hasAttribute('data-view-transition')) invocation.viewTransition = true;
   return invocation;
 }
 

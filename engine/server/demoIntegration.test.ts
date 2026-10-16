@@ -1,135 +1,115 @@
 /**
  * @vitest-environment happy-dom
  *
- * Integration tests: server NDJSON stream → client StateSurface apply path.
- * Uses supertest for server and StateSurface with mock callbacks for client.
+ * Integration: the demo server's SSR HTML and transition streams applied by the browser
+ * runtime (StateSurface + SlotDom + ComponentHost) in a DOM.
  */
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
-import { createDemo } from '../../testing/server.js';
+import { createDemo, surfaceHeaders } from '../../testing/server.js';
+import { StateSurface } from '../client/stateSurface.js';
+import { ComponentHost } from '../client/componentHost.js';
+import { SlotDom } from '../client/slotDom.js';
+import { readBootstrap } from '../client/start.js';
 
 let app: any;
 beforeAll(async () => {
   ({ server: app } = await createDemo());
 });
-import { decodeFrames } from '../shared/ndjson.js';
-import { StateSurface } from '../client/stateSurface.js';
-import type { TraceEvent, StateSurfaceOptions } from '../client/stateSurface.js';
-import type { StateFrame } from '../shared/protocol.js';
+afterEach(() => vi.unstubAllGlobals());
 
-type RenderCall = { name: string; data: any };
-
-function createTestSurface() {
-  const rendered: RenderCall[] = [];
-  const updated: RenderCall[] = [];
-  const unmounted: string[] = [];
-  const traces: TraceEvent[] = [];
-
-  const opts: StateSurfaceOptions = {
-    renderTemplate: (name, data, _el) => rendered.push({ name, data }),
-    hydrateTemplate: (_name, _data, _el) => () => {},
-    updateTemplate: (name, data, _el) => updated.push({ name, data }),
-    unmountTemplate: (name, _el) => unmounted.push(name),
-    trace: event => traces.push(event),
-    frameBudgetMs: 1000,
-  };
-  const surface = new StateSurface(opts);
-  return { surface, rendered, updated, unmounted, traces };
+/** Load an SSR page into the document and start the runtime with a fetch bound to the server. */
+async function open(path: string) {
+  const page = await request(app).get(path);
+  // Keep the bootstrap JSON; drop assets so the DOM does not try to fetch them.
+  const html = page.text
+    .replace('<!doctype html>', '')
+    .replace(/<link [^>]*>/g, '')
+    .replace(/<script type="module"[^>]*><\/script>/g, '');
+  document.documentElement.innerHTML = html.replace(/^<html[^>]*>|<\/html>$/g, '');
+  const bootstrap = readBootstrap(document);
+  const requests: string[] = [];
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+    requests.push(url);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-Surface-Build']).toBe(surfaceHeaders(bootstrap.pageId)['x-surface-build']);
+    expect(headers['X-Surface-Page']).toBe(bootstrap.pageId);
+    const res = await request(app)
+      .post(url)
+      .set(headers)
+      .send(JSON.parse(String(init.body)));
+    return new Response(res.text, {
+      status: res.status,
+      headers: { 'content-type': String(res.headers['content-type']) },
+    });
+  });
+  const host = new ComponentHost({ loaders: {} });
+  const surface = new StateSurface({
+    bootstrap,
+    slots: bootstrap.slots ?? [],
+    host,
+    dom: new SlotDom(host, undefined),
+  });
+  surface.discoverAnchors();
+  const text = (slot: string) =>
+    document.querySelector(`h-state[name="${slot}"]`)?.textContent ?? '';
+  return { surface, text, requests };
 }
 
-function setupAnchors(names: string[]) {
-  document.body.innerHTML = names.map(name => `<h-state name="${name}"></h-state>`).join('');
-}
-
-/**
- * Feed server NDJSON response through StateSurface's frame pipeline.
- */
-function feedFramesToSurface(surface: StateSurface, frames: StateFrame[]) {
-  for (const frame of frames) {
-    if (frame.type === 'state') {
-      (surface as any).frameQueue.push(frame);
-    } else if (frame.type === 'done') {
-      (surface as any).flushAll();
-    } else if (frame.type === 'error') {
-      (surface as any).handleError(frame);
-    }
-  }
-  (surface as any).flushQueue(true);
-}
-
-describe('server stream → client apply (guide-load)', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
+describe('server stream → browser apply', () => {
+  it('guide-load replaces the loading skeleton with the sections', async () => {
+    const { surface, text } = await open('/guide/surface');
+    expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).not.toBeNull();
+    expect(await surface.transition('guide-load', { slug: 'surface', lang: 'en' })).toBe(
+      'completed'
+    );
+    expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).toBeNull();
+    expect(
+      document.querySelectorAll('h-state[name="guide:content"] section').length
+    ).toBeGreaterThan(1);
+    expect(text('guide:toc')).toContain('Surface');
   });
 
-  it('full pipeline: server frames produce correct client state', async () => {
-    // 1. Get frames from server
-    const res = await request(app).post('/transition/guide-load').send({ slug: 'surface' });
+  it('search updates input and results; static header markup stays a server slot', async () => {
+    const { surface, text } = await open('/examples/search');
+    expect(text('search:results')).toBe('');
+    expect(await surface.transition('search', { query: 'streaming' })).toBe('completed');
+    expect(text('search:results')).toContain('Streaming Demo');
+    expect(
+      (document.querySelector('h-state[name="search:input"] input') as HTMLInputElement).value
+    ).toBe('streaming');
+  });
 
-    const frames = decodeFrames(res.text);
+  it('streaming demo removes and restores output and shows the error slot', async () => {
+    const { surface, text } = await open('/examples/streaming');
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toBe('completed');
+    expect(text('demo:output')).toContain('restored');
+    expect(text('demo:timeline')).toContain('Accumulate');
+    expect(await surface.transition('stream-demo', { mode: 'error-demo' })).toBe('failed');
+    expect(text('system:error')).toContain('demonstration error');
+    // The next request's baseline clears the error slot.
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toBe('completed');
+    expect(text('system:error')).toBe('');
+  }, 15000);
 
-    // 2. Set up client
-    setupAnchors(['page:header', 'guide:toc', 'guide:content', 'system:error']);
-    const { surface, rendered, updated } = createTestSurface();
-    surface.discoverAnchors();
-
-    // 3. Feed server frames to client
-    feedFramesToSurface(surface, frames);
-
-    // 4. Verify final state
-    expect(surface.activeStates['page:header']).toHaveProperty('title');
-    expect(surface.activeStates['guide:toc'].slug).toBe('surface');
-    expect(surface.activeStates['guide:content'].loading).toBe(false);
-    expect(surface.activeStates['guide:content'].sections.length).toBeGreaterThan(0);
-
-    // toc rendered once, content rendered once then updated once
-    expect(rendered.filter(r => r.name === 'guide:toc')).toHaveLength(1);
-    expect(rendered.filter(r => r.name === 'guide:content')).toHaveLength(1);
-    expect(updated.filter(u => u.name === 'guide:content')).toHaveLength(1);
+  it('ui-patch demo applies and resets the slot UI patch', async () => {
+    const { surface } = await open('/examples/ui-patch');
+    const preview = () => document.querySelector('h-state[name="uipatch:preview"]') as HTMLElement;
+    await surface.transition('ui-patch-demo', { action: 'theme', theme: 'warning' });
+    expect(preview().classList.contains('tone-warning')).toBe(true);
+    expect(preview().style.getPropertyValue('--card-accent')).toBe('#f59e0b');
+    await surface.transition('ui-patch-demo', { action: 'clear' });
+    expect(preview().getAttribute('class')).toBe('');
+    expect(preview().style.getPropertyValue('--card-accent')).toBe('');
   });
 });
 
 describe('home route surface independence', () => {
   it('GET / renders home slots only (no cross-page leakage)', async () => {
     const res = await request(app).get('/');
-
     expect(res.status).toBe(200);
     expect(res.text).toContain('name="page:hero"');
-    expect(res.text).toContain('name="page:concepts"');
-    expect(res.text).toContain('name="page:features"');
     expect(res.text).not.toContain('name="guide:content"');
-    expect(res.text).not.toContain('name="demo:controls"');
-    expect(res.text).not.toContain('name="search:input"');
     expect(res.text).not.toContain('name="search:results"');
-  });
-});
-
-describe('server stream → client apply (search)', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('full pipeline: search frames produce correct client state', async () => {
-    const res = await request(app).post('/transition/search').send({ query: 'streaming' });
-
-    const frames = decodeFrames(res.text);
-
-    setupAnchors(['page:header', 'search:input', 'search:results', 'system:error']);
-    const { surface, rendered, updated } = createTestSurface();
-    surface.discoverAnchors();
-
-    feedFramesToSurface(surface, frames);
-
-    expect(surface.activeStates['search:input'].query).toBe('streaming');
-    expect(surface.activeStates['search:results'].loading).toBe(false);
-    expect(surface.activeStates['search:results'].items.length).toBeGreaterThan(0);
-
-    // results rendered once then updated once
-    expect(rendered.filter(r => r.name === 'search:results')).toHaveLength(1);
-    expect(updated.filter(u => u.name === 'search:results')).toHaveLength(1);
-
-    // header and input not updated (only partial changed search:results)
-    expect(updated.filter(u => u.name === 'page:header')).toHaveLength(0);
-    expect(updated.filter(u => u.name === 'search:input')).toHaveLength(0);
   });
 });

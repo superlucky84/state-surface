@@ -1,10 +1,11 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 import { listFiles, hasSegment, isModuleFile } from './build/fsUtils.js';
-import { SurfaceAnalyzer, type FactsCache } from './build/app.js';
+import { SurfaceAnalyzer, type ExportRef, type FactsCache } from './build/app.js';
 import { transformSurface } from './build/transform.js';
 import { SurfaceBuildError } from './build/diagnostics.js';
 import { nodeListener } from './adapters/http.js';
@@ -19,6 +20,7 @@ const ENGINE_CLIENT = {
   loader: path.join(ENGINE_DIR, 'client/loader.ts'),
   runtime: path.join(ENGINE_DIR, 'client/runtime.ts'),
   bridge: path.join(ENGINE_DIR, 'client/lithentBridge.ts'),
+  morph: path.join(ENGINE_DIR, 'client/morph.ts'),
 };
 const SERVER_ONLY_MARKERS = [
   path.join(ENGINE_DIR, 'serverOnly.ts'),
@@ -48,6 +50,9 @@ function isServerOnly(id: string) {
 export function surface(options: SurfacePluginOptions = {}): Plugin {
   let config: ResolvedConfig;
   const facts: FactsCache = new Map();
+  // Root secret for deferred-slot tokens and flash (IC-09) when SURFACE_SECRET is unset:
+  // one per build (shared by every instance of that build) or per dev server.
+  const secret = randomBytes(32).toString('base64url');
   let analyzed = new Set<string>();
   // Each hook (and Vite environment) resolves with its own plugin context.
   const analyzerFor = (context: PluginContext) =>
@@ -126,6 +131,8 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         config.command === 'serve' &&
         !process.env.VITEST &&
         importer &&
+        // Virtual modules watch the analyzed page graph (addWatchFile); those are not imports.
+        !importer.startsWith('\0virtual:state-surface/') &&
         isClient(this) &&
         (id === 'state-surface/server-only' ||
           id.startsWith('node:') ||
@@ -197,6 +204,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           loader: documentPath(ENGINE_CLIENT.loader),
           runtime: documentPath(ENGINE_CLIENT.runtime),
           bridge: documentPath(ENGINE_CLIENT.bridge),
+          morph: documentPath(ENGINE_CLIENT.morph),
         },
       };
       let assets = {};
@@ -210,14 +218,44 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         }
       }
       const base = config.base === '/' ? '' : config.base.replace(/\/$/, '');
+      // The client asset manifest identifies the deployment; dev servers get a random id.
+      const buildId =
+        config.command === 'build' && Object.keys(assets).length
+          ? createHash('sha256').update(JSON.stringify(assets)).digest('hex').slice(0, 16)
+          : `dev-${randomBytes(6).toString('hex')}`;
+      // Page manifests (DESIGN 6.2): server slots import their component, external slots
+      // their schema. Everything else is plain data.
+      const modules = new Map<string, string>();
+      const ref = ({ file, exportName }: ExportRef) => {
+        if (!modules.has(file)) modules.set(file, `m${modules.size}`);
+        return `${modules.get(file)}[${JSON.stringify(exportName)}]`;
+      };
+      const components = new Map<string, string>();
+      const pages = app.pages.map(route => {
+        const id = path
+          .relative(path.join(root, 'routes'), route.filePath)
+          .split(path.sep)
+          .join('/')
+          .replace(/\.tsx$/, '');
+        const slots = (app.pageSlots.get(route.filePath) ?? []).map(slot => {
+          const { component, schema, name, ...facts } = slot;
+          if (slot.mode === 'server') components.set(slot.componentId, ref(component));
+          const data = JSON.stringify(facts).slice(1, -1);
+          return `${JSON.stringify(name)}:{${data}${schema ? `,schema:${ref(schema)}` : ''}}`;
+        });
+        return `{id:${JSON.stringify(id)},slots:{${slots.join(',')}}}`;
+      });
       return [
         "import { defineManifest } from 'state-surface/server';",
         "import { configureAssets } from 'state-surface/internal/assets';",
         "import { setBasePath } from 'state-surface/internal/basePath';",
         ...app.pages.map((r, i) => `import * as route${i} from ${JSON.stringify(r.filePath)};`),
         ...transitions.map((file, i) => `import transition${i} from ${JSON.stringify(file)};`),
+        ...[...modules].map(
+          ([file, local]) => `import * as ${local} from ${JSON.stringify(file)};`
+        ),
         `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({basePath:${JSON.stringify(base)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
+        `export default defineManifest({basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
       ].join('\n');
     },
     async transform(code, id) {

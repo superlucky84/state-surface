@@ -1,6 +1,7 @@
 import type { TagFunction } from 'lithent';
 import type { Mount } from './lithentBridge.js';
 import type { PluginHost } from './pluginHost.js';
+import type { IslandMeta, SlotMeta } from '../shared/protocol.js';
 import { schedule, type Timing } from './scheduler.js';
 
 /** componentId → lazy loader of the client component chunk (`virtual:state-surface/islands`). */
@@ -18,58 +19,73 @@ interface Instance {
   only: boolean;
   /** SSR props (slot state or island props); undefined for empty slots. */
   snapshot?: unknown;
+  /** Island props as rendered by the server (IC-06 morph comparison). */
+  signature?: string;
   childrenHtml?: string;
   status: 'dormant' | 'loading' | 'active' | 'failed';
   generation: number;
   component?: TagFunction;
   mount?: Mount;
-  /** Latest frame data received before the component became active. */
+  /** Latest data received before the component became active. */
   pending?: { op: 'render' | 'update'; data: unknown };
   cancel?: () => void;
 }
 
+const signatureOf = (component: string, props: unknown) =>
+  `${component}\u0000${JSON.stringify(props ?? {})}`;
+
 /**
  * Owns client components of the page: schedules activation (load/idle/visible/media), loads
- * Lithent and the component chunk on demand, and mounts slots and islands. It also provides
- * the StateSurface callbacks, so frames for a dormant slot activate it first; the latest data
- * is applied after hydrating the SSR snapshot.
+ * Lithent and the component chunk on demand, and mounts slots and islands. Metadata comes
+ * from `__SURFACE__.slots` and `html` op `islands`. Data for a dormant slot activates it
+ * first; the latest data is applied after hydrating the SSR snapshot (DC-05).
  */
 export class ComponentHost {
   private instances = new Map<string, Instance>();
   private modules = new Map<string, Promise<TagFunction>>();
   private bridge?: Promise<Bridge>;
-  /** Set once the bridge chunk loaded; active instances can mount synchronously. */
+  /** Set once the bridge chunk loaded; active instances mount synchronously. */
   private bridgeModule?: Bridge;
 
   constructor(
     private options: {
       loaders: ComponentLoaders;
-      states: Record<string, unknown>;
       plugins?: PluginHost;
       report?: Report;
       loadBridge?: () => Promise<Bridge>;
     }
   ) {}
 
-  /** Register client slots and islands rendered by the server and schedule them. */
-  scan(root: ParentNode = document) {
-    for (const el of Array.from(root.querySelectorAll<HTMLElement>('h-state[data-component]')))
-      this.register(
-        el.getAttribute('name')!,
-        'slot',
-        el,
-        this.options.states[el.getAttribute('name')!]
-      );
-    for (const el of Array.from(root.querySelectorAll<HTMLElement>('h-island[data-island]'))) {
-      let props: unknown = {};
-      try {
-        props = JSON.parse(el.getAttribute('data-props') ?? '{}');
-      } catch (error) {
-        this.report(error, { island: el.getAttribute('data-component') });
-        continue;
-      }
-      this.register(el.getAttribute('data-island')!, 'island', el, props);
+  /** Register the client slots and islands of the bootstrap and schedule them. */
+  scan(root: ParentNode, slots: readonly SlotMeta[]) {
+    for (const meta of slots) {
+      if (meta.mode !== 'client' || !meta.component) continue;
+      const island = meta.id.includes('$');
+      const el = island
+        ? root.querySelector<HTMLElement>(`h-island[data-island="${CSS.escape(meta.id)}"]`)
+        : root.querySelector<HTMLElement>(`h-state[name="${CSS.escape(meta.id)}"]`);
+      if (el)
+        this.register(meta.id, island ? 'island' : 'slot', el, {
+          ...meta,
+          component: meta.component,
+        });
     }
+    this.scheduleAll();
+  }
+
+  /** Islands of new server HTML inside `container` (`html` op or deferred response). */
+  adopt(container: ParentNode, islands: readonly IslandMeta[] = []) {
+    for (const meta of islands) {
+      if (this.instances.has(meta.id)) continue;
+      const el = container.querySelector<HTMLElement>(
+        `h-island[data-island="${CSS.escape(meta.id)}"]`
+      );
+      if (el) this.register(meta.id, 'island', el, meta);
+    }
+    this.scheduleAll();
+  }
+
+  private scheduleAll() {
     for (const instance of this.instances.values())
       if (instance.status === 'dormant' && !instance.cancel)
         instance.cancel = schedule(instance.timing, () => this.activate(instance), {
@@ -78,23 +94,30 @@ export class ComponentHost {
         });
   }
 
-  private register(key: string, kind: Instance['kind'], el: HTMLElement, snapshot: unknown) {
+  private register(
+    key: string,
+    kind: Instance['kind'],
+    el: HTMLElement,
+    meta: Omit<IslandMeta, 'props'> & { props?: Record<string, unknown> }
+  ) {
     const existing = this.instances.get(key);
     if (existing) return existing;
-    const timing = (el.getAttribute('data-activation') as Timing | null) ?? 'load';
     const instance: Instance = {
       key,
       kind,
       el,
-      componentId: el.getAttribute('data-component') ?? '',
-      timing,
-      media: el.getAttribute('data-media') ?? undefined,
-      only: el.hasAttribute('data-only'),
-      snapshot,
+      componentId: meta.component,
+      timing: meta.activation ?? 'load',
+      media: meta.media,
+      only: meta.only === true,
+      snapshot: meta.props,
       status: 'dormant',
       generation: 0,
     };
-    if (kind === 'island') instance.childrenHtml = takeChildrenHtml(el);
+    if (kind === 'island') {
+      instance.childrenHtml = takeChildrenHtml(el);
+      instance.signature = signatureOf(meta.component, meta.props);
+    }
     this.instances.set(key, instance);
     return instance;
   }
@@ -177,63 +200,96 @@ export class ComponentHost {
     });
   }
 
-  private ensure(name: string, el: HTMLElement) {
-    return this.instances.get(name) ?? this.register(name, 'slot', el, undefined);
+  /** `props` op (or merged props) for a client slot. */
+  setProps(name: string, el: HTMLElement, data: unknown, meta: SlotMeta) {
+    const instance =
+      this.instances.get(name) ??
+      this.register(name, 'slot', el, { ...meta, component: meta.component!, props: undefined });
+    if (instance.status === 'active') {
+      if (instance.mount) {
+        instance.mount.update(data);
+        // Lithent applies the update in a microtask; notify plugins afterwards.
+        queueMicrotask(() => this.options.plugins?.updatedSlot(name));
+        return;
+      }
+      el.innerHTML = '';
+      try {
+        instance.mount = this.mount(this.bridgeModule!, instance, data, false);
+      } catch (error) {
+        this.report(error, { component: instance.componentId, slot: name });
+        renderMissing(instance, error);
+        return;
+      }
+      this.options.plugins?.displayedSlot(name, el, 'client');
+      return;
+    }
+    if (instance.status === 'failed') {
+      if (instance.snapshot === undefined) renderMissing(instance, new Error('not loaded'));
+      return;
+    }
+    instance.pending = {
+      op:
+        instance.snapshot !== undefined && instance.pending?.op !== 'render' ? 'update' : 'render',
+      data,
+    };
+    this.activate(instance);
+    this.scheduleAll();
   }
 
-  /** StateSurface callbacks for client slots; static and server slots are not updatable. */
-  callbacks() {
-    return {
-      isUpdatable: (_name: string, el: HTMLElement) => el.hasAttribute('data-component'),
-      hydrateTemplate: (name: string, data: unknown, el: HTMLElement) => {
-        const instance = this.ensure(name, el);
-        if (instance.snapshot === undefined) instance.snapshot = data;
-        return () => {};
-      },
-      renderTemplate: (name: string, data: unknown, el: HTMLElement): void => {
-        const instance = this.ensure(name, el);
-        if (instance.status === 'active' && this.bridgeModule) {
-          if (instance.mount) return this.callbacks().updateTemplate(name, data, el);
-          el.innerHTML = '';
-          try {
-            instance.mount = this.mount(this.bridgeModule, instance, data, false);
-          } catch (error) {
-            this.report(error, { component: instance.componentId, slot: name });
-            renderMissing(instance, error);
-            return;
-          }
-          this.options.plugins?.displayedSlot(name, el, 'client');
-          return;
-        }
-        if (instance.status === 'failed') return renderMissing(instance, new Error('not loaded'));
-        instance.pending = { op: 'render', data };
-        this.activate(instance);
-      },
-      updateTemplate: (name: string, data: unknown, el: HTMLElement): void => {
-        const instance = this.ensure(name, el);
-        if (instance.status === 'active' && instance.mount) {
-          instance.mount.update(data);
-          // Lithent applies the update in a microtask; notify plugins afterwards.
-          queueMicrotask(() => this.options.plugins?.updatedSlot(name));
-          return;
-        }
-        if (instance.status === 'active') return this.callbacks().renderTemplate(name, data, el);
-        if (instance.status === 'failed') return;
-        instance.pending = { op: instance.pending?.op === 'render' ? 'render' : 'update', data };
-        this.activate(instance);
-      },
-      unmountTemplate: (name: string, _el: HTMLElement) => {
-        const instance = this.instances.get(name);
-        this.options.plugins?.removedSlot(name);
-        if (!instance) return;
-        instance.mount?.cleanup();
-        instance.mount = undefined;
-        instance.pending = undefined;
-        instance.snapshot = undefined;
-        instance.generation++;
-        if (instance.status === 'loading') instance.status = 'dormant';
-      },
-    };
+  /** `remove` op for a client slot: cleanup, forget the snapshot, clear the host. */
+  remove(name: string) {
+    const instance = this.instances.get(name);
+    this.options.plugins?.removedSlot(name);
+    if (!instance) return;
+    this.reset(instance);
+  }
+
+  private reset(instance: Instance) {
+    instance.cancel?.();
+    instance.cancel = undefined;
+    try {
+      instance.mount?.cleanup();
+    } catch (error) {
+      this.report(error, { component: instance.componentId, slot: instance.key });
+    }
+    instance.mount = undefined;
+    instance.pending = undefined;
+    instance.snapshot = undefined;
+    instance.generation++;
+    if (instance.status === 'loading') instance.status = 'dormant';
+  }
+
+  /** Dispose islands inside `container` (server HTML replaced or removed, DC-08). */
+  disposeWithin(container: Node) {
+    for (const [key, instance] of this.instances)
+      if (instance.kind === 'island' && container.contains(instance.el)) this.dispose(key);
+  }
+
+  dispose(key: string) {
+    const instance = this.instances.get(key);
+    if (!instance) return;
+    this.reset(instance);
+    instance.status = 'failed'; // never activates again
+    this.instances.delete(key);
+  }
+
+  /** IC-06: an island with the same component and props keeps its instance across morph. */
+  sameIsland(key: string, meta: IslandMeta) {
+    return this.instances.get(key)?.signature === signatureOf(meta.component, meta.props);
+  }
+
+  rekey(from: string, to: string) {
+    if (from === to) return;
+    const instance = this.instances.get(from);
+    if (!instance) return;
+    this.instances.delete(from);
+    instance.key = to;
+    instance.el.setAttribute('data-island', to);
+    this.instances.set(to, instance);
+  }
+
+  has(key: string) {
+    return this.instances.has(key);
   }
 }
 

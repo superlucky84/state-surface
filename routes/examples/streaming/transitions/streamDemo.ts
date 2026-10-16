@@ -1,5 +1,5 @@
 import type { SurfaceContext } from 'state-surface/server';
-import { defineTransition } from 'state-surface/server';
+import { defineTransition, TransitionError } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
@@ -37,16 +37,11 @@ async function* streamDemo(
 
     await delay(500);
 
-    yield {
-      type: 'error',
-      message: 'Intentional error to demonstrate error frame handling',
-      template: 'system:error',
-      data: {
-        message:
-          'This is a demonstration error frame. In real apps, transitions can yield error frames when something goes wrong.',
-      },
-    };
-    return;
+    // Thrown errors end the stream with an error frame; TransitionError messages reach the
+    // error slot in production too.
+    throw new TransitionError(
+      'This is a demonstration error frame. In real apps, a transition throws when something goes wrong.'
+    );
   }
 
   // Default: full sequence demonstrating all frame types
@@ -224,8 +219,6 @@ async function* streamDemo(
       },
     },
   };
-
-  yield { type: 'done' };
 }
 
 export default defineTransition('stream-demo', streamDemo);

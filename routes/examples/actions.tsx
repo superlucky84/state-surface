@@ -11,10 +11,10 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="actions:playground" client:load>
+        <Slot name="actions:playground" mode="server">
           <ActionsPlayground {...content['actions:playground']} />
         </Slot>
-        <Slot name="actions:log" client:load>
+        <Slot name="actions:log" mode="server">
           <ActionsLog {...content['actions:log']} />
         </Slot>
       </main>

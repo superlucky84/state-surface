@@ -3,7 +3,12 @@
 작성일: 2026-03-08  
 상태: Draft (새 설계 문서)
 
-이 문서는 다음 단계 설계를 위한 **활성(working) DESIGN 문서**다.
+> **대체됨 (2026-10-16, 단계 4)**: 이 문서의 단일 층 프레임 계약(ui/uiChanged 포함)은
+> [docs/surface-expansion/DESIGN.md](../surface-expansion/DESIGN.md) 6장의 두 층 계약(작성 프레임 → 전송 op,
+> DC-09)으로 대체되었다. `ui`/`uiChanged` 작성 규칙은 작성 층에 그대로 남고, 브라우저는 서버가 투영한 `ui` op만
+> 실행한다. 현재 계약은 [PROTOCOL.md](../../PROTOCOL.md)를 따른다. 아래 내용은 기록으로 보존한다.
+
+이 문서는 다음 단계 설계를 위한 **활성(working) DESIGN 문서**였다.
 이전 Phase 설계/구현 문서는 `docs/completed/`로 이동했다.
 
 ## 0) 철학/배경 기준선

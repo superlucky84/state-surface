@@ -37,12 +37,12 @@ export default async function Page(ctx: SurfaceContext) {
     <Layout header={state['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6">
         <div class="w-full md:w-56 md:shrink-0">
-          <Slot name="guide:toc" client:load>
+          <Slot name="guide:toc" mode="server">
             <GuideToc {...state['guide:toc']} />
           </Slot>
         </div>
         <div class="min-w-0 flex-1">
-          <Slot name="guide:content" client:load>
+          <Slot name="guide:content" mode="server">
             <GuideContent {...state['guide:content']} />
           </Slot>
         </div>

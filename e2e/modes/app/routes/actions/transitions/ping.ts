@@ -1,11 +1,11 @@
 import { defineTransition } from 'state-surface/server';
 
-// Targets a static slot: content stays (V-01) while the UI patch applies.
+// Server slot: the server re-renders the HTML and the browser applies it with the UI patch;
+// the page still needs no Lithent. The engine sends `done` when the handler returns.
 export default defineTransition('ping', async function* () {
   yield {
     type: 'state',
-    states: { note: { text: 'changed by frame' } },
+    states: { note: { text: 'static note' } },
     ui: { note: { classAdd: ['pinged'] } },
   };
-  yield { type: 'done' };
 });

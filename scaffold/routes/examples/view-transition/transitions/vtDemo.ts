@@ -1,5 +1,5 @@
 import type { SurfaceContext } from 'state-surface/server';
-import { defineTransition } from 'state-surface/server';
+import { defineTransition, TransitionError } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
@@ -20,7 +20,6 @@ async function* vtDemo(
       type: 'state',
       states: base,
     };
-    yield { type: 'done' };
     return;
   }
 
@@ -29,15 +28,7 @@ async function* vtDemo(
     const cards = base['vt:gallery'].cards;
     const selected = cards.find((c: { id: string }) => c.id === cardId);
 
-    if (!selected) {
-      yield {
-        type: 'error',
-        message: `Card "${cardId}" not found`,
-        template: 'system:error',
-        data: { message: `Card "${cardId}" not found` },
-      };
-      return;
-    }
+    if (!selected) throw new TransitionError(`Card "${cardId}" not found`);
 
     yield {
       type: 'state',
@@ -53,7 +44,6 @@ async function* vtDemo(
         },
       },
     };
-    yield { type: 'done' };
     return;
   }
 
@@ -62,7 +52,7 @@ async function* vtDemo(
     type: 'state',
     states: base,
   };
-  yield { type: 'done' };
 }
 
-export default defineTransition('vt-demo', vtDemo);
+// The gallery ↔ detail morph is an action-level View Transition (DC-06 ②).
+export default defineTransition('vt-demo', { viewTransition: true, handler: vtDemo });

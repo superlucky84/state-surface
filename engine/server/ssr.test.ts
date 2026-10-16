@@ -1,48 +1,40 @@
 import { describe, it, expect } from 'vitest';
-import { safeStateJSON, buildStateScript, buildBootScript } from './ssr.js';
+import { safeStateJSON, buildSurfaceScript } from './ssr.js';
 
 describe('safeStateJSON', () => {
-  it('escapes < > & for safe HTML embedding', () => {
-    const result = safeStateJSON({ html: '<script>alert("xss")</script>' });
-    expect(result).not.toContain('<');
-    expect(result).not.toContain('>');
+  it('escapes < > & U+2028 U+2029 for safe HTML embedding', () => {
+    const result = safeStateJSON({ html: '<script>alert("xss")</script>&\u2028\u2029' });
+    expect(result).not.toMatch(/[<>&\u2028\u2029]/);
     expect(result).toContain('\\u003c');
     expect(result).toContain('\\u003e');
+    expect(result).toContain('\\u0026');
+    expect(result).toContain('\\u2028');
   });
 
   it('produces valid JSON after escaping', () => {
-    const original = { a: 1, b: '<tag>&amp;</tag>' };
-    const escaped = safeStateJSON(original);
-    // The escaped string should parse back correctly
-    // (JSON.parse handles unicode escapes)
-    expect(JSON.parse(escaped)).toEqual(original);
+    const original = { a: 1, b: '<tag>&amp;</tag>\u2028' };
+    expect(JSON.parse(safeStateJSON(original))).toEqual(original);
   });
 });
 
-describe('buildStateScript', () => {
-  it('produces a script tag with safe JSON', () => {
-    const states = { 'page:article': { title: '<Test>' } };
-    const result = buildStateScript(states);
-
-    expect(result).toMatch(/^<script id="__STATE__" type="application\/json">/);
-    expect(result).toMatch(/<\/script>$/);
-    expect(result).not.toContain('<Test>');
-    expect(result).toContain('\\u003cTest\\u003e');
-  });
-});
-
-describe('buildBootScript', () => {
-  it('serializes <Boot> entries as an ordered array', () => {
-    const script = buildBootScript([
-      { transition: 'first', params: { q: '</script>' } },
-      { transition: 'second', params: {} },
-    ]);
-    expect(script).toMatch(/^<script id="__BOOT__" type="application\/json">/);
+describe('buildSurfaceScript', () => {
+  it('writes the single bootstrap JSON that cannot close its script element', () => {
+    const script = buildSurfaceScript({
+      buildId: 'b1',
+      pageId: 'guide/[slug]',
+      basePath: '/demo',
+      slots: [{ id: 'a', mode: 'client', component: 'a#default', props: { t: '</script>' } }],
+      boot: [{ transition: 'first', params: { q: '</script>' } }],
+    });
+    expect(script).toMatch(/^<script id="__SURFACE__" type="application\/json">/);
     expect(script.split('</script>')).toHaveLength(2);
     const json = script.slice(script.indexOf('>') + 1, script.lastIndexOf('</script>'));
-    expect(JSON.parse(json)).toEqual([
-      { transition: 'first', params: { q: '</script>' } },
-      { transition: 'second', params: {} },
-    ]);
+    expect(JSON.parse(json)).toEqual({
+      buildId: 'b1',
+      pageId: 'guide/[slug]',
+      basePath: '/demo',
+      slots: [{ id: 'a', mode: 'client', component: 'a#default', props: { t: '</script>' } }],
+      boot: [{ transition: 'first', params: { q: '</script>' } }],
+    });
   });
 });

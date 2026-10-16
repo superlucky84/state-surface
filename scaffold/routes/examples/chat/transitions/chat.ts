@@ -3,8 +3,8 @@ import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 import { getLang, isValidLang } from '../../../../shared/i18n.js';
 import type { Lang } from '../../../../shared/i18n.js';
-
-type Message = { id: string; role: 'user' | 'bot'; text: string };
+import { chatContent } from '../../../../shared/content.js';
+import { appendMessage } from '../history.server.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -63,50 +63,31 @@ async function* chat(
 ): AsyncGenerator<StateFrame, void, unknown> {
   const userText = String(params.message ?? '').trim();
   const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  // Nothing to send: an empty success (the engine answers `done` only).
+  if (!userText) return;
 
-  if (!userText) {
-    yield { type: 'done' };
-    return;
-  }
+  const content = chatContent(lang);
+  // Written before the first frame, so the session cookie is part of the response.
+  const history = appendMessage(ctx, { id: `u-${Date.now()}`, role: 'user', text: userText });
 
-  const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', text: userText };
-
-  // Partial frame: reset chat:current, clear input, show typing indicator.
-  // chat:messages is NOT touched — previous history is preserved.
+  // Full frame: the history (server slot), an empty streaming bubble (client slot), the
+  // typing indicator and a fresh input. These four slots are the transition targets.
   yield {
     type: 'state',
-    full: false,
-    changed: ['chat:current', 'chat:typing', 'chat:input'],
     states: {
+      'chat:messages': { ...content['chat:messages'], messages: history },
       'chat:current': { text: '' },
       'chat:typing': { text: lang === 'ko' ? '입력 중...' : 'Typing...' },
-      'chat:input': {
-        placeholder: lang === 'ko' ? '메시지를 입력하세요...' : 'Type a message...',
-        submitLabel: lang === 'ko' ? '전송' : 'Send',
-        hint:
-          lang === 'ko'
-            ? '새 메시지를 보내면 진행 중인 응답이 취소됩니다 (abort previous 정책).'
-            : 'Sending a new message cancels any in-progress response (abort previous policy).',
-        lang,
-      },
+      'chat:input': content['chat:input'],
     },
-  };
-
-  // Append user message to history via accumulate
-  yield {
-    type: 'state',
-    accumulate: true,
-    states: { 'chat:messages': { messages: [userMsg] } },
   };
 
   await delay(400);
 
-  // Streaming: accumulate frames carry only new chars; runtime concatenates
-  // activeStates['chat:current'].text on the client — no local state in template.
+  // Streaming: accumulate frames carry only new characters. chat:current is a client slot,
+  // so the server sends `merge` ops and the browser concatenates the text.
   const fullResponse = makeBotResponse(userText, lang);
-  const botId = `b-${Date.now()}`;
   let pos = 0;
-
   while (pos < fullResponse.length) {
     const chunkSize = Math.floor(Math.random() * 4) + 1;
     const nextPos = Math.min(pos + chunkSize, fullResponse.length);
@@ -120,22 +101,16 @@ async function* chat(
     await delay(Math.floor(Math.random() * 30) + 15);
   }
 
-  // Final: append completed bot message to history, remove streaming slot and typing.
-  const botMsg: Message = { id: botId, role: 'bot', text: fullResponse };
-  yield {
-    type: 'state',
-    accumulate: true,
-    states: { 'chat:messages': { messages: [botMsg] } },
-  };
-
+  // Final: store the completed bot message, re-render the history, drop the bubble and
+  // typing indicator. An aborted request never reaches this point, so it stores nothing.
+  const messages = appendMessage(ctx, { id: `b-${Date.now()}`, role: 'bot', text: fullResponse });
   yield {
     type: 'state',
     full: false,
-    states: {},
+    states: { 'chat:messages': { ...content['chat:messages'], messages } },
+    changed: ['chat:messages'],
     removed: ['chat:current', 'chat:typing'],
   };
-
-  yield { type: 'done' };
 }
 
 export default defineTransition('chat', chat);

@@ -13,12 +13,29 @@ export interface ImportBinding {
   imported: string;
 }
 
+/** Statically declared Slot options (literals), read for the page manifest (DESIGN 6.2). */
+export interface SlotFacts {
+  name: string;
+  /** Normalized (DC-01): explicit `mode`, else `client` with a client directive, else `static`. */
+  mode: 'static' | 'server' | 'client';
+  swap?: 'replace' | 'morph';
+  capability?: 'strict' | 'rich' | 'unsafe';
+  sandbox?: 'iframe';
+  viewTransition?: true;
+  /** `server:defer` (DC-21). */
+  defer?: true;
+  cache?: string;
+  external?: true;
+  /** `schema={identifier}` of an external slot: imported or exported from this module. */
+  schema?: { local: string; offset: number };
+}
+
 export interface IslandUse {
   /** Direct directive island, the single child of a Slot, or Slot `component={…}`. */
   kind: 'island' | 'slot-child' | 'slot-component';
   local: string;
   binding: ImportBinding;
-  slot?: { name: string; mode?: string };
+  slot?: SlotFacts;
   /** Opening tag name range (island/slot-child) or Slot tag name range (slot-component). */
   nameStart: number;
   nameEnd: number;
@@ -40,7 +57,9 @@ export interface ModuleAnalysis {
   islands: IslandUse[];
   /** Other component elements of imported identifiers (checked for server components). */
   elements: ElementUse[];
-  slots: Array<{ name: string; offset: number }>;
+  slots: Array<SlotFacts & { offset: number }>;
+  /** Top-level local name → exported name (`export const x`, `export { x as y }`). */
+  exports: Map<string, string>;
   usesSlot: boolean;
   usesBoot: boolean;
   hasDefaultExport: boolean;
@@ -63,6 +82,7 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     islands: [],
     elements: [],
     slots: [],
+    exports: new Map(),
     usesSlot: false,
     usesBoot: false,
     hasDefaultExport: false,
@@ -193,8 +213,15 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     if (node.type === 'VariableDeclaration') declare(node, false);
     if (node.type === 'ExportNamedDeclaration') {
       declare(node.declaration, true);
+      const declaration = node.declaration;
+      if (declaration?.type === 'VariableDeclaration')
+        for (const item of declaration.declarations)
+          if (item.id.type === 'Identifier') result.exports.set(item.id.name, item.id.name);
+      if (declaration?.id?.type === 'Identifier')
+        result.exports.set(declaration.id.name, declaration.id.name);
       for (const spec of node.specifiers ?? []) {
         const exported = spec.exported.name ?? spec.exported.value;
+        if (!node.source && spec.local?.name) result.exports.set(spec.local.name, exported);
         if (exported === 'default') result.hasDefaultExport = true;
         if (!node.source && serverLocals.has(spec.local.name)) result.serverExports.add(exported);
         if (!node.source && pluginLocals.has(spec.local.name))
@@ -241,6 +268,12 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
       if (!name?.includes(':')) continue;
       const [namespace, directive] = name.split(':');
       if (namespace !== 'client' && namespace !== 'server' && namespace !== 'transition') continue;
+      if (namespace === 'server' && (directive !== 'defer' || attr.value !== null))
+        fail(
+          `${where}: unknown directive "${name}".`,
+          attr.start,
+          'The server directive is server:defer.'
+        );
       if (namespace === 'client') {
         if (!(CLIENT_DIRECTIVES as readonly string[]).includes(directive))
           fail(
@@ -302,6 +335,14 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     });
   };
 
+  const booleanAttr = (attr: any, where: string): boolean => {
+    if (attr.value === null) return true;
+    const expression =
+      attr.value?.type === 'JSXExpressionContainer' ? attr.value.expression : undefined;
+    if (expression?.type === 'Literal' && typeof expression.value === 'boolean')
+      return expression.value;
+    return fail(`${where}: \`${attrName(attr)}\` must be a boolean literal.`, attr.start);
+  };
   const handleSlot = (element: any, depth: { slot: number; island: number }) => {
     result.usesSlot = true;
     if (depth.slot) fail('<Slot> cannot be nested inside another <Slot>.', element.start);
@@ -309,6 +350,16 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     let name: string | undefined;
     let mode: string | undefined;
     let componentAttr: any;
+    const options: Omit<SlotFacts, 'name' | 'mode'> = {};
+    const choice = <T extends string>(attr: any, allowed: readonly T[], what: string): T => {
+      const value = literal(attr);
+      if (value === undefined || !(allowed as readonly string[]).includes(value))
+        fail(
+          `<Slot> \`${what}\` must be ${allowed.map(item => `"${item}"`).join(' or ')} as a literal.`,
+          attr.start
+        );
+      return value as T;
+    };
     for (const attr of element.openingElement.attributes) {
       const key = attrName(attr);
       if (key === 'name') {
@@ -319,6 +370,28 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         if (!mode || !['static', 'server', 'client'].includes(mode))
           fail('<Slot> `mode` must be "static", "server" or "client" as a literal.', attr.start);
       } else if (key === 'component') componentAttr = attr;
+      else if (key === 'swap') options.swap = choice(attr, ['replace', 'morph'] as const, 'swap');
+      else if (key === 'capability')
+        options.capability = choice(attr, ['strict', 'rich', 'unsafe'] as const, 'capability');
+      else if (key === 'sandbox') options.sandbox = choice(attr, ['iframe'] as const, 'sandbox');
+      else if (key === 'cache') {
+        options.cache = literal(attr);
+        if (!options.cache) fail('<Slot> `cache` must be a string literal.', attr.start);
+      } else if (key === 'viewTransition') {
+        if (booleanAttr(attr, '<Slot>')) options.viewTransition = true;
+      } else if (key === 'external') {
+        if (booleanAttr(attr, '<Slot>')) options.external = true;
+      } else if (key === 'server:defer') options.defer = true;
+      else if (key === 'schema') {
+        const expression =
+          attr.value?.type === 'JSXExpressionContainer' ? attr.value.expression : undefined;
+        if (expression?.type !== 'Identifier')
+          fail(
+            '<Slot> `schema` must be an identifier of an imported or exported Standard Schema.',
+            attr.start
+          );
+        options.schema = { local: expression.name, offset: attr.start };
+      }
     }
     if (name === undefined) fail('<Slot> requires a `name`.', element.start);
     if (name!.includes('#'))
@@ -327,9 +400,37 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
       fail(`Slot name "${name}" must match [a-z0-9-]+(:[a-z0-9-]+)*.`, element.start);
     const where = `<Slot name="${name}">`;
     const directives = directivesOf(element, where);
-    if (mode && mode !== 'client' && directives.some(d => d.startsWith('client:')))
+    const client = directives.some(d => d.startsWith('client:'));
+    if (mode && mode !== 'client' && client)
       fail(`${where}: mode="${mode}" cannot be combined with client directives.`, element.start);
-    result.slots.push({ name: name!, offset: element.start });
+    const normalized = (mode ?? (client ? 'client' : 'static')) as SlotFacts['mode'];
+    if (options.swap && normalized !== 'server')
+      fail(`${where}: \`swap\` applies to mode="server" slots.`, element.start);
+    if (options.defer && normalized !== 'server')
+      fail(`${where}: server:defer needs mode="server".`, element.start);
+    if (options.cache && !options.defer)
+      fail(`${where}: \`cache\` applies to server:defer slots.`, element.start);
+    if (options.sandbox && options.capability !== 'unsafe')
+      fail(`${where}: sandbox="iframe" needs capability="unsafe".`, element.start);
+    if (options.external && !options.schema)
+      fail(
+        `${where}: an external slot needs a Standard Schema \`schema\`.`,
+        element.start,
+        'Frames from ctx.external() are validated against it (DESIGN 8.1).'
+      );
+    if (options.schema && !options.external)
+      fail(`${where}: \`schema\` is only used by external slots.`, element.start);
+    if (options.schema) {
+      const local = options.schema.local;
+      const binding = result.imports.get(local);
+      if ((!binding || binding.imported === '*') && !result.exports.has(local))
+        fail(
+          `${where}: schema \`${local}\` must be imported or exported from this module.`,
+          options.schema.offset
+        );
+    }
+    const facts: SlotFacts = { name: name!, mode: normalized, ...options };
+    result.slots.push({ ...facts, offset: element.start });
     const children = meaningfulChildren(element);
     if (componentAttr) {
       if (children.length)
@@ -354,7 +455,7 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         kind: 'slot-component',
         local: expression.name,
         binding: binding!,
-        slot: { name: name!, mode },
+        slot: facts,
         nameStart: tag.start,
         nameEnd: tag.end,
         offset: componentAttr.start,
@@ -377,7 +478,7 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         child.start,
         'Pass fixed content as props.'
       );
-    recordIsland(child, 'slot-child', binding, { name: name!, mode });
+    recordIsland(child, 'slot-child', binding, facts);
   };
 
   const visit = (node: any, depth: { slot: number; island: number }): void => {

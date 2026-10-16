@@ -105,8 +105,8 @@ describe('request context and middleware', () => {
       defineManifest({
         routes: [],
         transitions: [
-          { name: 'same', handler: async function* () {} },
-          { name: 'same', handler: async function* () {} },
+          { name: 'same', definition: { handler: async function* () {} } },
+          { name: 'same', definition: { handler: async function* () {} } },
         ],
       })
     ).toThrow('Duplicate');

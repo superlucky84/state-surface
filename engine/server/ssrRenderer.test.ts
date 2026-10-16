@@ -38,6 +38,20 @@ function json(html: string, id: string) {
   const match = html.match(new RegExp(`<script id="${id}" type="application/json">(.*?)</script>`));
   return match ? JSON.parse(match[1]) : undefined;
 }
+/** Slot and island entries of `__SURFACE__` keyed by id. */
+function slotsOf(html: string): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    (json(html, '__SURFACE__')?.slots ?? []).map((entry: { id: string }) => [entry.id, entry])
+  );
+}
+/** Client SSR snapshot props per slot (what `__STATE__` used to hold). */
+function propsOf(html: string) {
+  return Object.fromEntries(
+    Object.entries(slotsOf(html))
+      .filter(([, entry]) => entry.props !== undefined && !String(entry.id).includes('$'))
+      .map(([id, entry]) => [id, entry.props])
+  );
+}
 
 const Title = ({ text }: { text: string }) => el('h1', {}, text);
 const Counter = ({ count }: { count: number }) => el('button', { type: 'button' }, String(count));
@@ -81,7 +95,7 @@ describe('Lithent SSR attribute contract', () => {
     expect(button.innerHTML).toBe('<strong>trusted</strong>');
   });
 
-  it('round-trips JSON slot props through data-params and __STATE__', async () => {
+  it('round-trips JSON slot props through data-params and __SURFACE__', async () => {
     const Action = ({ params }: { params: Record<string, string> }) =>
       el('button', { 'data-action': 'go', 'data-params': JSON.stringify(params) }, 'Go');
     const render = (params: Record<string, string>) =>
@@ -94,7 +108,7 @@ describe('Lithent SSR attribute contract', () => {
     const hostile = { q: '"><script>alert(1)</script>' };
     const hostileHtml = await render(hostile);
     expect(hostileHtml).not.toContain('<script>alert(1)');
-    expect(json(hostileHtml, '__STATE__')).toEqual({ act: { params: hostile } });
+    expect(propsOf(hostileHtml)).toEqual({ act: { params: hostile } });
 
     // DOM parser round-trip (happy-dom decodes &quot;/&amp; but not &lt;/&gt; in attributes;
     // the markup round-trip is covered in Chromium by the browser spikes).
@@ -114,6 +128,8 @@ describe('document assembly', () => {
       ctx,
       {
         plugins: [{ id: 'p.ts#scroll', load: 'idle' }],
+        buildId: 'b1',
+        pageId: 'index',
         tags: () => ({
           styles: ['/assets/app.css'],
           preload: ['/assets/title.js'],
@@ -126,13 +142,13 @@ describe('document assembly', () => {
       '<!doctype html><html lang="en"><head><!--ss:head--><title>Test</title>' +
         '<link rel="stylesheet" href="/assets/app.css">' +
         '<link rel="modulepreload" href="/assets/title.js">' +
-        '<script id="__STATE__" type="application/json">{"title":{"text":"Hello"}}</script>' +
-        '<script id="__PLUGINS__" type="application/json">[{"id":"p.ts#scroll","load":"idle"}]</script>' +
-        '<script id="__BASE_PATH__" type="application/json">""</script>' +
+        '<script id="__SURFACE__" type="application/json">{"buildId":"b1","pageId":"index","basePath":"",' +
+        '"slots":[{"id":"title","mode":"client","component":"Title.tsx#default","props":{"text":"Hello"}}],' +
+        '"plugins":[{"id":"p.ts#scroll","load":"idle"}]}</script>' +
         `<script type="module" src="/assets/app.js" nonce="${ctx.nonce}"></script>` +
         `<script type="module" src="/assets/loader.js" nonce="${ctx.nonce}"></script>` +
         '<!--/ss:head--></head><body><!--ss:body-->' +
-        '<h-state name="title" data-component="Title.tsx#default"><h1>Hello</h1></h-state>' +
+        '<h-state name="title"><h1>Hello</h1></h-state>' +
         '<!--/ss:body--></body></html>'
     );
   });
@@ -207,10 +223,10 @@ describe('entry selection', () => {
     );
     expect(usage).toMatchObject({ engine: false, actions: false, components: [] });
     expect(html).toContain('<h-state name="hero"><h1>static</h1></h-state>');
-    expect(html).not.toContain('__STATE__');
+    expect(html).not.toContain('"slots"');
     expect(html).not.toContain('/loader.js');
-    // The app entry still runs on every page (DC-18), with the base path it may need.
-    expect(html).toContain('<script id="__BASE_PATH__"');
+    // The app entry still runs on every page (DC-18), with the build, page and base path.
+    expect(json(html, '__SURFACE__')).toEqual({ buildId: 'dev', pageId: '', basePath: '' });
     expect(html).toContain('src="/app.js"');
   });
 
@@ -255,10 +271,16 @@ describe('entry selection', () => {
       context()
     );
     expect(Heavy).not.toHaveBeenCalled();
-    expect(html).toContain(
-      '<h-state name="chart" data-component="Mock.tsx#default" data-activation="media" data-media="(min-width: 800px)" data-only=""><p>Loading</p></h-state>'
-    );
-    expect(json(html, '__STATE__')).toEqual({ chart: { points: [1, 2] } });
+    expect(html).toContain('<h-state name="chart"><p>Loading</p></h-state>');
+    expect(slotsOf(html).chart).toEqual({
+      id: 'chart',
+      mode: 'client',
+      component: 'Mock.tsx#default',
+      activation: 'media',
+      media: '(min-width: 800px)',
+      only: true,
+      props: { points: [1, 2] },
+    });
   });
 });
 
@@ -277,11 +299,15 @@ describe('slots', () => {
       context()
     );
     expect(html).toContain(
-      '<h-state name="count" class="card" data-animate="fade" data-component="Counter.tsx#default">' +
-        '<button type="button">3</button></h-state>'
+      '<h-state name="count" class="card" data-animate="fade"><button type="button">3</button></h-state>'
     );
-    expect(html).toContain('<h-state name="later" data-component="Title.tsx#default"></h-state>');
-    expect(json(html, '__STATE__')).toEqual({ count: { count: 3 } });
+    expect(html).toContain('<h-state name="later"></h-state>');
+    expect(propsOf(html)).toEqual({ count: { count: 3 } });
+    expect(slotsOf(html).later).toEqual({
+      id: 'later',
+      mode: 'client',
+      component: 'Title.tsx#default',
+    });
   });
 
   it('awaits server loads in parallel and renders their data without client state', async () => {
@@ -310,7 +336,9 @@ describe('slots', () => {
     const html = await rendering;
     expect(html).toContain('<h-state name="a"><span>A@/prices</span></h-state>');
     expect(html).toContain('<h-state name="b"><span>B@/prices</span></h-state>');
-    expect(json(html, '__STATE__')).toBeUndefined();
+    // Server slots need no browser code; their input never reaches the page.
+    expect(json(html, '__SURFACE__')).toBeUndefined();
+    expect(html).not.toContain('"id":"A"');
   });
 
   it('fails the page when a server load rejects or throws synchronously', async () => {
@@ -402,9 +430,16 @@ describe('islands', () => {
       context()
     );
     expect(html).toContain(
-      '<h-island data-island="$0" data-component="Card.tsx#default" data-props="{&quot;title&quot;:&quot;Card&quot;}" data-activation="idle" style="display:contents">' +
+      '<h-island data-island="$0" style="display:contents">' +
         '<section><h2>Card</h2><h-children style="display:contents"><p>server child</p></h-children></section></h-island>'
     );
+    expect(slotsOf(html).$0).toEqual({
+      id: '$0',
+      mode: 'client',
+      component: 'Card.tsx#default',
+      props: { title: 'Card' },
+      activation: 'idle',
+    });
     expect(html).not.toContain('<template');
   });
 
@@ -423,7 +458,7 @@ describe('islands', () => {
       context()
     );
     expect(OnlyClient).not.toHaveBeenCalled();
-    expect(html).toContain('data-only=""');
+    expect(slotsOf(html).$0).toMatchObject({ only: true });
     expect(html).toContain(
       '<template data-surface-children=""><b>kid</b></template><p>Loading</p>'
     );
@@ -469,7 +504,7 @@ describe('islands', () => {
       page(() => documentOf(slot({ name: 'ok' }, island(Counter, { count: 1, extra: undefined })))),
       context()
     );
-    expect(json(html, '__STATE__')).toEqual({ ok: { count: 1 } });
+    expect(propsOf(html)).toEqual({ ok: { count: 1 } });
   });
 
   it('rejects islands inside client components and slots inside island children', async () => {
@@ -496,8 +531,10 @@ describe('islands', () => {
       page(() => documentOf(slot({ name: 'panel', mode: 'server' }, island(Panel)))),
       context()
     );
-    expect(html).toContain('<h-state name="panel"><div><h-island data-island="$0"');
+    // Islands inside a slot get slot-scoped ids, the same ones html ops produce.
+    expect(html).toContain('<h-state name="panel"><div><h-island data-island="panel$0"');
     expect(html).toContain('<button type="button">7</button>');
+    expect(slotsOf(html)['panel$0']).toMatchObject({ activation: 'visible', props: { count: 7 } });
   });
 });
 
@@ -515,7 +552,7 @@ describe('<Boot>', () => {
       ),
       context()
     );
-    expect(json(html, '__BOOT__')).toEqual([
+    expect(json(html, '__SURFACE__').boot).toEqual([
       { transition: 'first', params: {} },
       { transition: 'second', params: { n: 2 } },
       { transition: 'third', params: { q: '</script>' } },
@@ -545,10 +582,10 @@ describe('request isolation', () => {
     const [slow, fast] = await Promise.all(
       ['slow', 'fast'].map(id => renderPage(pageModule, context(`https://surface.test/?id=${id}`)))
     );
-    expect(json(slow, '__STATE__')).toEqual({ header: { text: 'header-slow' } });
-    expect(json(fast, '__STATE__')).toEqual({ header: { text: 'header-fast' } });
-    expect(json(slow, '__BOOT__')).toEqual([{ transition: 'boot-slow', params: {} }]);
-    expect(json(fast, '__BOOT__')).toEqual([{ transition: 'boot-fast', params: {} }]);
+    expect(propsOf(slow)).toEqual({ header: { text: 'header-slow' } });
+    expect(propsOf(fast)).toEqual({ header: { text: 'header-fast' } });
+    expect(json(slow, '__SURFACE__').boot).toEqual([{ transition: 'boot-slow', params: {} }]);
+    expect(json(fast, '__SURFACE__').boot).toEqual([{ transition: 'boot-fast', params: {} }]);
   });
 
   it('does not mutate module-level JSX shared between requests', async () => {

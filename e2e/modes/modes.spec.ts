@@ -20,10 +20,13 @@ test('static page loads no engine JavaScript, only the app entry', async ({ page
   expect(await page.evaluate(() => document.documentElement.dataset.appEntry)).toBe('ran');
   expect(urls).toHaveLength(1);
   expect(named(urls, 'app-entry')).toHaveLength(1);
-  expect(await page.locator('script#__STATE__, script#__BOOT__').count()).toBe(0);
+  // The app entry gets build, page and base path; no slots, boot or plugins (no engine).
+  expect(
+    await page.evaluate(() => JSON.parse(document.getElementById('__SURFACE__')!.textContent!))
+  ).toEqual({ buildId: expect.any(String), pageId: 'index', basePath: '' });
 });
 
-test('actions without client components load the runtime but not Lithent; static content stays', async ({
+test('actions without client components load the runtime but not Lithent; server HTML applies', async ({
   page,
 }) => {
   const urls = scripts(page);

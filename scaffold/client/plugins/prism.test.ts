@@ -4,7 +4,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { prism } from './prism.js';
 
-
 const SAMPLE_CODE = `const value = 1;
 console.log(value);`;
 

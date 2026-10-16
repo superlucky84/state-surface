@@ -12,3 +12,8 @@ export async function createDemo(options: Omit<Partial<HandlerOptions>, 'manifes
     }),
   };
 }
+
+/** Headers the browser runtime sends with a transition from page `pageId` (DESIGN 6.2). */
+export function surfaceHeaders(pageId: string) {
+  return { 'x-surface-build': manifest.buildId, 'x-surface-page': pageId };
+}

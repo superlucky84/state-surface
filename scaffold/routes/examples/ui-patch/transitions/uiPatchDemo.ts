@@ -69,8 +69,6 @@ async function* uiPatchDemo(
       },
       changed: ['uipatch:preview'],
     };
-
-    yield { type: 'done' };
   } else if (action === 'style-only') {
     // Style-only partial: no state change, only ui
     const patch = THEMES[theme] ?? THEMES.reset;
@@ -94,8 +92,6 @@ async function* uiPatchDemo(
       ui: { 'uipatch:preview': patch },
       uiChanged: ['uipatch:preview'],
     };
-
-    yield { type: 'done' };
   } else if (action === 'clear') {
     // Clear UI: set ui to null
     yield {
@@ -107,8 +103,6 @@ async function* uiPatchDemo(
       },
       ui: {},
     };
-
-    yield { type: 'done' };
   }
 }
 

@@ -5,14 +5,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { bindDeclarativeActions } from './actionDelegation.js';
 import type { StateSurface, TraceEvent } from './stateSurface.js';
 
-type MockSurface = Pick<StateSurface, 'transition' | 'trace'>;
-
 function createMockSurface() {
   const transition = vi.fn();
-  const trace = vi.fn<[TraceEvent], void>();
+  const trace = vi.fn<(event: TraceEvent) => void>();
 
   return {
-    surface: { transition, trace } as MockSurface as StateSurface,
+    surface: { transition, trace } as unknown as StateSurface,
     transition,
     trace,
   };

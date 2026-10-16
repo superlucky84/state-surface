@@ -284,11 +284,22 @@ describe('app analysis', () => {
     ]);
     expect(pluginsOf('index.tsx')).toEqual([]);
     expect(app.plugins.size).toBe(3);
-    expect([...app.client.keys()]).toContain('routes/_shared/components/pageHeader.tsx#default');
-    expect([...app.client.keys()]).toContain(
-      'routes/examples/chat/_components/chatTyping.tsx#default'
-    );
-    expect(app.client.size).toBe(23);
+    // Stage 4: transition-updated demo slots are server slots; only the chat bubble streams
+    // into a client slot.
+    expect([...app.client.keys()]).toEqual([
+      'routes/examples/chat/_components/chatCurrent.tsx#default',
+    ]);
+    const slotsOf = (page: string) =>
+      Object.fromEntries(
+        (app.pageSlots.get(path.resolve('routes', page)) ?? []).map(slot => [slot.name, slot])
+      );
+    expect(slotsOf('examples/search.tsx')['search:input']).toMatchObject({
+      mode: 'server',
+      swap: 'morph',
+      componentId: 'routes/examples/search/_components/searchInput.tsx#default',
+    });
+    expect(slotsOf('examples/search.tsx')['page:header']).toMatchObject({ mode: 'server' });
+    expect(slotsOf('examples/chat.tsx')['chat:current']).toMatchObject({ mode: 'client' });
   });
 
   it('reports one slot name declared by two modules on the same page', async () => {
@@ -318,5 +329,47 @@ describe('app analysis', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('reads static Slot options for the page manifest and diagnoses invalid combinations', () => {
+    const slotOf = (attrs: string) =>
+      analyzeModule(
+        `import { Slot } from 'state-surface';\nimport T from './T';\nimport { schema } from './s';\nexport const local = 1;\nexport default () => <Slot name="x" ${attrs}><T /></Slot>;`,
+        '/app/routes/p.tsx'
+      ).slots[0];
+    expect(slotOf('mode="server" swap="morph" viewTransition')).toMatchObject({
+      name: 'x',
+      mode: 'server',
+      swap: 'morph',
+      viewTransition: true,
+    });
+    expect(slotOf('mode="server" server:defer cache="public, max-age=60"')).toMatchObject({
+      defer: true,
+      cache: 'public, max-age=60',
+    });
+    expect(slotOf('mode="server" capability="unsafe" sandbox="iframe"')).toMatchObject({
+      capability: 'unsafe',
+      sandbox: 'iframe',
+    });
+    expect(slotOf('client:load external schema={schema}')).toMatchObject({
+      mode: 'client',
+      external: true,
+      schema: { local: 'schema' },
+    });
+    expect(slotOf('')).toMatchObject({ mode: 'static' });
+    for (const [attrs, message] of [
+      ['client:load swap="morph"', 'applies to mode="server"'],
+      ['server:defer', 'server:defer needs mode="server"'],
+      ['mode="server" cache="x"', 'applies to server:defer'],
+      ['mode="server" sandbox="iframe"', 'needs capability="unsafe"'],
+      ['client:load external', 'needs a Standard Schema'],
+      ['client:load schema={schema}', 'only used by external'],
+      ['client:load external schema={missing}', 'must be imported or exported'],
+      ['mode="server" swap="slide"', '"replace" or "morph"'],
+      ['mode="server" server:later', 'unknown directive'],
+      ['mode="server" viewTransition={flag}', 'boolean literal'],
+    ])
+      expect(() => slotOf(attrs), attrs).toThrow(message);
+    expect(slotOf('client:load external schema={local}')).toMatchObject({ external: true });
   });
 });

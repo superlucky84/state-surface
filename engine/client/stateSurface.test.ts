@@ -1,979 +1,534 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StateSurface } from './stateSurface.js';
-import type { TraceEvent } from './stateSurface.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { h } from 'lithent';
+import type { TagFunction } from 'lithent';
+import { StateSurface, coalesceOps, type TraceEvent } from './stateSurface.js';
+import { ComponentHost } from './componentHost.js';
+import { SlotDom } from './slotDom.js';
+import type { Op, SlotMeta, WireFrame } from '../shared/protocol.js';
 
-function createMockSurface(
-  options: {
-    transitionTimeout?: number;
-    isUpdatable?: (name: string, el: HTMLElement) => boolean;
-    onAction?: (event: { name: string; phase: 'start' | 'end'; error?: Error }) => void;
-  } = {}
-) {
-  const rendered: Array<{ name: string; data: any }> = [];
-  const hydrated: Array<{ name: string; data: any }> = [];
-  const updated: Array<{ name: string; data: any }> = [];
-  const unmounted: string[] = [];
-  const traces: TraceEvent[] = [];
+const Text = ((props: { text?: string }) =>
+  h('p', { class: 'text' }, props.text ?? '')) as unknown as TagFunction;
+const flush = () => new Promise(resolve => setTimeout(resolve, 30));
 
-  const surface = new StateSurface({
-    renderTemplate: (name, data, _el) => {
-      rendered.push({ name, data });
-    },
-    hydrateTemplate: (name, data, _el) => {
-      hydrated.push({ name, data });
-      return () => {};
-    },
-    updateTemplate: (name, data, _el) => {
-      updated.push({ name, data });
-    },
-    unmountTemplate: (name, _el) => {
-      unmounted.push(name);
-    },
-    trace: event => traces.push(event),
-    frameBudgetMs: 1000, // high budget so flushQueue drains all in tests
-    transitionTimeout: options.transitionTimeout,
-    isUpdatable: options.isUpdatable,
-    onAction: options.onAction,
+const SLOTS: SlotMeta[] = [
+  { id: 'list', mode: 'server' },
+  { id: 'card', mode: 'server', viewTransition: true },
+  { id: 'chat', mode: 'client', component: 'text#default' },
+  { id: 'system:error', mode: 'server' },
+];
+
+function ndjson(frames: unknown[], status = 200) {
+  return new Response(frames.map(frame => JSON.stringify(frame)).join('\n') + '\n', {
+    status,
+    headers: { 'content-type': 'application/x-ndjson' },
   });
-
-  return { surface, rendered, hydrated, updated, unmounted, traces };
 }
 
-function setupDOM(anchors: string[], stateJson?: Record<string, any>) {
-  document.body.innerHTML = anchors.map(name => `<h-state name="${name}"></h-state>`).join('');
-
-  if (stateJson) {
-    const script = document.createElement('script');
-    script.id = '__STATE__';
-    script.type = 'application/json';
-    script.textContent = JSON.stringify(stateJson);
-    document.body.appendChild(script);
-  }
-}
-
-describe('StateSurface', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  // ── Anchor Discovery ──
-
-  describe('discoverAnchors', () => {
-    it('finds all h-state elements', () => {
-      setupDOM(['page:article', 'panel:comments']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Verify by hydrating — only discovered anchors get hydrated
-      surface.hydrate({
-        'page:article': { id: 1 },
-        'panel:comments': { count: 5 },
-        'unknown:state': { x: 1 }, // no anchor for this
-      });
-
-      expect(surface.activeStates).toHaveProperty('unknown:state');
-    });
-  });
-
-  // ── Bootstrap + Hydration ──
-
-  describe('bootstrap', () => {
-    it('reads __STATE__ and hydrates per anchor', () => {
-      setupDOM(['page:article', 'panel:comments'], {
-        'page:article': { title: 'Hello' },
-        'panel:comments': { count: 3 },
-      });
-
-      const { surface, hydrated } = createMockSurface();
-      surface.discoverAnchors();
-      surface.bootstrap();
-
-      expect(hydrated).toHaveLength(2);
-      expect(hydrated[0]).toEqual({ name: 'page:article', data: { title: 'Hello' } });
-      expect(hydrated[1]).toEqual({ name: 'panel:comments', data: { count: 3 } });
-      expect(surface.activeStates).toEqual({
-        'page:article': { title: 'Hello' },
-        'panel:comments': { count: 3 },
-      });
-    });
-
-    it('does nothing when __STATE__ is absent', () => {
-      setupDOM(['page:article']);
-
-      const { surface, hydrated } = createMockSurface();
-      surface.discoverAnchors();
-      surface.bootstrap();
-
-      expect(hydrated).toHaveLength(0);
-      expect(surface.activeStates).toEqual({});
-    });
-  });
-
-  // ── Full Frame Apply ──
-
-  describe('full frame apply', () => {
-    it('replaces activeStates and renders new anchors', () => {
-      setupDOM(['page:article', 'loading']);
-
-      const { surface, rendered } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Manually push and flush a full frame
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: {
-          'page:article': { articleId: 1 },
-          loading: { articleId: 1 },
-        },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(surface.activeStates).toEqual({
-        'page:article': { articleId: 1 },
-        loading: { articleId: 1 },
-      });
-      expect(rendered).toHaveLength(2);
-    });
-  });
-
-  // ── Partial Frame Apply ──
-
-  describe('partial frame apply', () => {
-    it('merges changed and removes keys', () => {
-      setupDOM(['page:article', 'loading', 'content:loaded']);
-
-      const { surface, rendered, unmounted } = createMockSurface();
-      surface.discoverAnchors();
-
-      // First: full frame
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { 'page:article': { id: 1 }, loading: {} },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(rendered).toHaveLength(2);
-
-      // Second: partial frame — remove loading, add content:loaded
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: { 'content:loaded': { article: 'Hello' } },
-        changed: ['content:loaded'],
-        removed: ['loading'],
-      });
-      (surface as any).flushQueue(true);
-
-      expect(unmounted).toContain('loading');
-      expect(rendered).toHaveLength(3); // page:article, loading, content:loaded
-      expect(surface.activeStates).toEqual({
-        'page:article': { id: 1 },
-        'content:loaded': { article: 'Hello' },
-      });
-    });
-
-    it('updates already-mounted templates instead of re-rendering', () => {
-      setupDOM(['page:article']);
-
-      const { surface, rendered, updated } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Full frame
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { 'page:article': { v: 1 } },
-      });
-      (surface as any).flushQueue(true);
-      expect(rendered).toHaveLength(1);
-
-      // Partial update
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: { 'page:article': { v: 2 } },
-        changed: ['page:article'],
-      });
-      (surface as any).flushQueue(true);
-
-      expect(rendered).toHaveLength(1); // no new render
-      expect(updated).toHaveLength(1); // update called
-      expect(updated[0].data).toEqual({ v: 2 });
-    });
-  });
-
-  // ── Backpressure: Coalesce Partials ──
-
-  describe('coalesce partials', () => {
-    it('merges consecutive partial frames', () => {
-      setupDOM(['a', 'b', 'c']);
-
-      const { surface, traces } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Full frame first
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { x: 1 } },
-      });
-      (surface as any).flushQueue(true);
-
-      // Multiple consecutive partials
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: { b: { y: 2 } },
-        changed: ['b'],
-      });
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: { c: { z: 3 } },
-        changed: ['c'],
-      });
-      (surface as any).flushQueue(true);
-
-      // Should have merged into one apply
-      const mergedEvents = traces.filter(t => t.kind === 'merged');
-      expect(mergedEvents).toHaveLength(1);
-
-      expect(surface.activeStates).toEqual({
-        a: { x: 1 },
-        b: { y: 2 },
-        c: { z: 3 },
-      });
-    });
-  });
-
-  // ── Backpressure: Full Supersedes Partials ──
-
-  describe('full supersedes pending partials', () => {
-    it('drops partials before a full frame when queue overflows', () => {
-      setupDOM(['a']);
-
-      const { surface, traces } = createMockSurface();
-      (surface as any).maxQueue = 3;
-      surface.discoverAnchors();
-
-      // Push many partials then a full — simulate overflow
-      // First need a base state
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 0 } },
-      });
-      (surface as any).flushQueue(true);
-
-      // Now overflow: 4 partials then a full
-      for (let i = 1; i <= 4; i++) {
-        (surface as any).frameQueue.push({
-          type: 'state',
-          full: false,
-          states: { a: { v: i } },
-          changed: ['a'],
-        });
+/** A stream the test feeds frame by frame. */
+function controlledStream() {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start: c => void (controller = c) });
+  const encoder = new TextEncoder();
+  return {
+    response: new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+    // A superseded request's reader may already be cancelled; late sends are then no-ops.
+    send: (frame: unknown) => {
+      try {
+        controller.enqueue(encoder.encode(JSON.stringify(frame) + '\n'));
+      } catch {
+        /* cancelled */
       }
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 'final' } },
-      });
-      (surface as any).flushQueue(true);
+    },
+    close: () => {
+      try {
+        controller.close();
+      } catch {
+        /* cancelled */
+      }
+    },
+  };
+}
 
-      expect(surface.activeStates).toEqual({ a: { v: 'final' } });
-      // Should have dropped some partials
-      const dropped = traces.filter(t => t.kind === 'dropped');
-      expect(dropped.length).toBeGreaterThanOrEqual(1);
-    });
+function setup(options: { slots?: SlotMeta[]; html?: string; development?: boolean } = {}) {
+  document.body.innerHTML =
+    options.html ??
+    '<h-state name="list"><ul><li>ssr</li></ul></h-state><h-state name="card"></h-state>' +
+      '<h-state name="chat"></h-state><h-state name="system:error"></h-state>';
+  const traces: TraceEvent[] = [];
+  const report = vi.fn();
+  const reload = vi.fn();
+  const actions: Array<{ name: string; phase: string; error?: Error }> = [];
+  const host = new ComponentHost({ loaders: { 'text#default': async () => Text } });
+  const surface = new StateSurface({
+    bootstrap: { buildId: 'b1', pageId: 'page', basePath: '/base' },
+    slots: options.slots ?? SLOTS,
+    host,
+    dom: new SlotDom(host, undefined, { development: options.development }),
+    trace: event => traces.push(event),
+    report,
+    reload,
+    development: options.development,
+    onAction: event => actions.push(event),
   });
+  surface.discoverAnchors();
+  const slot = (name: string) => document.querySelector<HTMLElement>(`h-state[name="${name}"]`)!;
+  return { surface, traces, report, reload, actions, slot };
+}
 
-  // ── Accumulate Frame: activeStates Stays Synchronous ──
+beforeEach(() => {
+  document.body.innerHTML = '';
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-  describe('accumulate frames update activeStates synchronously', () => {
-    it('preserves accumulated state across rapid consecutive frames', () => {
-      setupDOM(['chat:messages', 'chat:input']);
-
-      const { surface, rendered, updated } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Full frame: initial chat state
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: {
-          'chat:messages': { messages: [{ role: 'bot', text: 'Hello' }] },
-          'chat:input': { value: '' },
-        },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(surface.activeStates['chat:messages'].messages).toHaveLength(1);
-
-      // Partial frame: reset input (preserves messages)
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: { 'chat:input': { value: '' } },
-        changed: ['chat:input'],
-      });
-      (surface as any).flushQueue(true);
-
-      // activeStates must be updated synchronously before next frame
-      expect(surface.activeStates['chat:messages'].messages).toHaveLength(1);
-
-      // Accumulate frame: append user message
-      (surface as any).frameQueue.push({
-        type: 'state',
-        accumulate: true,
-        states: { 'chat:messages': { messages: [{ role: 'user', text: 'Hi' }] } },
-        changed: ['chat:messages'],
-      });
-      (surface as any).flushQueue(true);
-
-      // Must have both messages (old + accumulated)
-      expect(surface.activeStates['chat:messages'].messages).toHaveLength(2);
-      expect(surface.activeStates['chat:messages'].messages[0]).toEqual({
-        role: 'bot',
-        text: 'Hello',
-      });
-      expect(surface.activeStates['chat:messages'].messages[1]).toEqual({
-        role: 'user',
-        text: 'Hi',
-      });
-
-      // Another accumulate: bot response
-      (surface as any).frameQueue.push({
-        type: 'state',
-        accumulate: true,
-        states: { 'chat:messages': { messages: [{ role: 'bot', text: 'How can I help?' }] } },
-        changed: ['chat:messages'],
-      });
-      (surface as any).flushQueue(true);
-
-      expect(surface.activeStates['chat:messages'].messages).toHaveLength(3);
-      expect(surface.activeStates['chat:messages'].messages[2]).toEqual({
-        role: 'bot',
-        text: 'How can I help?',
-      });
-    });
-  });
-
-  // ── Error Handling ──
-
-  describe('error handling', () => {
-    it('renders error template as full state when anchor exists', () => {
-      setupDOM(['system:error']);
-
-      const { surface, rendered } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).handleError({
-        type: 'error',
-        template: 'system:error',
-        data: { message: 'db timeout' },
-      });
-
-      // Should have pushed and flushed an error-as-full-state frame
-      expect(rendered).toHaveLength(1);
-      expect(rendered[0].name).toBe('system:error');
-      expect(rendered[0].data).toEqual({ message: 'db timeout' });
-    });
-
-    it('surfaces error via trace when no anchor exists', () => {
-      setupDOM([]); // no anchors
-
-      const { surface, traces } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).handleError({
-        type: 'error',
-        message: 'something broke',
-      });
-
-      const errorTraces = traces.filter(t => t.kind === 'error');
-      expect(errorTraces).toHaveLength(1);
-    });
-  });
-
-  // ── Done Handling ──
-
-  describe('done handling', () => {
-    it('flushes remaining queue on done', () => {
-      setupDOM(['a']);
-
-      const { surface, rendered } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Queue a frame but don't flush yet
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-      });
-
-      // Simulate onFrame with done
-      (surface as any).onFrame({ type: 'done' }, new AbortController().signal);
-
-      // Queue should be drained
-      expect(rendered).toHaveLength(1);
-      expect(surface.activeStates).toEqual({ a: { v: 1 } });
-    });
-  });
-
-  // ── Pending State ──
-
-  describe('pending state', () => {
-    it('adds pending on transition start and clears on first frame', async () => {
-      setupDOM(['a', 'b']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
-
-      let resolveFetch!: (value: Response) => void;
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockReturnValue(new Promise(resolve => (resolveFetch = resolve)) as Promise<Response>);
-
-      const transitionPromise = surface.transition('demo');
-
-      expect(a.hasAttribute('data-pending')).toBe(true);
-      expect(b.hasAttribute('data-pending')).toBe(true);
-
-      resolveFetch(
-        new Response(
-          `${JSON.stringify({ type: 'state', states: { a: { v: 1 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
-          { status: 200 }
-        )
-      );
-
-      await transitionPromise;
-
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(b.hasAttribute('data-pending')).toBe(false);
-      fetchSpy.mockRestore();
-    });
-
-    it('limits pending scope with pendingTargets option', async () => {
-      setupDOM(['a', 'b']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
-
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(
-          new Response(
-            `${JSON.stringify({ type: 'state', states: { b: { v: 2 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
-            { status: 200 }
-          )
-        );
-
-      const transitionPromise = surface.transition('demo', {}, { pendingTargets: ['b'] });
-
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(b.hasAttribute('data-pending')).toBe(true);
-
-      await transitionPromise;
-
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(b.hasAttribute('data-pending')).toBe(false);
-      fetchSpy.mockRestore();
-    });
-
-    it('keeps latest transition pending when previous transition is aborted', async () => {
-      setupDOM(['a', 'b']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      const b = document.querySelector<HTMLElement>('h-state[name="b"]')!;
-
-      let resolveSecondFetch!: (value: Response) => void;
-      let callCount = 0;
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
-        callCount++;
-
-        if (callCount === 1) {
-          const signal = init?.signal as AbortSignal;
-          return new Promise((_resolve, reject) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                const err = new Error('Aborted');
-                err.name = 'AbortError';
-                reject(err);
-              },
-              { once: true }
-            );
-          }) as Promise<Response>;
-        }
-
-        return new Promise(resolve => {
-          resolveSecondFetch = resolve;
-        }) as Promise<Response>;
-      });
-
-      const firstTransition = surface.transition('first', {}, { pendingTargets: ['a'] });
-      expect(a.hasAttribute('data-pending')).toBe(true);
-      expect(b.hasAttribute('data-pending')).toBe(false);
-
-      const secondTransition = surface.transition('second', {}, { pendingTargets: ['b'] });
-
-      await Promise.resolve();
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(b.hasAttribute('data-pending')).toBe(true);
-
-      resolveSecondFetch(
-        new Response(
-          `${JSON.stringify({ type: 'state', states: { b: { v: 3 } } })}\n${JSON.stringify({ type: 'done' })}\n`,
-          { status: 200 }
-        )
-      );
-
-      await secondTransition;
-      await firstTransition;
-
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(b.hasAttribute('data-pending')).toBe(false);
-      fetchSpy.mockRestore();
-    });
-  });
-
-  // ── Static slots and action notifications ──
-
-  describe('non-updatable slots', () => {
-    it('keeps static slot content when frames target it but still applies UI patches', () => {
-      document.body.innerHTML =
-        '<h-state name="hero"><p>SSR hero</p></h-state><h-state name="live" data-component="x"></h-state>';
-      const { surface, rendered, unmounted, traces } = createMockSurface({
-        isUpdatable: (_name, el) => el.hasAttribute('data-component'),
-      });
-      surface.discoverAnchors();
-      surface.hydrate({ hero: { title: 'ignored' } });
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { hero: { title: 'new' }, live: { v: 1 } },
-        ui: { hero: { classAdd: ['is-active'] } },
-      });
-      (surface as any).flushQueue(true);
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: {},
-        removed: ['hero'],
-      });
-      (surface as any).flushQueue(true);
-
-      expect(rendered.map(entry => entry.name)).toEqual(['live']);
-      expect(unmounted).toEqual([]);
-      const hero = document.querySelector('h-state[name="hero"]')!;
-      expect(hero.innerHTML).toBe('<p>SSR hero</p>');
-      expect(traces.some(event => event.kind === 'dropped')).toBe(true);
-    });
-  });
-
-  describe('onAction', () => {
-    it('reports start and end with the transition error', async () => {
-      setupDOM(['a']);
-      const events: Array<{ name: string; phase: string; error?: Error }> = [];
-      const { surface } = createMockSurface({ onAction: event => events.push(event) });
-      surface.discoverAnchors();
-
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(new Response('', { status: 500 }));
-
-      await surface.transition('demo');
-
-      expect(events.map(event => [event.name, event.phase])).toEqual([
-        ['demo', 'start'],
-        ['demo', 'end'],
+describe('request state table (DESIGN 6.3)', () => {
+  it('applies a reset patch and later patches, then completes on done', async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<ul><li>a</li></ul>' }] },
+        { type: 'patch', ops: [{ slot: 'list', html: '<ul><li>b</li></ul>' }] },
+        { type: 'done' },
+        { type: 'patch', ops: [{ slot: 'list', html: '<ul><li>after done</li></ul>' }] },
       ]);
-      expect(events[1].error?.message).toBe('HTTP 500');
-
-      fetchSpy.mockRestore();
     });
-
-    it('keeps the transition running when an onAction listener throws', async () => {
-      setupDOM(['a']);
-      const { surface, traces } = createMockSurface({
-        onAction: () => {
-          throw new Error('listener failed');
-        },
-      });
-      surface.discoverAnchors();
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(new Response('{"type":"done"}\n'));
-      await expect(surface.transition('demo')).resolves.toBeUndefined();
-      expect(traces.some(event => event.kind === 'error')).toBe(true);
-      fetchSpy.mockRestore();
+    const { surface, slot, actions } = setup();
+    expect(await surface.transition('go', { q: 1 })).toBe('completed');
+    expect(slot('list').innerHTML).toBe('<ul><li>b</li></ul>');
+    expect(calls[0][0]).toBe('/base/transition/go');
+    expect(calls[0][1].headers).toMatchObject({
+      'X-Surface-Build': 'b1',
+      'X-Surface-Page': 'page',
     });
+    expect(actions).toEqual([
+      { name: 'go', phase: 'start' },
+      { name: 'go', phase: 'end' },
+    ]);
   });
 
-  // ── UI Patch ──
-
-  describe('ui patch', () => {
-    it('no ui in frame → DOM unchanged', () => {
-      setupDOM(['a']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-      });
-      (surface as any).flushQueue(true);
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.length).toBe(0);
-      expect(el.style.length).toBe(0);
-    });
-
-    it('classAdd → adds classes to h-state element', () => {
-      setupDOM(['a']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-        ui: { a: { classAdd: ['highlight', 'active'] } },
-      });
-      (surface as any).flushQueue(true);
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.contains('highlight')).toBe(true);
-      expect(el.classList.contains('active')).toBe(true);
-    });
-
-    it('classRemove → removes classes from h-state element', () => {
-      setupDOM(['a']);
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      el.classList.add('old-class');
-
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-        ui: { a: { classRemove: ['old-class'] } },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(el.classList.contains('old-class')).toBe(false);
-    });
-
-    it('cssVars → sets CSS variables on h-state element', () => {
-      setupDOM(['a']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-        ui: { a: { cssVars: { '--accent': '#f00', '--size': '16px' } } },
-      });
-      (surface as any).flushQueue(true);
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.style.getPropertyValue('--accent')).toBe('#f00');
-      expect(el.style.getPropertyValue('--size')).toBe('16px');
-    });
-
-    it('ui[slot] = null → clears previous patch', () => {
-      setupDOM(['a']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Full frame with UI
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-        ui: { a: { classAdd: ['highlight'], cssVars: { '--accent': '#f00' } } },
-      });
-      (surface as any).flushQueue(true);
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.contains('highlight')).toBe(true);
-
-      // Partial with ui null → clear
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: {},
-        ui: { a: null },
-        uiChanged: ['a'],
-      });
-      (surface as any).flushQueue(true);
-
-      expect(el.classList.contains('highlight')).toBe(false);
-      expect(el.style.getPropertyValue('--accent')).toBe('');
-    });
-
-    it('partial coalesce merges ui/uiChanged correctly', () => {
-      setupDOM(['a', 'b']);
-      const { surface, traces } = createMockSurface();
-      surface.discoverAnchors();
-
-      // Full frame first
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 }, b: { v: 2 } },
-      });
-      (surface as any).flushQueue(true);
-
-      // Two consecutive partials with ui
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: {},
-        ui: { a: { classAdd: ['x'] } },
-        uiChanged: ['a'],
-      });
-      (surface as any).frameQueue.push({
-        type: 'state',
-        full: false,
-        states: {},
-        ui: { b: { classAdd: ['y'] } },
-        uiChanged: ['b'],
-      });
-      (surface as any).flushQueue(true);
-
-      const mergedEvents = traces.filter(t => t.kind === 'merged');
-      expect(mergedEvents).toHaveLength(1);
-
-      const elA = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      const elB = document.querySelector<HTMLElement>('h-state[name="b"]')!;
-      expect(elA.classList.contains('x')).toBe(true);
-      expect(elB.classList.contains('y')).toBe(true);
-    });
-
-    it('trace event includes ui info when ui is present', () => {
-      setupDOM(['a']);
-      const { surface, traces } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-        ui: { a: { classAdd: ['x'] } },
-      });
-      (surface as any).flushQueue(true);
-
-      const applied = traces.find(t => t.kind === 'applied');
-      expect(applied).toBeDefined();
-      expect((applied!.detail as any).uiCount).toBe(1);
-      expect((applied!.detail as any).uiSlots).toEqual(['a']);
-    });
-
-    it('trace event omits ui info when no ui', () => {
-      setupDOM(['a']);
-      const { surface, traces } = createMockSurface();
-      surface.discoverAnchors();
-
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 1 } },
-      });
-      (surface as any).flushQueue(true);
-
-      const applied = traces.find(t => t.kind === 'applied');
-      expect(applied).toBeDefined();
-      expect((applied!.detail as any).uiCount).toBeUndefined();
-    });
-
-    it('hydration applies initial ui patches', () => {
-      setupDOM(['a'], { a: { v: 1 } });
-
-      // Add __UI__ script tag
-      const uiScript = document.createElement('script');
-      uiScript.id = '__UI__';
-      uiScript.type = 'application/json';
-      uiScript.textContent = JSON.stringify({
-        a: { classAdd: ['hydrated'], cssVars: { '--color': 'blue' } },
-      });
-      document.body.appendChild(uiScript);
-
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-      surface.bootstrap();
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.contains('hydrated')).toBe(true);
-      expect(el.style.getPropertyValue('--color')).toBe('blue');
-      expect(surface.activeUi).toEqual({
-        a: { classAdd: ['hydrated'], cssVars: { '--color': 'blue' } },
-      });
-    });
+  it('treats done without a patch as an empty success', async () => {
+    vi.stubGlobal('fetch', async () => ndjson([{ type: 'done' }]));
+    const { surface, slot } = setup();
+    expect(await surface.transition('noop')).toBe('completed');
+    expect(slot('list').innerHTML).toBe('<ul><li>ssr</li></ul>');
   });
 
-  // ── SSR → Hydration → Transition (Phase 6) ──
-
-  describe('SSR → hydration → transition ui flow', () => {
-    it('hydration ui is replaced by transition full frame ui', () => {
-      setupDOM(['a'], { a: { v: 1 } });
-
-      const uiScript = document.createElement('script');
-      uiScript.id = '__UI__';
-      uiScript.type = 'application/json';
-      uiScript.textContent = JSON.stringify({ a: { classAdd: ['ssr-class'] } });
-      document.body.appendChild(uiScript);
-
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-      surface.bootstrap();
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.contains('ssr-class')).toBe(true);
-
-      // Transition full frame with different ui
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 2 } },
-        ui: { a: { classAdd: ['new-class'], cssVars: { '--c': 'red' } } },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(el.classList.contains('ssr-class')).toBe(false); // cleared
-      expect(el.classList.contains('new-class')).toBe(true);
-      expect(el.style.getPropertyValue('--c')).toBe('red');
-    });
-
-    it('hydration ui is cleared when transition full frame has no ui', () => {
-      setupDOM(['a'], { a: { v: 1 } });
-
-      const uiScript = document.createElement('script');
-      uiScript.id = '__UI__';
-      uiScript.type = 'application/json';
-      uiScript.textContent = JSON.stringify({
-        a: { classAdd: ['ssr-class'], cssVars: { '--x': '1' } },
-      });
-      document.body.appendChild(uiScript);
-
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-      surface.bootstrap();
-
-      const el = document.querySelector<HTMLElement>('h-state[name="a"]')!;
-      expect(el.classList.contains('ssr-class')).toBe(true);
-
-      // Transition full frame without ui
-      (surface as any).frameQueue.push({
-        type: 'state',
-        states: { a: { v: 2 } },
-      });
-      (surface as any).flushQueue(true);
-
-      expect(el.classList.contains('ssr-class')).toBe(false);
-      expect(el.style.getPropertyValue('--x')).toBe('');
-    });
+  it.each([
+    [
+      'a patch without reset first',
+      [{ type: 'patch', ops: [] }, { type: 'done' }],
+      'must be a reset',
+    ],
+    ['EOF without done', [{ type: 'patch', reset: true, ops: [] }], 'without "done"'],
+    [
+      'an unknown op',
+      [{ type: 'patch', reset: true, ops: [{ slot: 'list', append: 'x' }] }],
+      'version mismatch',
+    ],
+    [
+      'html for a client slot',
+      [{ type: 'patch', reset: true, ops: [{ slot: 'chat', html: 'x' }] }],
+      'does not match the mode',
+    ],
+    [
+      'props for a server slot',
+      [{ type: 'patch', reset: true, ops: [{ slot: 'list', props: {} }] }],
+      'does not match the mode',
+    ],
+  ])('fails on %s and applies nothing of it', async (_case, frames, reason) => {
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    const { surface, slot, report, actions } = setup();
+    expect(await surface.transition('bad')).toBe('failed');
+    expect(slot('list').innerHTML).toBe('<ul><li>ssr</li></ul>');
+    expect(report.mock.calls[0][0].message).toContain(reason);
+    expect(actions.at(-1)!.error!.message).toContain(reason);
   });
 
-  // ── End-to-End Frame Flow (Phase 6) ──
-
-  describe('full+ui → partial+uiChanged → done flow', () => {
-    it('complete frame sequence applies ui correctly', () => {
-      setupDOM(['card', 'sidebar']);
-      const { surface } = createMockSurface();
-      surface.discoverAnchors();
-
-      // 1. Full frame with ui
-      (surface as any).onFrame(
+  it('skips an invalid ui op and still applies content (DC-14 ②)', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
         {
-          type: 'state',
-          states: { card: { title: 'A' }, sidebar: { items: [] } },
-          ui: { card: { classAdd: ['tone-default'], cssVars: { '--accent': 'blue' } } },
+          type: 'patch',
+          reset: true,
+          ops: [
+            { slot: 'list', html: '<p>ok</p>' },
+            { slot: 'list', ui: { classAdd: ['bad token'] } },
+            { slot: 'card', ui: { cssVars: { '--x': 'url(evil)' } } },
+          ],
         },
-        new AbortController().signal
-      );
-      (surface as any).flushQueue(true);
-
-      const cardEl = document.querySelector<HTMLElement>('h-state[name="card"]')!;
-      expect(cardEl.classList.contains('tone-default')).toBe(true);
-      expect(cardEl.style.getPropertyValue('--accent')).toBe('blue');
-
-      // 2. Partial frame with uiChanged (style-only)
-      (surface as any).onFrame(
-        {
-          type: 'state',
-          full: false,
-          states: {},
-          ui: {
-            card: {
-              classAdd: ['tone-warning'],
-              classRemove: ['tone-default'],
-              cssVars: { '--accent': '#f59e0b' },
-            },
-          },
-          uiChanged: ['card'],
-        },
-        new AbortController().signal
-      );
-      (surface as any).flushQueue(true);
-
-      expect(cardEl.classList.contains('tone-default')).toBe(false);
-      expect(cardEl.classList.contains('tone-warning')).toBe(true);
-      expect(cardEl.style.getPropertyValue('--accent')).toBe('#f59e0b');
-
-      // 3. Done
-      (surface as any).onFrame({ type: 'done' }, new AbortController().signal);
-
-      // Final state integrity
-      expect(surface.activeStates).toEqual({ card: { title: 'A' }, sidebar: { items: [] } });
-      expect(surface.activeUi).toEqual({
-        card: {
-          classAdd: ['tone-warning'],
-          classRemove: ['tone-default'],
-          cssVars: { '--accent': '#f59e0b' },
-        },
-      });
-    });
+        { type: 'done' },
+      ])
+    );
+    const { surface, slot, traces } = setup();
+    expect(await surface.transition('ui')).toBe('completed');
+    expect(slot('list').innerHTML).toBe('<p>ok</p>');
+    expect(slot('list').className).toBe('');
+    expect(traces.filter(event => event.kind === 'skipped')).toHaveLength(2);
   });
 
-  describe('transition timeout', () => {
-    it('aborts slow transition and reports timeout error', async () => {
-      vi.useFakeTimers();
-      setupDOM(['a']);
+  it('stops reading an NDJSON line above the frame size limit', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([{ type: 'patch', reset: true, ops: [{ slot: 'list', html: 'x'.repeat(300) }] }])
+    );
+    const { surface } = setup();
+    (surface as unknown as { options: { frameSize: number } }).options.frameSize = 100;
+    expect(await surface.transition('big')).toBe('failed');
+  });
 
-      const { surface, traces } = createMockSurface({ transitionTimeout: 20 });
-      surface.discoverAnchors();
-      const a = document.querySelector<HTMLElement>('h-state[name="a"]')!;
+  it('reads a single JSON response with the same pipeline', async () => {
+    vi.stubGlobal('fetch', async () =>
+      Response.json({
+        frames: [
+          { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>json</p>' }] },
+          { type: 'done' },
+        ],
+      })
+    );
+    const { surface, slot } = setup();
+    expect(await surface.transition('json')).toBe('completed');
+    expect(slot('list').innerHTML).toBe('<p>json</p>');
+  });
 
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
-        const signal = init?.signal as AbortSignal;
-        return new Promise((_resolve, reject) => {
-          signal.addEventListener(
-            'abort',
-            () => {
-              const err = new Error('Aborted');
-              err.name = 'AbortError';
-              reject(err);
+  it('reloads the document on a build mismatch (409)', async () => {
+    vi.stubGlobal('fetch', async () => new Response('{}', { status: 409 }));
+    const { surface, reload } = setup();
+    expect(await surface.transition('old')).toBe('aborted');
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('looks up the global fetch on every call (instrumentation wraps it later, 8.3-3)', async () => {
+    const { surface } = setup();
+    const wrapped = vi.fn(async () => ndjson([{ type: 'done' }]));
+    vi.stubGlobal('fetch', wrapped);
+    await surface.transition('a');
+    expect(wrapped).toHaveBeenCalledOnce();
+  });
+
+  it('reports HTTP failures without frames', async () => {
+    vi.stubGlobal('fetch', async () => new Response('Forbidden', { status: 403 }));
+    const { surface, report } = setup();
+    expect(await surface.transition('denied')).toBe('failed');
+    expect(report.mock.calls[0][0]).toMatchObject({ kind: 'http', message: 'HTTP 403' });
+  });
+});
+
+describe('error frames', () => {
+  it('shows the error slot content, reports it, and clears it with the next baseline', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>partial</p>' }] },
+        { type: 'error', message: 'boom', slot: 'system:error', html: '<strong>boom</strong>' },
+      ])
+    );
+    const { surface, slot, report } = setup();
+    expect(await surface.transition('fail')).toBe('failed');
+    expect(slot('list').innerHTML).toBe('<p>partial</p>');
+    expect(slot('system:error').innerHTML).toBe('<strong>boom</strong>');
+    expect(report.mock.calls[0][0]).toMatchObject({ kind: 'server', message: 'boom' });
+
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>ok</p>' }] },
+        { type: 'done' },
+      ])
+    );
+    expect(await surface.transition('ok')).toBe('completed');
+    expect(slot('system:error').innerHTML).toBe('');
+  });
+
+  it('warns in development when the page has no error slot', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('fetch', async () => ndjson([{ type: 'error', message: 'no slot' }]));
+    const { surface, report } = setup({ development: true });
+    expect(await surface.transition('fail')).toBe('failed');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed without an error slot'));
+    expect(report).toHaveBeenCalledOnce();
+  });
+});
+
+describe('generation invalidation (abort previous)', () => {
+  it('ignores frames of a superseded request and keeps the latest result', async () => {
+    const first = controlledStream();
+    const second = controlledStream();
+    const responses = [first.response, second.response];
+    vi.stubGlobal('fetch', async () => responses.shift()!);
+    const { surface, slot, report } = setup();
+    const running = surface.transition('a');
+    await flush();
+    first.send({ type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>A1</p>' }] });
+    await flush();
+    expect(slot('list').innerHTML).toBe('<p>A1</p>');
+    const latest = surface.transition('b');
+    first.send({ type: 'patch', ops: [{ slot: 'list', html: '<p>A2 stale</p>' }] });
+    await flush();
+    second.send({ type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>B</p>' }] });
+    second.send({ type: 'done' });
+    second.close();
+    expect(await latest).toBe('completed');
+    expect(await running).toBe('aborted');
+    expect(slot('list').innerHTML).toBe('<p>B</p>');
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('marks pending targets and clears them with the first patch (until stage 5)', async () => {
+    const stream = controlledStream();
+    vi.stubGlobal('fetch', async () => stream.response);
+    const { surface, slot } = setup();
+    const running = surface.transition('p', {}, { pendingTargets: ['list'] });
+    expect(slot('list').hasAttribute('data-pending')).toBe(true);
+    expect(slot('card').hasAttribute('data-pending')).toBe(false);
+    await flush();
+    stream.send({ type: 'patch', reset: true, ops: [] });
+    await flush();
+    expect(slot('list').hasAttribute('data-pending')).toBe(false);
+    stream.send({ type: 'done' });
+    stream.close();
+    await running;
+  });
+});
+
+describe('ops', () => {
+  it('renders, merges and removes a client slot (props / merge / remove)', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'chat', props: { text: 'He' } }] },
+        { type: 'patch', ops: [{ slot: 'chat', merge: { text: 'll' } }] },
+        { type: 'patch', ops: [{ slot: 'chat', merge: { text: 'o' } }] },
+        { type: 'done' },
+      ])
+    );
+    const { surface, slot } = setup();
+    await surface.transition('chat');
+    await flush();
+    expect(slot('chat').textContent).toBe('Hello');
+    expect(surface.activeStates.chat).toEqual({ text: 'Hello' });
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'chat', remove: true }] },
+        { type: 'done' },
+      ])
+    );
+    await surface.transition('clear');
+    expect(slot('chat').innerHTML).toBe('');
+    expect(surface.activeStates.chat).toBeUndefined();
+  });
+
+  it('applies and clears a slot UI patch after its content', async () => {
+    const { surface, slot } = setup();
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        {
+          type: 'patch',
+          reset: true,
+          ops: [
+            {
+              slot: 'card',
+              ui: { classAdd: ['tone-warning'], cssVars: { '--accent': '#f59e0b' } },
             },
-            { once: true }
-          );
-        }) as Promise<Response>;
-      });
+          ],
+        },
+        { type: 'done' },
+      ])
+    );
+    await surface.transition('theme');
+    expect(slot('card').classList.contains('tone-warning')).toBe(true);
+    expect(slot('card').style.getPropertyValue('--accent')).toBe('#f59e0b');
+    expect(surface.activeUi).toEqual({
+      card: { classAdd: ['tone-warning'], cssVars: { '--accent': '#f59e0b' } },
+    });
+    vi.stubGlobal('fetch', async () =>
+      ndjson([{ type: 'patch', reset: true, ops: [{ slot: 'card', ui: null }] }, { type: 'done' }])
+    );
+    await surface.transition('reset');
+    expect(slot('card').getAttribute('class')).toBe('');
+    expect(slot('card').style.getPropertyValue('--accent')).toBe('');
+  });
 
-      const transitionPromise = surface.transition('slow', {}, { pendingTargets: ['a'] });
-      expect(a.hasAttribute('data-pending')).toBe(true);
+  it('drops ops for slots that are not on the page', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'elsewhere', html: '<p>x</p>' }] },
+        { type: 'done' },
+      ])
+    );
+    const { surface, traces } = setup();
+    expect(await surface.transition('x')).toBe('completed');
+    expect(traces.some(event => event.kind === 'dropped')).toBe(true);
+  });
+});
 
-      await vi.advanceTimersByTimeAsync(30);
-      await transitionPromise;
-
-      expect(a.hasAttribute('data-pending')).toBe(false);
-      expect(
-        traces.some(
-          trace => trace.kind === 'error' && trace.detail === 'Transition timeout after 20ms'
+describe('coalesceOps (DESIGN 6.2)', () => {
+  const ops = (...list: Op[]) => list;
+  it('keeps the last html/props per slot and folds merges', () => {
+    expect(
+      coalesceOps(
+        ops(
+          { slot: 'a', html: '1' },
+          { slot: 'b', props: { items: [1], text: 'a' } },
+          { slot: 'a', html: '2' },
+          { slot: 'b', merge: { items: [2], text: 'b' } },
+          { slot: 'c', merge: { items: [1] } },
+          { slot: 'c', merge: { items: [2] } },
+          { slot: 'a', ui: { classAdd: ['x'] } },
+          { slot: 'a', ui: null }
         )
-      ).toBe(true);
+      )
+    ).toEqual([
+      { slot: 'a', html: '2' },
+      { slot: 'a', ui: null },
+      { slot: 'b', props: { items: [1, 2], text: 'ab' } },
+      { slot: 'c', merge: { items: [1, 2] } },
+    ]);
+  });
 
-      fetchSpy.mockRestore();
-      vi.useRealTimers();
+  it('treats ops after remove as a new appearance and keeps type-changing merges apart', () => {
+    expect(
+      coalesceOps(
+        ops(
+          { slot: 'a', html: 'old' },
+          { slot: 'a', ui: { classAdd: ['x'] } },
+          { slot: 'a', remove: true },
+          { slot: 'a', html: 'new' },
+          { slot: 'm', merge: { v: 'text' } },
+          { slot: 'm', merge: { v: [1] } }
+        )
+      )
+    ).toEqual([
+      { slot: 'a', remove: true },
+      { slot: 'a', html: 'new' },
+      { slot: 'm', merge: { v: 'text' } },
+      { slot: 'm', merge: { v: [1] } },
+    ]);
+  });
+});
+
+describe('in-page View Transitions (DC-06)', () => {
+  function stubViewTransitions() {
+    const started: number[] = [];
+    let count = 0;
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = (
+      update: () => Promise<void> | void
+    ) => {
+      started.push(++count);
+      const done = Promise.resolve().then(update);
+      return { updateCallbackDone: done, finished: done, ready: done };
+    };
+    return started;
+  }
+  afterEach(() => {
+    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  const frames: WireFrame[] = [
+    { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>1</p>' }] },
+    { type: 'patch', ops: [{ slot: 'list', html: '<p>2</p>' }] },
+    { type: 'done' },
+  ];
+
+  it('applies immediately by default', async () => {
+    const started = stubViewTransitions();
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    const { surface, slot } = setup();
+    await surface.transition('plain');
+    expect(started).toEqual([]);
+    expect(slot('list').innerHTML).toBe('<p>2</p>');
+  });
+
+  it('wraps only the first patch of an opted-in action (header or data-view-transition)', async () => {
+    const started = stubViewTransitions();
+    vi.stubGlobal('fetch', async () => {
+      const response = ndjson(frames);
+      response.headers.set('x-surface-view-transition', '1');
+      return response;
     });
+    const { surface, slot } = setup();
+    await surface.transition('vt');
+    expect(started).toHaveLength(1);
+    expect(slot('list').innerHTML).toBe('<p>2</p>');
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    await surface.transition('attr', {}, { viewTransition: true });
+    expect(started).toHaveLength(2);
+  });
+
+  it('wraps a patch that changes a slot declared with viewTransition, first appearance included', async () => {
+    const started = stubViewTransitions();
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'card', html: '<img>' }] },
+        { type: 'done' },
+      ])
+    );
+    const { surface } = setup();
+    await surface.transition('open');
+    expect(started).toHaveLength(1);
+  });
+
+  it('skips the transition with prefers-reduced-motion', async () => {
+    const started = stubViewTransitions();
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    const { surface } = setup();
+    await surface.transition('vt', {}, { viewTransition: true });
+    expect(started).toEqual([]);
+  });
+});
+
+describe('deferred server slots (DC-21)', () => {
+  const deferred: SlotMeta[] = [
+    { id: 'list', mode: 'server', component: 'list.tsx#default', defer: 'tok' },
+  ];
+
+  it('drops a response when a transition changed the slot first', async () => {
+    let answer!: (response: Response) => void;
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.includes('/_surface/island/')
+        ? new Promise<Response>(resolve => (answer = resolve))
+        : ndjson([
+            { type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>fresh</p>' }] },
+            { type: 'done' },
+          ])
+    );
+    const { surface, slot, traces } = setup({ slots: deferred });
+    const loading = surface.loadDeferred();
+    await surface.transition('update');
+    answer(Response.json({ html: '<p>stale</p>' }));
+    await loading;
+    await flush();
+    expect(slot('list').innerHTML).toBe('<p>fresh</p>');
+    expect(traces.some(event => event.kind === 'dropped')).toBe(true);
+  });
+
+  it('retries once after a second, then keeps the fallback and reports', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(async () => new Response('down', { status: 503 }));
+    vi.stubGlobal('fetch', fetch);
+    const { surface, slot, report } = setup({ slots: deferred });
+    const loading = surface.loadDeferred();
+    await vi.advanceTimersByTimeAsync(1000);
+    await loading;
+    vi.useRealTimers();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(slot('list').innerHTML).toBe('<ul><li>ssr</li></ul>');
+    expect(report).toHaveBeenCalledWith(expect.any(Error), { slot: 'list', kind: 'deferred' });
+  });
+
+  it('switches to POST for tokens longer than 2KB', async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return Response.json({ html: '<p>ok</p>' });
+    });
+    const { surface } = setup({
+      slots: [{ ...deferred[0], defer: 't'.repeat(3000) }],
+    });
+    await surface.loadDeferred();
+    expect(calls[0][0]).toBe('/base/_surface/island/list.tsx%23default');
+    expect(calls[0][1]).toMatchObject({ method: 'POST', body: 't'.repeat(3000) });
   });
 });

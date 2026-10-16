@@ -16,8 +16,8 @@
 StateSurface is a **state-layout mapping runtime** for the web. Pages load as real MPA HTML. In-page updates stream through `<h-state>` anchors via NDJSON — no SPA router, no client-side state management, no virtual DOM diffing on your side.
 
 ```
-User action → POST /transition/:name → Server yields state frames
-            → NDJSON stream → Client frame queue → DOM projection
+User action → POST /transition/:name → Server yields state frames → request reducer
+            → server slots render HTML, client slots get props → NDJSON patch ops → DOM
 ```
 
 ## Why StateSurface?
@@ -65,11 +65,11 @@ export default async function Page(ctx: SurfaceContext) {
     <Layout title="Stock Dashboard">
       <main class="mx-auto max-w-6xl p-6">
         <h1 class="mb-6 text-2xl font-bold">Stock Dashboard</h1>
-        <Slot name="stock:price" client:load>
+        <Slot name="stock:price" mode="server">
           <StockPrice symbol={symbol} price={0} change={0} loading />
         </Slot>
         {/* An empty slot declares its component and is filled by the first frame. */}
-        <Slot name="stock:news" component={StockNews} client:visible data-animate="fade" />
+        <Slot name="stock:news" mode="server" component={StockNews} data-animate="fade" />
         <Boot transition="dashboard-load" params={{ symbol }} />
       </main>
     </Layout>
@@ -83,9 +83,13 @@ export default async function Page(ctx: SurfaceContext) {
   adds the doctype, comment markers, stylesheets, bootstrap JSON and the entry script.
 - Files and folders starting with `_` are not pages, so helpers live next to pages in `_components/`.
 - `<Boot>` starts a transition right after the page loads (here: streaming the real data).
-- **Modes**: a Slot without directives is `static` (server HTML only, no JS); `client:load`,
+- **Modes**: a Slot without directives is `static` (server HTML only, frames cannot change it);
+  `mode="server"` renders on the server and transitions update it with server-rendered HTML
+  (`swap="replace"` by default, `swap="morph"` keeps inputs and focus); `client:load`,
   `client:idle`, `client:visible`, `client:media` and `client:only` make it a client slot that
-  Lithent hydrates when its chunk loads; `mode="server"` renders on the server only.
+  Lithent hydrates when its chunk loads and that receives props (or `merge` deltas).
+- `<Slot mode="server" server:defer fallback={…}>` renders the fallback first and fetches the
+  content after load with an encrypted props token (`SURFACE_SECRET`).
 - **Per-page JavaScript**: every client component is its own chunk. A page without client
   components, `data-action`, `<Boot>` or plugins ships no engine script at all; the action runtime
   and Lithent load only on pages that need them.
@@ -143,14 +147,17 @@ export const plugins = [chatScroll];
 
 ### 3. Transition — Server-side state generator
 
-An async generator that yields state frames. Each `yield` sends one NDJSON line to the client, updating the UI progressively.
+An async generator that yields state frames (or an async function that returns one result). The
+server reduces each frame for this request and sends per-slot ops: HTML for server slots, props or
+`merge` deltas for client slots. The engine sends `done` when the handler returns; throw to fail
+(`TransitionError` messages are shown in the error slot).
 
 ```typescript
 // routes/dashboard/transitions/loadDashboard.ts
 import { defineTransition } from 'state-surface/server';
 
 export default defineTransition('dashboard-load', async function* (params, ctx) {
-  // First frame: full state — renders loading skeleton
+  // First frame: full state for the transition's targets — renders loading skeletons
   yield {
     type: 'state',
     states: {
@@ -169,7 +176,7 @@ export default defineTransition('dashboard-load', async function* (params, ctx) 
     states: { 'stock:price': price },
   };
 
-  // More partial frames as data arrives...
+  // More partial frames as data arrives... no `done`: the engine sends it.
 });
 ```
 
@@ -198,7 +205,10 @@ Trigger transitions from HTML attributes — zero JS event handlers.
 
 StateSurface streams three types of state frames:
 
-**Full frame** — Replaces all active state. First frame in every stream must be full.
+These are the frames a transition yields (the authoring layer, see [PROTOCOL.md](PROTOCOL.md)).
+
+**Full frame** — Replaces the state of the transition's target slots. First frame in every stream
+must be full.
 
 ```json
 { "type": "state", "states": { "slot:a": { "title": "Hello" }, "slot:b": { "items": [1, 2, 3] } } }
@@ -224,11 +234,14 @@ StateSurface streams three types of state frames:
 ## Features
 
 - **Full SSR** — Every page renders complete HTML on the server
-- **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames
+- **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames, projected
+  by the server into HTML (server slots) and props (client slots)
+- **Capabilities** — strict by default (no raw HTML, safe URLs), `rich` Markdown, opt-in `unsafe`
 - **Abort previous** — Concurrent transitions auto-cancel earlier ones
 - **Per-slot hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
 - **File-based routing** — `.tsx` pages and transitions auto-discovered from `routes/`
-- **View Transition API** — MPA cross-fade + in-page element morphing
+- **View Transition API** — MPA cross-fade; in-page transitions are opt-in per action
+  (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
 - **i18n ready** — Bilingual content driven by cookie + transition
 - **Sub-path mounting** — `BASE_PATH=/demo pnpm dev`
@@ -249,7 +262,7 @@ client/                  # styles.css, plugins/, optional entry.ts (runs on ever
 
 engine/                  # Framework core (do not edit)
   server/                #   Web-standard core, page renderer, transition handler
-  client/                #   Browser bootstrap, hydration, frame queue
+  client/                #   Loader, component host, patch apply pipeline, morph
   build/                 #   Vite plugin: page discovery, call-site transform, diagnostics
   shared/                #   Protocol types, Slot/Boot markers
 ```

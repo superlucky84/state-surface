@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createDemo } from '../testing/server.js';
+import { createDemo, surfaceHeaders } from '../testing/server.js';
+import { decodeFrames } from '../engine/shared/ndjson.js';
+import type { WireFrame } from '../engine/shared/protocol.js';
 
 let app: any;
 beforeAll(async () => {
@@ -273,22 +275,23 @@ describe('guide SSR rendering', () => {
     it(`/transition/guide-load for ${slug} returns sections with blocks`, async () => {
       const res = await request(app)
         .post('/transition/guide-load')
+        .set(surfaceHeaders('guide/[slug]'))
         .send({ slug, lang: 'en' })
         .set('Content-Type', 'application/json');
 
       expect(res.status).toBe(200);
 
-      const lines = res.text
-        .trim()
-        .split('\n')
-        .map((l: string) => JSON.parse(l));
-
-      const loadedFrame = lines.find(
-        (l: any) => l.type === 'state' && l.full === false && l.states?.['guide:content']?.sections
-      );
-      expect(loadedFrame).toBeDefined();
-
-      const content = loadedFrame.states['guide:content'];
+      // guide:content is a server slot: the loaded sections arrive as rendered HTML.
+      const html = decodeFrames<WireFrame>(res.text)
+        .flatMap(frame => (frame.type === 'patch' ? frame.ops : []))
+        .filter(op => op.slot === 'guide:content' && 'html' in op)
+        .map(op => (op as { html: string }).html)
+        .at(-1)!;
+      const content = {
+        sections: html.match(/<section /g) ?? [],
+        demoHref: /<a href="([^"]+)" class="inline-flex items-center gap-1\.5/.exec(html)?.[1],
+        demoLabel: html.includes('bg-slate-900 px-4 py-2'),
+      };
       const baseCount =
         slug === 'quickstart'
           ? QUICKSTART_REQUIRED_SECTION_IDS.length

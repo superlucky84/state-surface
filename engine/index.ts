@@ -13,4 +13,4 @@ export type { SlotProps, BootProps, SlotMode, Capability } from './shared/surfac
 export { prefixPath, getBasePath } from './shared/basePath.js';
 
 // Protocol
-export type { StateFrame, UiPatch } from './shared/protocol.js';
+export type { StateFrame, TransitionResult, UiPatch } from './shared/protocol.js';

@@ -1,5 +1,5 @@
 import type { SurfaceContext } from 'state-surface/server';
-import { defineTransition } from 'state-surface/server';
+import { defineTransition, TransitionError } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
 import { getLang, isValidLang } from '../../../shared/i18n.js';
 import type { Lang } from '../../../shared/i18n.js';
@@ -15,15 +15,7 @@ async function* guideLoad(
   const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
   const guide = guideContent(slug, lang);
 
-  if (!guide) {
-    yield {
-      type: 'error',
-      message: `Guide "${slug}" not found`,
-      template: 'system:error',
-      data: { message: `Guide "${slug}" not found` },
-    };
-    return;
-  }
+  if (!guide) throw new TransitionError(`Guide "${slug}" not found`);
 
   // Frame 1: full — TOC + loading content
   yield {
@@ -43,8 +35,9 @@ async function* guideLoad(
       changed: ['guide:content'],
     };
   }
-
-  yield { type: 'done' };
 }
 
-export default defineTransition('guide-load', guideLoad);
+export default defineTransition('guide-load', {
+  targets: ['page:header', 'guide:toc', 'guide:content'],
+  handler: guideLoad,
+});

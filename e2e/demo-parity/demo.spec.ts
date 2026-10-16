@@ -53,6 +53,11 @@ test('guide boot streams sections, highlights code, and exposes section navigati
 test('search form streams results and links respect BASE_PATH', async ({ page }) => {
   await ready(page, 'examples/search');
   await page.getByRole('textbox').fill('streaming');
+  await page.getByRole('textbox').press('Enter');
+  await expect(slot(page, 'search:results').getByRole('link').first()).toBeVisible();
+  // search:input is swap="morph": the input node, its text and focus survive the update.
+  await expect(page.getByRole('textbox')).toBeFocused();
+  await expect(page.getByRole('textbox')).toHaveValue('streaming');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(slot(page, 'search:results').getByRole('link').first()).toBeVisible();
   await expect(slot(page, 'search:results')).not.toContainText('Searching for');

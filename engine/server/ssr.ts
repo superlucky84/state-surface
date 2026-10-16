@@ -1,8 +1,8 @@
-// ── safeStateJSON ──
+import type { SurfaceBootstrap } from '../shared/protocol.js';
 
 /**
- * Safely serialize state for embedding in HTML <script> tags.
- * Escapes characters that could break out of the script context.
+ * Serialize JSON for an HTML `<script type="application/json">` body: `<`, `>`, `&`,
+ * U+2028 and U+2029 are written as `\u` escapes so the text cannot close the element.
  */
 export function safeStateJSON(value: unknown): string {
   return JSON.stringify(value)
@@ -13,35 +13,7 @@ export function safeStateJSON(value: unknown): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
-/**
- * Build the __STATE__ script tag with the props of client-rendered slots.
- */
-export function buildStateScript(states: Record<string, unknown>): string {
-  return `<script id="__STATE__" type="application/json">${safeStateJSON(states)}</script>`;
-}
-
-/**
- * Build the __BOOT__ script tag: rendered `<Boot>` entries in document order.
- */
-export function buildBootScript(
-  boot: Array<{ transition: string; params: Record<string, unknown> }>
-): string {
-  return `<script id="__BOOT__" type="application/json">${safeStateJSON(boot)}</script>`;
-}
-
-/**
- * Build the __PLUGINS__ script tag: client plugins the loader fetches for this page.
- */
-export function buildPluginsScript(
-  plugins: Array<{ id: string; load: string; slots?: string[] }>
-): string {
-  return `<script id="__PLUGINS__" type="application/json">${safeStateJSON(plugins)}</script>`;
-}
-
-/**
- * Build the __BASE_PATH__ script tag for client basePath bootstrap.
- * Embedded in SSR HTML; client reads it in main.ts before hydration.
- */
-export function buildBasePathScript(basePath: string): string {
-  return `<script id="__BASE_PATH__" type="application/json">${safeStateJSON(basePath)}</script>`;
+/** The single bootstrap JSON (DESIGN 6.2): build, page, base path, slots, boot, plugins. */
+export function buildSurfaceScript(bootstrap: SurfaceBootstrap): string {
+  return `<script id="__SURFACE__" type="application/json">${safeStateJSON(bootstrap)}</script>`;
 }

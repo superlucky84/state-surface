@@ -1,4 +1,5 @@
 import type { Logger } from '../logger.js';
+import type { StateFrame } from '../../shared/protocol.js';
 
 declare global {
   namespace App {
@@ -31,11 +32,16 @@ export interface SurfaceContext {
   nonce: string;
   basePath: string;
   route: {
-    kind: 'page' | 'transition' | 'not-found';
+    kind: 'page' | 'transition' | 'island' | 'not-found';
     pattern?: string;
     name?: string;
     prerendered: boolean;
   };
+  /**
+   * Transitions only: re-yield frames from an outside source (`yield* ctx.external(src)`).
+   * Frames may only touch `external` slots and must pass their schema; others are dropped.
+   */
+  external(source: AsyncIterable<unknown> | Iterable<unknown>): AsyncGenerator<StateFrame, void>;
 }
 export type Middleware = (
   ctx: SurfaceContext,
@@ -119,6 +125,9 @@ export function createContext(
     nonce: Array.from(bytes, n => n.toString(16).padStart(2, '0')).join(''),
     basePath: options.basePath,
     route: { kind: 'not-found', prerendered: false },
+    external() {
+      throw new Error('ctx.external() is only available inside a transition');
+    },
     cookies: {
       get: name => incoming.get(name),
       set: write,

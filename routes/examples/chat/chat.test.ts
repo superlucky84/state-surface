@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createDemo } from '../../../testing/server.js';
+import { createDemo, surfaceHeaders } from '../../../testing/server.js';
+import { decodeFrames } from '../../../engine/shared/ndjson.js';
+import type { PatchFrame, WireFrame } from '../../../engine/shared/protocol.js';
 
 let app: any;
 beforeAll(async () => {
@@ -37,113 +39,75 @@ describe('GET /examples/chat — SSR initial render', () => {
   });
 });
 
-describe('POST /transition/chat — accumulate frame sequence', () => {
-  it('empty message yields only done', async () => {
-    const res = await request(app)
-      .post('/transition/chat')
-      .send({ message: '', lang: 'en' })
-      .set('Content-Type', 'application/json');
+const send = (body: Record<string, unknown>, cookie?: string) => {
+  const req = request(app).post('/transition/chat').set(surfaceHeaders('examples/chat'));
+  if (cookie) req.set('Cookie', cookie);
+  return req.send(body).set('Content-Type', 'application/json');
+};
+const patches = (text: string) =>
+  decodeFrames<WireFrame>(text).filter((f): f is PatchFrame => f.type === 'patch');
 
+describe('POST /transition/chat — server history, client merge streaming', () => {
+  it('empty message is an empty success (done only)', async () => {
+    const res = await send({ message: '', lang: 'en' });
     expect(res.status).toBe(200);
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    expect(lines).toHaveLength(1);
-    expect(lines[0].type).toBe('done');
+    expect(decodeFrames(res.text)).toEqual([{ type: 'done' }]);
   });
 
-  it('server sends accumulate frames — user message appended via accumulate', async () => {
-    const res = await request(app)
-      .post('/transition/chat')
-      .send({ message: 'surface', lang: 'en' })
-      .set('Content-Type', 'application/json');
-
+  it('streams the reply as merge ops into the client slot and stores it on the server', async () => {
+    const res = await send({ message: 'surface', lang: 'en' });
     expect(res.status).toBe(200);
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
+    const cookie = res.headers['set-cookie']?.[0]?.split(';')[0];
+    expect(cookie).toMatch(/^chat_session=/);
+    const [first, ...rest] = patches(res.text);
 
-    // Frame 0: partial frame — resets chat:current, clears input, shows typing
-    // Partial so that chat:messages (conversation history) is preserved
-    const firstFrame = lines[0];
-    expect(firstFrame.full).toBe(false);
-    expect(firstFrame.changed).toContain('chat:current');
-    expect(firstFrame.changed).toContain('chat:typing');
-    expect(firstFrame.changed).toContain('chat:input');
-    expect(firstFrame.accumulate).not.toBe(true);
-    expect(firstFrame.states['chat:current']).toEqual({ text: '' });
-    expect(firstFrame.states['chat:typing']).toBeDefined();
-    expect(firstFrame.states['chat:input']).toBeDefined();
+    // Reset patch: history (server html) with the user message, empty bubble (client props).
+    expect(first.reset).toBe(true);
+    const history = first.ops.find(op => op.slot === 'chat:messages' && 'html' in op) as {
+      html: string;
+    };
+    expect(history.html).toContain('surface');
+    expect(first.ops).toContainEqual({ slot: 'chat:current', props: { text: '' } });
+    expect(first.ops.some(op => op.slot === 'chat:typing' && 'html' in op)).toBe(true);
 
-    // Frame 1: accumulate — appends user message to chat:messages.messages[]
-    const userAccumulate = lines[1];
-    expect(userAccumulate.accumulate).toBe(true);
-    expect(userAccumulate.states['chat:messages'].messages).toHaveLength(1);
-    expect(userAccumulate.states['chat:messages'].messages[0].role).toBe('user');
-    expect(userAccumulate.states['chat:messages'].messages[0].text).toBe('surface');
+    // Token stream: merge ops carrying only the new characters.
+    const merges = rest.flatMap(patch => patch.ops).filter(op => 'merge' in op);
+    expect(merges.length).toBeGreaterThan(0);
+    const text = merges
+      .map(op => (op as unknown as { merge: { text: string } }).merge.text)
+      .join('');
+    expect(text).toContain('A Surface is the page shell');
 
-    // Streaming frames: accumulate with chat:current.text (delta chars)
-    const streamingFrames = lines.slice(2, -3);
-    expect(streamingFrames.length).toBeGreaterThan(0);
-    for (const frame of streamingFrames) {
-      expect(frame.accumulate).toBe(true);
-      expect(frame.states['chat:current']).toHaveProperty('text');
-      expect(typeof frame.states['chat:current'].text).toBe('string');
-    }
+    // Final patch: re-rendered history with the bot reply, bubble and typing removed.
+    const last = rest.at(-1)!;
+    expect(last.ops).toContainEqual({ slot: 'chat:current', remove: true });
+    expect(last.ops).toContainEqual({ slot: 'chat:typing', remove: true });
+    expect((last.ops.find(op => op.slot === 'chat:messages') as { html: string }).html).toContain(
+      'A Surface is the page shell'
+    );
+    expect(decodeFrames(res.text).at(-1)).toEqual({ type: 'done' });
 
-    // Second-to-last state frame: accumulate bot message into chat:messages
-    const botAccumulate = lines[lines.length - 3];
-    expect(botAccumulate.accumulate).toBe(true);
-    expect(botAccumulate.states['chat:messages'].messages).toHaveLength(1);
-    expect(botAccumulate.states['chat:messages'].messages[0].role).toBe('bot');
-
-    // Partial remove: clears chat:current and chat:typing
-    const removeFrame = lines[lines.length - 2];
-    expect(removeFrame.full).toBe(false);
-    expect(removeFrame.removed).toContain('chat:current');
-    expect(removeFrame.removed).toContain('chat:typing');
-
-    expect(lines[lines.length - 1].type).toBe('done');
-  }, 30000);
-
-  it('server does not receive or echo back history — stateless server', async () => {
-    const res = await request(app)
-      .post('/transition/chat')
-      .send({ message: 'action', lang: 'en' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // User message appended via accumulate (frame 1)
-    expect(lines[1].accumulate).toBe(true);
-    expect(lines[1].states['chat:messages'].messages[0].text).toBe('action');
+    // The next request and a reload read the same history from the server.
+    const next = await send({ message: 'action', lang: 'en' }, cookie);
+    const nextHistory = patches(next.text)[0].ops.find(op => op.slot === 'chat:messages') as {
+      html: string;
+    };
+    expect(nextHistory.html).toContain('A Surface is the page shell');
+    const page = await request(app).get('/examples/chat').set('Cookie', cookie!);
+    expect(page.text).toContain('A Surface is the page shell');
   }, 30000);
 
   it('Korean language: typing and bot response in Korean', async () => {
-    const res = await request(app)
-      .post('/transition/chat')
-      .send({ message: 'surface', lang: 'ko' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // Full frame contains Korean typing indicator
-    expect(lines[0].states['chat:typing'].text).toBe('입력 중...');
-
-    // Bot accumulate frame contains Korean text
-    const botAccumulate = lines[lines.length - 3];
-    expect(botAccumulate.accumulate).toBe(true);
-    expect(botAccumulate.states['chat:messages'].messages[0].text).toMatch(/[가-힣]/);
+    const res = await send({ message: 'surface', lang: 'ko' });
+    const all = patches(res.text);
+    expect(
+      (all[0].ops.find(op => op.slot === 'chat:typing' && 'html' in op) as { html: string }).html
+    ).toContain('입력 중...');
+    const text = all
+      .flatMap(patch => patch.ops)
+      .filter(op => 'merge' in op)
+      .map(op => (op as unknown as { merge: { text: string } }).merge.text)
+      .join('');
+    expect(text).toMatch(/[가-힣]/);
   }, 30000);
 });

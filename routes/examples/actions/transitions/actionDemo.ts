@@ -83,8 +83,6 @@ async function* actionDemo(
     },
     changed: ['actions:playground', 'actions:log'],
   };
-
-  yield { type: 'done' };
 }
 
 export default defineTransition('action-demo', actionDemo);

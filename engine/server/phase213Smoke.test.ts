@@ -1,15 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { createDemo } from '../../testing/server.js';
+import { createDemo, surfaceHeaders } from '../../testing/server.js';
 
 let app: any;
 
-function readStateScript(html: string): Record<string, any> {
-  const match = html.match(/<script id="__STATE__" type="application\/json">([\s\S]*?)<\/script>/);
-  if (!match) {
-    throw new Error('__STATE__ script not found in SSR response');
-  }
-  return JSON.parse(match[1]);
+/** Language of the header's active switch button (the header is a server slot, no props). */
+function headerLang(html: string): string | undefined {
+  for (const button of html.match(/<button type="button" data-action="switch-lang"[^>]*>/g) ?? [])
+    if (button.includes('bg-slate-900 text-white'))
+      return /&quot;lang&quot;:&quot;(\w+)&quot;/.exec(button)?.[1];
+  return undefined;
 }
 
 beforeAll(async () => {
@@ -63,19 +63,18 @@ describe('phase 2-13 smoke coverage', () => {
     for (const route of routes) {
       const en = await request(app).get(route);
       expect(en.status).toBe(200);
-      const enState = readStateScript(en.text);
-      expect(enState['page:header']?.lang).toBe('en');
+      expect(headerLang(en.text)).toBe('en');
 
       const ko = await request(app).get(route).set('Cookie', 'lang=ko');
       expect(ko.status).toBe(200);
-      const koState = readStateScript(ko.text);
-      expect(koState['page:header']?.lang).toBe('ko');
+      expect(headerLang(ko.text)).toBe('ko');
     }
   });
 
   it('lang cookie from switch-lang transition is preserved across MPA navigation', async () => {
     const switched = await request(app)
       .post('/transition/switch-lang')
+      .set(surfaceHeaders('index'))
       .send({ lang: 'ko', page: 'home' })
       .set('Content-Type', 'application/json');
 
@@ -89,8 +88,7 @@ describe('phase 2-13 smoke coverage', () => {
     for (const route of routes) {
       const res = await request(app).get(route).set('Cookie', cookiePair);
       expect(res.status).toBe(200);
-      const state = readStateScript(res.text);
-      expect(state['page:header']?.lang).toBe('ko');
+      expect(headerLang(res.text)).toBe('ko');
     }
   });
 });

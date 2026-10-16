@@ -24,5 +24,6 @@ export function bindDeclarativeActions(surface: StateSurface): () => void {
 export function runAction(surface: StateSurface, invocation: ActionInvocation) {
   const options: TransitionOptions = {};
   if (invocation.pendingTargets) options.pendingTargets = invocation.pendingTargets;
+  if (invocation.viewTransition) options.viewTransition = true;
   return surface.transition(invocation.action, invocation.params, options);
 }

@@ -1,511 +1,530 @@
-import type { StateFrame, StateFrameState, UiPatch } from '../shared/protocol.js';
-import { applyFrame, applyUi } from '../shared/protocol.js';
+import {
+  checkWireFrame,
+  mergeAccumulate,
+  type ErrorFrame,
+  type Op,
+  type SlotMeta,
+  type SurfaceBootstrap,
+  type UiPatch,
+} from '../shared/protocol.js';
 import { createNdjsonParser } from '../shared/ndjson.js';
-
-// ── Types ──
-
-export type TemplateRenderer = (name: string, data: any, el: HTMLElement) => void;
-export type TemplateHydrator = (name: string, data: any, el: HTMLElement) => () => void;
-export type TemplateUpdater = (name: string, data: any, el: HTMLElement) => void;
+import type { ComponentHost } from './componentHost.js';
+import type { SlotDom } from './slotDom.js';
 
 export type TraceEvent = {
-  kind: 'received' | 'applied' | 'merged' | 'dropped' | 'error' | 'done';
+  kind: 'received' | 'applied' | 'merged' | 'dropped' | 'skipped' | 'error' | 'done';
   detail?: unknown;
 };
 
+/** Request state table (DESIGN 6.3). */
+export type RequestState = 'awaiting-baseline' | 'active' | 'completed' | 'failed' | 'aborted';
+
 export interface StateSurfaceOptions {
-  renderTemplate: TemplateRenderer;
-  hydrateTemplate: TemplateHydrator;
-  updateTemplate: TemplateUpdater;
-  unmountTemplate: (name: string, el: HTMLElement) => void;
-  /**
-   * Whether frames may change the slot's content. Static and server slots keep their SSR
-   * HTML (V-01); UI patches still apply. Defaults to every anchor.
-   */
-  isUpdatable?: (name: string, el: HTMLElement) => boolean;
+  bootstrap: Pick<SurfaceBootstrap, 'buildId' | 'pageId' | 'basePath'>;
+  slots: readonly SlotMeta[];
+  host: ComponentHost;
+  dom: SlotDom;
   /** Action start/end notifications (client plugins' `onAction`). */
   onAction?: (event: { name: string; phase: 'start' | 'end'; error?: Error }) => void;
-  maxQueue?: number;
-  frameBudgetMs?: number;
-  transitionTimeout?: number;
   trace?: (event: TraceEvent) => void;
-  basePath?: string;
+  /** Unexpected errors (forwarded to `reportError`, DESIGN 8.3-2). */
+  report?: (error: unknown, detail: Record<string, unknown>) => void;
+  /** Build mismatch (409): open the current URL as a document load. */
+  reload?: () => void;
+  development?: boolean;
+  /** Receive limits (DC-14): one NDJSON line and the whole response, in characters. */
+  frameSize?: number;
+  responseSize?: number;
 }
 
 export interface TransitionOptions {
   pendingTargets?: string[];
+  /** `data-view-transition`: wrap this action's first change in a View Transition. */
+  viewTransition?: boolean;
 }
 
-// ── StateSurface ──
+interface Request {
+  id: number;
+  name: string;
+  controller: AbortController;
+  state: RequestState;
+  viewTransition: boolean;
+  transitioned: boolean;
+  error?: Error;
+}
 
+/** Wire or HTTP failure kinds (DESIGN 7장 `error.kind`, completed in stage 5). */
+export class RequestError extends Error {
+  constructor(
+    public kind: 'http' | 'protocol' | 'server' | 'network',
+    message: string
+  ) {
+    super(message);
+    this.name = 'RequestError';
+  }
+}
+
+const terminal = (state: RequestState) =>
+  state === 'completed' || state === 'failed' || state === 'aborted';
+const isContent = (op: Op) => !('ui' in op);
+
+function mergeable(a: Record<string, unknown>, b: Record<string, unknown>) {
+  const kind = (value: unknown) =>
+    Array.isArray(value) ? 'array' : typeof value === 'string' ? 'string' : 'other';
+  return Object.keys(b).every(key => !(key in a) || kind(a[key]) === kind(b[key]));
+}
+
+/**
+ * Browser coalescing (DESIGN 6.2): per slot keep the last `html`/`props`, fold `merge` into
+ * the preceding props or merge, and treat ops after `remove` as a new appearance. Within a
+ * slot the order is remove → content → ui.
+ */
+export function coalesceOps(ops: readonly Op[]): Op[] {
+  const order: string[] = [];
+  const slots = new Map<string, { remove: boolean; content: Op[]; ui?: Op }>();
+  for (const op of ops) {
+    let entry = slots.get(op.slot);
+    if (!entry) {
+      entry = { remove: false, content: [] };
+      slots.set(op.slot, entry);
+      order.push(op.slot);
+    }
+    if ('remove' in op) {
+      entry.remove = true;
+      entry.content = [];
+      entry.ui = undefined;
+    } else if ('ui' in op) entry.ui = op;
+    else if ('merge' in op) {
+      const last = entry.content[entry.content.length - 1];
+      if (last && 'props' in last)
+        entry.content[entry.content.length - 1] = {
+          slot: op.slot,
+          props: mergeAccumulate(last.props, op.merge),
+        };
+      else if (last && 'merge' in last && mergeable(last.merge, op.merge))
+        entry.content[entry.content.length - 1] = {
+          slot: op.slot,
+          merge: mergeAccumulate(last.merge, op.merge),
+        };
+      else entry.content.push(op);
+    } else entry.content = [op];
+  }
+  const result: Op[] = [];
+  for (const slot of order) {
+    const entry = slots.get(slot)!;
+    if (entry.remove) result.push({ slot, remove: true });
+    result.push(...entry.content);
+    if (entry.ui) result.push(entry.ui);
+  }
+  return result;
+}
+
+/**
+ * Browser apply pipeline for transitions (DESIGN 6.2/6.3). The server already reduced and
+ * projected every frame; the browser checks op structure, follows the request state table,
+ * coalesces queued ops once per animation frame and executes them in order: server slots
+ * get HTML, client slots get props, UI patches go on the slot host. Requests are invalidated
+ * by generation (abort previous until stage 5). View Transitions are opt-in (DC-06).
+ */
 export class StateSurface {
-  activeStates: Record<string, any> = {};
-  activeUi: Record<string, UiPatch | null> = {};
-  private frameQueue: StateFrameState[] = [];
+  private metas: Map<string, SlotMeta>;
   private anchors = new Map<string, HTMLElement>();
-  private mounted = new Set<string>();
-  private pendingAnchors = new Set<string>();
+  private props = new Map<string, unknown>();
+  private revisions = new Map<string, number>();
+  private queue: Op[] = [];
+  private queued?: Request;
   private flushScheduled = false;
-  private abortController: AbortController | null = null;
-  private maxQueue: number;
-  private frameBudgetMs: number;
-  private transitionTimeout: number;
-
-  private renderTemplate: TemplateRenderer;
-  private hydrateTemplate: TemplateHydrator;
-  private updateTemplate: TemplateUpdater;
-  private unmountTemplate: (name: string, el: HTMLElement) => void;
-  private isUpdatable: (name: string, el: HTMLElement) => boolean;
-  private onAction?: StateSurfaceOptions['onAction'];
-  private basePath: string;
-
+  private applying: Promise<void> = Promise.resolve();
+  private current?: Request;
+  private pendingAnchors = new Set<string>();
+  private errorShown?: string;
+  private nextId = 0;
   trace?: (event: TraceEvent) => void;
 
-  constructor(options: StateSurfaceOptions) {
-    this.renderTemplate = options.renderTemplate;
-    this.hydrateTemplate = options.hydrateTemplate;
-    this.updateTemplate = options.updateTemplate;
-    this.unmountTemplate = options.unmountTemplate;
-    this.isUpdatable = options.isUpdatable ?? (() => true);
-    this.onAction = options.onAction;
-    this.maxQueue = options.maxQueue ?? 20;
-    this.frameBudgetMs = options.frameBudgetMs ?? 33;
-    this.transitionTimeout = options.transitionTimeout ?? 30_000;
+  constructor(private options: StateSurfaceOptions) {
+    this.metas = new Map(options.slots.filter(meta => !meta.id.includes('$')).map(m => [m.id, m]));
+    for (const meta of this.metas.values())
+      if (meta.mode === 'client' && meta.props !== undefined) this.props.set(meta.id, meta.props);
     this.trace = options.trace;
-    this.basePath = options.basePath ?? '';
   }
 
-  // ── Anchor Discovery ──
+  /** Client slot props as last applied (dev overlay). */
+  get activeStates(): Record<string, unknown> {
+    return Object.fromEntries(this.props);
+  }
 
-  discoverAnchors() {
+  get activeUi(): Record<string, UiPatch> {
+    const ui: Record<string, UiPatch> = {};
+    for (const name of this.metas.keys()) {
+      const patch = this.options.dom.uiOf(name);
+      if (patch) ui[name] = patch;
+    }
+    return ui;
+  }
+
+  discoverAnchors(root: ParentNode = document) {
     this.clearPending();
     this.anchors.clear();
-    const elements = document.querySelectorAll<HTMLElement>('h-state[name]');
-    for (const el of elements) {
-      const name = el.getAttribute('name')!;
-      this.anchors.set(name, el);
-    }
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>('h-state[name]')))
+      this.anchors.set(el.getAttribute('name')!, el);
   }
 
-  // ── Bootstrap + Hydration ──
-
-  bootstrap() {
-    const stateEl = document.getElementById('__STATE__');
-    if (!stateEl?.textContent) return;
-
-    const initialStates = JSON.parse(stateEl.textContent) as Record<string, any>;
-
-    const uiEl = document.getElementById('__UI__');
-    const initialUi = uiEl?.textContent
-      ? (JSON.parse(uiEl.textContent) as Record<string, UiPatch | null>)
-      : {};
-
-    this.hydrate(initialStates, initialUi);
-  }
-
-  hydrate(initialStates: Record<string, any>, initialUi: Record<string, UiPatch | null> = {}) {
-    this.activeStates = { ...initialStates };
-    this.activeUi = { ...initialUi };
-
-    for (const [name, data] of Object.entries(initialStates)) {
-      const el = this.anchors.get(name);
-      if (!el || !this.isUpdatable(name, el)) continue;
-
-      this.hydrateTemplate(name, data, el);
-      this.mounted.add(name);
-    }
-
-    // Apply initial UI patches after hydration
-    for (const [name, patch] of Object.entries(initialUi)) {
-      const el = this.anchors.get(name);
-      if (!el || !patch) continue;
-      this.applyUiPatch(name, el, patch);
-    }
-  }
-
-  // ── Transitions ──
-
+  /** Resolves after the request finished and its DOM changes were applied. */
   async transition(
     name: string,
     params: Record<string, unknown> = {},
     options: TransitionOptions = {}
-  ) {
-    // Abort previous transition
-    if (this.abortController) {
-      this.abortController.abort();
-      this.clearPending();
-    }
-    this.abortController = new AbortController();
-    const transitionController = this.abortController;
-    const { signal } = transitionController;
-    let transitionError: Error | undefined;
-    let timedOut = false;
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      transitionController.abort();
-    }, this.transitionTimeout);
+  ): Promise<RequestState> {
+    if (this.current && !terminal(this.current.state)) this.abort(this.current);
+    const request: Request = {
+      id: ++this.nextId,
+      name,
+      controller: new AbortController(),
+      state: 'awaiting-baseline',
+      viewTransition: options.viewTransition === true,
+      transitioned: false,
+    };
+    this.current = request;
+    this.queue = [];
     this.notifyAction({ name, phase: 'start' });
     this.markPending(options.pendingTargets);
-    let firstFrameHandled = false;
-
+    const { bootstrap } = this.options;
     try {
-      const res = await fetch(`${this.basePath}/transition/${name}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-        signal,
-      });
-
-      if (!res.ok || !res.body) {
-        transitionError = new Error(`HTTP ${res.status}`);
-        this.trace?.({ kind: 'error', detail: `HTTP ${res.status}` });
-        if (this.abortController === transitionController) {
-          this.clearPending();
-        }
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      const parser = createNdjsonParser(
-        frame => {
-          if (!firstFrameHandled) {
-            firstFrameHandled = true;
-            if (this.abortController === transitionController) {
-              this.clearPending();
-            }
-          }
-          this.onFrame(frame, signal);
-        },
-        event => {
-          this.trace?.({
-            kind: 'error',
-            detail: {
-              source: 'ndjson',
-              stage: event.stage,
-              line: event.line,
-              message: event.error.message,
-            },
-          });
+      // Looked up per call so later instrumentation (Sentry, Datadog) is not bypassed (8.3-3).
+      const response = await globalThis.fetch(
+        `${bootstrap.basePath}/transition/${encodeURIComponent(name)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/x-ndjson, application/json',
+            'X-Surface-Build': bootstrap.buildId,
+            'X-Surface-Page': bootstrap.pageId,
+          },
+          body: JSON.stringify(params),
+          signal: request.controller.signal,
         }
       );
+      if (response.status === 409) {
+        request.state = 'aborted';
+        (this.options.reload ?? (() => location.reload()))();
+        return request.state;
+      }
+      if (response.headers.get('x-surface-view-transition') === '1') request.viewTransition = true;
+      const type = response.headers.get('content-type') ?? '';
+      if (type.includes('application/x-ndjson') && response.body)
+        await this.read(request, response.body);
+      else if (type.includes('application/json') && (response.ok || response.status === 500)) {
+        const body = (await response.json()) as { frames?: unknown };
+        if (!Array.isArray(body.frames))
+          this.fail(request, new RequestError('protocol', 'JSON response without frames'));
+        else for (const frame of body.frames) this.receive(request, frame);
+      }
+      if (!terminal(request.state))
+        this.fail(
+          request,
+          response.ok
+            ? new RequestError('protocol', 'The response ended without "done"')
+            : new RequestError('http', `HTTP ${response.status}`)
+        );
+    } catch (error) {
+      if (request.controller.signal.aborted && request.state === 'aborted') {
+        /* abort previous: not an error */
+      } else if (!terminal(request.state))
+        this.fail(
+          request,
+          error instanceof Error
+            ? new RequestError('network', error.message)
+            : new RequestError('network', String(error))
+        );
+    } finally {
+      if (this.current === request) this.clearPending();
+      this.notifyAction({ name, phase: 'end', ...(request.error ? { error: request.error } : {}) });
+    }
+    await this.applying;
+    return request.state;
+  }
 
-      while (true) {
+  private async read(request: Request, body: ReadableStream<Uint8Array>) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let total = 0;
+    const parser = createNdjsonParser(
+      frame => this.receive(request, frame),
+      event => {
+        this.trace?.({
+          kind: 'error',
+          detail: { source: 'ndjson', stage: event.stage, message: event.error.message },
+        });
+        if (event.stage === 'limit')
+          this.fail(request, new RequestError('protocol', event.error.message));
+      },
+      { maxLine: this.options.frameSize ?? 1024 * 1024 }
+    );
+    try {
+      while (!terminal(request.state)) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (signal.aborted) break;
-        parser.push(decoder.decode(value, { stream: true }));
-      }
-
-      parser.flush();
-      if (!firstFrameHandled && this.abortController === transitionController) {
-        this.clearPending();
-      }
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        transitionError = err instanceof Error ? err : new Error(String(err));
-        this.trace?.({ kind: 'error', detail: err });
-        if (this.abortController === transitionController) {
-          this.clearPending();
+        const text = decoder.decode(value, { stream: true });
+        total += text.length;
+        if (total > (this.options.responseSize ?? 32 * 1024 * 1024)) {
+          this.fail(request, new RequestError('protocol', 'The response exceeds the size limit'));
+          break;
         }
-      } else if (timedOut) {
-        transitionError = new Error(`Transition timeout after ${this.transitionTimeout}ms`);
-        this.trace?.({ kind: 'error', detail: transitionError.message });
-        if (this.abortController === transitionController) {
-          this.clearPending();
-        }
-      } else if (this.abortController === transitionController) {
-        this.clearPending();
+        parser.push(text);
       }
+      if (!terminal(request.state)) parser.flush();
     } finally {
-      clearTimeout(timeoutTimer);
-      this.notifyAction({
-        name,
-        phase: 'end',
-        ...(transitionError ? { error: transitionError } : {}),
-      });
+      if (terminal(request.state)) void reader.cancel().catch(() => {});
     }
   }
 
-  private onFrame(frame: StateFrame, signal: AbortSignal) {
-    if (signal.aborted) return;
-
+  private receive(request: Request, raw: unknown) {
+    if (request !== this.current || terminal(request.state)) return;
+    const checked = checkWireFrame(raw);
+    if (!checked.ok) return this.fail(request, new RequestError('protocol', checked.reason));
+    for (const skipped of checked.skipped) this.trace?.({ kind: 'skipped', detail: skipped });
+    const frame = checked.frame;
+    this.trace?.({ kind: 'received', detail: frame });
+    if (frame.type === 'patch') {
+      if (request.state === 'awaiting-baseline') {
+        if (!frame.reset)
+          return this.fail(
+            request,
+            new RequestError('protocol', 'The first patch must be a reset')
+          );
+        request.state = 'active';
+        // Pending ends with the first result until stage 5 (DC-11 ④).
+        this.clearPending();
+        if (this.errorShown && !frame.ops.some(op => op.slot === this.errorShown))
+          frame.ops.unshift({ slot: this.errorShown, remove: true });
+        this.errorShown = undefined;
+      }
+      for (const op of frame.ops) {
+        const meta = this.metas.get(op.slot);
+        if (!meta) continue;
+        if (
+          ('html' in op && meta.mode !== 'server') ||
+          (('props' in op || 'merge' in op) && meta.mode !== 'client')
+        )
+          return this.fail(
+            request,
+            new RequestError('protocol', `op does not match the mode of slot "${op.slot}"`)
+          );
+      }
+      this.queue.push(...frame.ops);
+      this.queued = request;
+      this.scheduleFlush();
+      return;
+    }
     if (frame.type === 'done') {
+      request.state = 'completed';
+      this.flush();
       this.trace?.({ kind: 'done' });
-      this.flushAll();
       return;
     }
-
-    if (frame.type === 'error') {
-      this.handleError(frame);
-      return;
-    }
-
-    // state frame
-    this.frameQueue.push(frame);
-    this.trace?.({ kind: 'received', detail: { queueSize: this.frameQueue.length } });
-    this.scheduleFlush();
+    request.state = 'failed';
+    request.error = new RequestError('server', frame.message);
+    this.flush();
+    this.showError(request, frame);
   }
 
-  // ── Error Handling ──
-
-  private handleError(frame: StateFrame & { type: 'error' }) {
-    const template = frame.template;
-    const anchor = template ? this.anchors.get(template) : undefined;
-
-    if (template && anchor) {
-      // Render error template as full state
-      const errorState: StateFrameState = {
-        type: 'state',
-        states: { [template]: frame.data ?? { message: frame.message } },
-        full: true,
-      };
-      this.frameQueue.push(errorState);
-      this.flushAll();
-    } else {
-      // No matching anchor — surface error
-      this.trace?.({ kind: 'error', detail: frame });
-    }
+  private fail(request: Request, error: Error) {
+    if (terminal(request.state)) return;
+    request.state = 'failed';
+    request.error = error;
+    request.controller.abort();
+    // A content op violation stops applying this request (DC-14 ②).
+    if (this.queued === request) this.queue = [];
+    this.trace?.({ kind: 'error', detail: error.message });
+    this.options.report?.(error, { transition: request.name });
   }
 
-  // ── Frame Queue ──
+  private abort(request: Request) {
+    request.state = 'aborted';
+    request.controller.abort();
+    this.queue = [];
+    this.clearPending();
+  }
+
+  private isCurrent(request: Request) {
+    return request === this.current && request.state !== 'aborted';
+  }
 
   private scheduleFlush() {
     if (this.flushScheduled) return;
     this.flushScheduled = true;
     requestAnimationFrame(() => {
       this.flushScheduled = false;
-      this.flushQueue();
+      this.flush();
     });
   }
 
-  private flushAll() {
-    this.flushScheduled = false;
-    this.flushQueue(true);
+  private flush() {
+    if (!this.queue.length || !this.queued) return;
+    const request = this.queued;
+    const ops = coalesceOps(this.queue);
+    if (ops.length < this.queue.length)
+      this.trace?.({ kind: 'merged', detail: { from: this.queue.length, to: ops.length } });
+    this.queue = [];
+    this.enqueue(() => this.apply(request, ops));
   }
 
-  private flushQueue(drainAll = false) {
-    const start = performance.now();
-
-    while (this.frameQueue.length > 0) {
-      if (!drainAll && performance.now() - start > this.frameBudgetMs) {
-        this.scheduleFlush();
-        break;
-      }
-
-      // Backpressure: drop to next full frame if queue too large
-      if (this.frameQueue.length > this.maxQueue) {
-        this.dropToNextFull();
-      }
-
-      let frame = this.frameQueue.shift()!;
-
-      // Coalesce consecutive partial frames (not accumulate — those apply individually)
-      if (frame.full === false && !frame.accumulate) {
-        frame = this.coalescePartials(frame);
-      }
-
-      this.applyStateFrame(frame);
-    }
-  }
-
-  private dropToNextFull() {
-    const idx = this.frameQueue.findIndex(f => f.full !== false);
-    if (idx > 0) {
-      const dropped = this.frameQueue.splice(0, idx);
-      this.trace?.({ kind: 'dropped', detail: { count: dropped.length } });
-    }
-  }
-
-  private coalescePartials(first: StateFrameState): StateFrameState {
-    let merged = { ...first };
-    let mergeCount = 0;
-
-    while (this.frameQueue.length > 0 && this.frameQueue[0].full === false) {
-      const next = this.frameQueue.shift()!;
-      merged = {
-        type: 'state',
-        full: false,
-        states: { ...merged.states, ...next.states },
-        removed: [...new Set([...(merged.removed ?? []), ...(next.removed ?? [])])],
-        changed: [...new Set([...(merged.changed ?? []), ...(next.changed ?? [])])],
-        ui: merged.ui || next.ui ? { ...merged.ui, ...next.ui } : undefined,
-        uiChanged:
-          merged.uiChanged || next.uiChanged
-            ? [...new Set([...(merged.uiChanged ?? []), ...(next.uiChanged ?? [])])]
-            : undefined,
-      };
-      mergeCount++;
-    }
-
-    if (mergeCount > 0) {
-      this.trace?.({ kind: 'merged', detail: { count: mergeCount + 1 } });
-    }
-
-    return merged;
-  }
-
-  // ── Apply ──
-
-  private applyStateFrame(frame: StateFrameState) {
-    const prevStates = this.activeStates;
-    const nextStates = applyFrame(prevStates, frame);
-    const prevUi = this.activeUi;
-    const nextUi = applyUi(prevUi, frame);
-
-    if (frame.accumulate === true) {
-      // Accumulate frame: only the listed slots changed
-      this.sync(nextStates, nextUi, Object.keys(frame.states), []);
-    } else if (frame.full !== false) {
-      // Full frame: find removed keys
-      const removedKeys = Object.keys(prevStates).filter(k => !(k in nextStates));
-      const changedKeys = Object.keys(nextStates);
-      this.sync(nextStates, nextUi, changedKeys, removedKeys);
-    } else {
-      this.sync(
-        nextStates,
-        nextUi,
-        frame.changed ?? Object.keys(frame.states),
-        frame.removed ?? []
-      );
-    }
-
-    const uiCount = Object.keys(nextUi).length;
-    this.trace?.({
-      kind: 'applied',
-      detail: {
-        full: frame.full !== false,
-        stateCount: Object.keys(nextStates).length,
-        ...(uiCount > 0 ? { uiCount, uiSlots: Object.keys(nextUi) } : {}),
-      },
+  private enqueue(task: () => Promise<void> | void) {
+    this.applying = this.applying.then(task).catch(error => {
+      this.trace?.({ kind: 'error', detail: error });
+      this.options.report?.(error, { phase: 'apply' });
     });
   }
 
-  private sync(
-    nextStates: Record<string, any>,
-    nextUi: Record<string, UiPatch | null>,
-    changedKeys: string[],
-    removedKeys: string[]
-  ) {
-    const prevUi = this.activeUi;
+  private viewTransitionFor(request: Request, ops: readonly Op[]) {
+    if (request.transitioned || typeof document.startViewTransition !== 'function') return false;
+    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+    return (
+      request.viewTransition ||
+      ops.some(op => isContent(op) && this.metas.get(op.slot)?.viewTransition === true)
+    );
+  }
 
-    const doSync = () => {
-      // Remove inactive templates
-      for (const key of removedKeys) {
-        if (this.mounted.has(key)) {
-          const el = this.anchors.get(key);
-          this.unmountTemplate(key, el!);
-          this.mounted.delete(key);
-          if (el) {
-            // Clear previous UI patch before clearing content
-            if (prevUi[key]) this.clearUiPatch(key, el, prevUi[key]!);
-            el.innerHTML = '';
-          }
-        }
-      }
-
-      // Update changed templates
-      for (const key of changedKeys) {
-        if (!(key in nextStates)) continue;
-
-        const el = this.anchors.get(key);
-        if (!el) continue;
-        if (!this.isUpdatable(key, el)) {
-          this.trace?.({ kind: 'dropped', detail: { slot: key, reason: 'not a client slot' } });
-          continue;
-        }
-
-        if (!this.mounted.has(key)) {
-          // First render for this anchor
-          this.renderTemplate(key, nextStates[key], el);
-          this.mounted.add(key);
-        } else {
-          // Update existing
-          this.updateTemplate(key, nextStates[key], el);
-        }
-
-        // Trigger reveal animation (opt-in via data-animate on <h-state>)
-        if (el.hasAttribute('data-animate')) {
-          el.removeAttribute('data-just-updated');
-          void el.offsetWidth; // force reflow to restart animation
-          el.setAttribute('data-just-updated', '');
-          el.addEventListener('animationend', () => el.removeAttribute('data-just-updated'), {
-            once: true,
-          });
-        }
-      }
-
-      // Apply UI patches after template render (per design: render first, then UI patch)
-      for (const key of Object.keys(nextUi)) {
-        const el = this.anchors.get(key);
-        if (!el) continue;
-
-        const prev = prevUi[key];
-        const next = nextUi[key];
-
-        if (next === null || next === undefined) {
-          // Clear previous patch
-          if (prev) this.clearUiPatch(key, el, prev);
-        } else if (prev !== next) {
-          // Clear old then apply new
-          if (prev) this.clearUiPatch(key, el, prev);
-          this.applyUiPatch(key, el, next);
-        }
-      }
-
-      // Clear UI for slots that were in prevUi but not in nextUi
-      for (const key of Object.keys(prevUi)) {
-        if (key in nextUi) continue;
-        const el = this.anchors.get(key);
-        if (!el || !prevUi[key]) continue;
-        this.clearUiPatch(key, el, prevUi[key]!);
-      }
+  private async apply(request: Request, ops: readonly Op[]) {
+    if (!this.isCurrent(request)) return;
+    const run = async () => {
+      for (const op of ops) await this.applyOp(request, op);
     };
-
-    // State and UI must update synchronously (frame queue depends on this)
-    this.activeStates = nextStates;
-    this.activeUi = nextUi;
-
-    // Use View Transition API for smooth DOM transitions (progressive enhancement)
-    if (document.startViewTransition) {
-      document.startViewTransition(doSync);
-    } else {
-      doSync();
-    }
+    if (this.viewTransitionFor(request, ops)) {
+      // One transition per action, on its first visible patch (DC-06 ②③). Later patches of
+      // the same request apply immediately once this DOM update ran.
+      request.transitioned = true;
+      const transition = document.startViewTransition(run);
+      await transition.updateCallbackDone.catch(() => {});
+    } else await run();
+    this.trace?.({ kind: 'applied', detail: { ops: ops.length } });
   }
 
-  // ── UI Patch ──
-
-  private applyUiPatch(_slotName: string, el: HTMLElement, patch: UiPatch) {
-    if (patch.classRemove?.length) {
-      el.classList.remove(...patch.classRemove);
+  private async applyOp(request: Request, op: Op) {
+    if (!this.isCurrent(request)) return;
+    const el = this.anchors.get(op.slot);
+    const meta = this.metas.get(op.slot);
+    if (!el || !meta) {
+      this.trace?.({ kind: 'dropped', detail: { slot: op.slot, reason: 'slot not on page' } });
+      return;
     }
-    if (patch.classAdd?.length) {
-      el.classList.add(...patch.classAdd);
-    }
-    if (patch.cssVars) {
-      for (const [key, value] of Object.entries(patch.cssVars)) {
-        el.style.setProperty(key, value);
-      }
-    }
+    this.revisions.set(op.slot, (this.revisions.get(op.slot) ?? 0) + 1);
+    const { dom, host } = this.options;
+    if ('html' in op)
+      await dom.html(el, op.slot, op.html, op.islands, meta.swap ?? 'replace', () =>
+        this.isCurrent(request)
+      );
+    else if ('props' in op) {
+      this.props.set(op.slot, op.props);
+      host.setProps(op.slot, el, op.props, meta);
+    } else if ('merge' in op) {
+      const next = mergeAccumulate(this.props.get(op.slot), op.merge);
+      this.props.set(op.slot, next);
+      host.setProps(op.slot, el, next, meta);
+    } else if ('remove' in op) {
+      this.props.delete(op.slot);
+      dom.remove(el, op.slot, meta.mode);
+    } else dom.setUi(el, op.slot, op.ui);
+    if (isContent(op) && !('remove' in op)) reveal(el);
   }
 
-  private clearUiPatch(_slotName: string, el: HTMLElement, patch: UiPatch) {
-    if (patch.classAdd?.length) {
-      el.classList.remove(...patch.classAdd);
-    }
-    if (patch.cssVars) {
-      for (const key of Object.keys(patch.cssVars)) {
-        el.style.removeProperty(key);
+  private showError(request: Request, frame: ErrorFrame) {
+    const el = frame.slot ? this.anchors.get(frame.slot) : undefined;
+    const meta = frame.slot ? this.metas.get(frame.slot) : undefined;
+    if (el && meta && frame.slot) {
+      const slot = frame.slot;
+      this.errorShown = slot;
+      this.enqueue(async () => {
+        if (request !== this.current) return;
+        if (frame.html !== undefined && meta.mode === 'server')
+          await this.options.dom.html(el, slot, frame.html, frame.islands);
+        else if (frame.props && meta.mode === 'client') {
+          this.props.set(slot, frame.props);
+          this.options.host.setProps(slot, el, frame.props, meta);
+        }
+      });
+    } else if (this.options.development)
+      console.warn(
+        `[StateSurface] "${request.name}" failed without an error slot: ${frame.message}`
+      );
+    this.trace?.({ kind: 'error', detail: frame });
+    this.options.report?.(request.error, { transition: request.name, kind: 'server' });
+  }
+
+  /**
+   * Deferred server slots (DC-21): request every one in parallel, drop a response when a
+   * transition changed the slot first, retry once after 1s, then keep the fallback.
+   */
+  loadDeferred() {
+    return Promise.all(
+      [...this.metas.values()].filter(meta => meta.defer).map(meta => this.deferred(meta, 0))
+    );
+  }
+
+  private async deferred(meta: SlotMeta, attempt: number): Promise<void> {
+    const el = this.anchors.get(meta.id);
+    if (!el || !meta.defer || !meta.component) return;
+    const revision = this.revisions.get(meta.id) ?? 0;
+    const { bootstrap } = this.options;
+    const post = meta.defer.length > 2048;
+    const url =
+      `${bootstrap.basePath}/_surface/island/${encodeURIComponent(meta.component)}` +
+      (post ? '' : `?p=${meta.defer}`);
+    try {
+      const response = await globalThis.fetch(url, {
+        method: post ? 'POST' : 'GET',
+        headers: {
+          'X-Surface-Build': bootstrap.buildId,
+          'X-Surface-Page': bootstrap.pageId,
+          ...(post ? { 'Content-Type': 'text/plain' } : {}),
+        },
+        ...(post ? { body: meta.defer } : {}),
+      });
+      if (response.status === 409) return (this.options.reload ?? (() => location.reload()))();
+      if (!response.ok) throw new Error(`Deferred slot "${meta.id}": HTTP ${response.status}`);
+      const body = (await response.json()) as { html?: unknown; islands?: unknown };
+      const checked = checkWireFrame({
+        type: 'patch',
+        ops: [
+          { slot: meta.id, html: body.html, ...(body.islands ? { islands: body.islands } : {}) },
+        ],
+      });
+      if (!checked.ok || checked.frame.type !== 'patch')
+        throw new Error(`Deferred slot "${meta.id}": invalid response`);
+      const op = checked.frame.ops[0] as Extract<Op, { html: string }>;
+      this.enqueue(async () => {
+        if ((this.revisions.get(meta.id) ?? 0) !== revision) {
+          this.trace?.({
+            kind: 'dropped',
+            detail: { slot: meta.id, reason: 'stale deferred response' },
+          });
+          return;
+        }
+        this.revisions.set(meta.id, revision + 1);
+        const run = () =>
+          this.options.dom.html(el, meta.id, op.html, op.islands, meta.swap ?? 'replace');
+        if (
+          meta.viewTransition &&
+          typeof document.startViewTransition === 'function' &&
+          !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        )
+          await document.startViewTransition(run).updateCallbackDone.catch(() => {});
+        else await run();
+        reveal(el);
+      });
+    } catch (error) {
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return this.deferred(meta, 1);
       }
+      this.options.report?.(error, { slot: meta.id, kind: 'deferred' });
     }
   }
 
   private markPending(targets?: string[]) {
     this.clearPending();
-
     const names = targets && targets.length > 0 ? targets : Array.from(this.anchors.keys());
-
     for (const name of names) {
       const el = this.anchors.get(name);
       if (!el) continue;
@@ -515,20 +534,13 @@ export class StateSurface {
   }
 
   private clearPending() {
-    if (this.pendingAnchors.size === 0) return;
-
-    for (const name of this.pendingAnchors) {
-      const el = this.anchors.get(name);
-      if (!el) continue;
-      el.removeAttribute('data-pending');
-    }
-
+    for (const name of this.pendingAnchors) this.anchors.get(name)?.removeAttribute('data-pending');
     this.pendingAnchors.clear();
   }
 
   private notifyAction(event: { name: string; phase: 'start' | 'end'; error?: Error }) {
     try {
-      this.onAction?.(event);
+      this.options.onAction?.(event);
     } catch (err) {
       this.trace?.({
         kind: 'error',
@@ -536,4 +548,15 @@ export class StateSurface {
       });
     }
   }
+}
+
+/** Opt-in reveal animation (`data-animate` on `<h-state>`). */
+function reveal(el: HTMLElement) {
+  if (!el.hasAttribute('data-animate')) return;
+  el.removeAttribute('data-just-updated');
+  void el.offsetWidth; // force reflow to restart animation
+  el.setAttribute('data-just-updated', '');
+  el.addEventListener('animationend', () => el.removeAttribute('data-just-updated'), {
+    once: true,
+  });
 }

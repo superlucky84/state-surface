@@ -11,10 +11,11 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="search:input" client:load>
+        {/* morph keeps the typed value and focus while the form re-renders (DC-03 ③). */}
+        <Slot name="search:input" mode="server" swap="morph">
           <SearchInput {...content['search:input']} />
         </Slot>
-        <Slot name="search:results" client:load component={SearchResults} data-animate="fade" />
+        <Slot name="search:results" mode="server" component={SearchResults} data-animate="fade" />
       </main>
     </Layout>
   );

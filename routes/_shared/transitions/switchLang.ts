@@ -38,8 +38,6 @@ async function* switchLang(
     type: 'state',
     states: cleanStates,
   };
-
-  yield { type: 'done' };
 }
 
 export default defineTransition('switch-lang', switchLang);

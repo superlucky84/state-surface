@@ -9,6 +9,7 @@ import { PluginHost } from './pluginHost.js';
 import { renderPage } from '../server/ssrRenderer.js';
 import { createContext } from '../server/core/context.js';
 import { Island, Slot } from '../shared/surfaceTree.js';
+import type { SlotMeta } from '../shared/protocol.js';
 
 const el = (tag: unknown, props: Record<string, unknown> = {}, ...children: unknown[]) =>
   h(tag as never, props as never, ...(children as never[]));
@@ -42,8 +43,8 @@ async function serverRender(...body: unknown[]) {
     html.indexOf('<!--ss:body-->'),
     html.indexOf('<!--/ss:body-->')
   );
-  const state = html.match(/<script id="__STATE__" type="application\/json">(.*?)<\/script>/);
-  return state ? JSON.parse(state[1]) : {};
+  const bootstrap = html.match(/<script id="__SURFACE__" type="application\/json">(.*?)<\/script>/);
+  return (bootstrap ? JSON.parse(bootstrap[1]).slots : []) as SlotMeta[];
 }
 
 const slot = (name: string, component: TagFunction, props: Record<string, unknown>, extra = {}) =>
@@ -59,14 +60,9 @@ const island = (
   ...children: unknown[]
 ) => el(Island, { __ssComponent: component, __ssId: id, ...props }, ...children);
 
-function host(
-  states: Record<string, unknown>,
-  loaders: Record<string, TagFunction>,
-  plugins?: PluginHost
-) {
+function host(loaders: Record<string, TagFunction>, plugins?: PluginHost) {
   const requested: string[] = [];
   const instance = new ComponentHost({
-    states,
     plugins,
     loaders: Object.fromEntries(
       Object.entries(loaders).map(([id, component]) => [
@@ -109,12 +105,12 @@ describe('ComponentHost', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('hydrates client:load slots in place and keeps local state across props updates', async () => {
-    const states = await serverRender(slot('count', Counter, { start: 2, label: 'a' }));
+    const slots = await serverRender(slot('count', Counter, { start: 2, label: 'a' }));
     const button = document.querySelector('button')!;
     const plugins = new PluginHost([], {});
     const displayed = vi.spyOn(plugins, 'displayedSlot');
-    const { host: components, requested } = host(states, { 'count.tsx#default': Counter }, plugins);
-    components.scan();
+    const { host: components, requested } = host({ 'count.tsx#default': Counter }, plugins);
+    components.scan(document, slots);
     await flush();
     expect(requested).toEqual(['count.tsx#default']);
     expect(document.querySelector('button')).toBe(button);
@@ -122,21 +118,25 @@ describe('ComponentHost', () => {
 
     button.click();
     await flush();
-    components
-      .callbacks()
-      .updateTemplate('count', { start: 2, label: 'b' }, document.querySelector('h-state')!);
+    components.setProps(
+      'count',
+      document.querySelector('h-state')!,
+      { start: 2, label: 'b' },
+      slots[0]
+    );
     await flush();
     expect(button.textContent).toBe('3');
     expect(document.querySelector('.label')!.textContent).toBe('b');
   });
 
   it('does not request client:visible chunks before the element is visible', async () => {
-    const states = await serverRender(
+    const slots = await serverRender(
       slot('later', Counter, { start: 1 }, { 'client:load': undefined, 'client:visible': true })
     );
-    expect(document.querySelector('h-state')!.getAttribute('data-activation')).toBe('visible');
-    const { host: components, requested } = host(states, { 'later.tsx#default': Counter });
-    components.scan();
+    expect(slots[0]).toMatchObject({ id: 'later', activation: 'visible' });
+    expect(document.querySelector('h-state')!.hasAttribute('data-activation')).toBe(false);
+    const { host: components, requested } = host({ 'later.tsx#default': Counter });
+    components.scan(document, slots);
     await flush();
     expect(requested).toEqual([]);
     FakeIntersectionObserver.instances[0].reveal();
@@ -145,7 +145,7 @@ describe('ComponentHost', () => {
   });
 
   it('activates a dormant slot when a frame arrives and applies the latest data after the SSR snapshot', async () => {
-    const states = await serverRender(
+    const slots = await serverRender(
       slot(
         'later',
         Counter,
@@ -154,11 +154,11 @@ describe('ComponentHost', () => {
       )
     );
     const ssrButton = document.querySelector('button');
-    const { host: components, requested } = host(states, { 'later.tsx#default': Counter });
-    components.scan();
+    const { host: components, requested } = host({ 'later.tsx#default': Counter });
+    components.scan(document, slots);
     const anchor = document.querySelector<HTMLElement>('h-state')!;
-    components.callbacks().updateTemplate('later', { start: 1, label: 'first' }, anchor);
-    components.callbacks().updateTemplate('later', { start: 1, label: 'latest' }, anchor);
+    components.setProps('later', anchor, { start: 1, label: 'first' }, slots[0]);
+    components.setProps('later', anchor, { start: 1, label: 'latest' }, slots[0]);
     await flush();
     expect(requested).toEqual(['later.tsx#default']);
     expect(document.querySelector('button')).toBe(ssrButton);
@@ -166,21 +166,21 @@ describe('ComponentHost', () => {
   });
 
   it('renders empty slots on the first frame and never mounts a slot removed while loading', async () => {
-    document.body.innerHTML =
-      '<h-state name="title" data-component="title.tsx#default"></h-state>' +
-      '<h-state name="gone" data-component="title.tsx#default" data-activation="idle"></h-state>';
+    document.body.innerHTML = '<h-state name="title"></h-state><h-state name="gone"></h-state>';
+    const slots: SlotMeta[] = [
+      { id: 'title', mode: 'client', component: 'title.tsx#default' },
+      { id: 'gone', mode: 'client', component: 'title.tsx#default', activation: 'idle' },
+    ];
     let release!: () => void;
     const gate = new Promise<void>(resolve => (release = resolve));
     const components = new ComponentHost({
-      states: {},
       loaders: { 'title.tsx#default': () => gate.then(() => Title) },
     });
-    components.scan();
+    components.scan(document, slots);
     const [title, gone] = Array.from(document.querySelectorAll<HTMLElement>('h-state'));
-    const callbacks = components.callbacks();
-    callbacks.renderTemplate('title', { text: 'Hello' }, title);
-    callbacks.renderTemplate('gone', { text: 'Never' }, gone);
-    callbacks.unmountTemplate('gone', gone);
+    components.setProps('title', title, { text: 'Hello' }, slots[0]);
+    components.setProps('gone', gone, { text: 'Never' }, slots[1]);
+    components.remove('gone');
     release();
     await flush();
     expect(title.innerHTML).toBe('<h1>Hello</h1>');
@@ -188,25 +188,21 @@ describe('ComponentHost', () => {
   });
 
   it('keeps SSR HTML when a chunk fails and shows a fallback only for slots without content', async () => {
-    const states = await serverRender(slot('kept', Title, { text: 'SSR' }));
-    document.body.insertAdjacentHTML(
-      'beforeend',
-      '<h-state name="empty" data-component="missing.tsx#default"></h-state>'
-    );
+    const slots = await serverRender(slot('kept', Title, { text: 'SSR' }));
+    document.body.insertAdjacentHTML('beforeend', '<h-state name="empty"></h-state>');
     const report = vi.fn();
     const components = new ComponentHost({
-      states,
       loaders: { 'kept.tsx#default': () => Promise.reject(new Error('chunk 404')) },
       report,
     });
-    components.scan();
-    components
-      .callbacks()
-      .renderTemplate(
-        'empty',
-        { text: 'x' },
-        document.querySelector<HTMLElement>('h-state[name="empty"]')!
-      );
+    const empty: SlotMeta = { id: 'empty', mode: 'client', component: 'missing.tsx#default' };
+    components.scan(document, [...slots, empty]);
+    components.setProps(
+      'empty',
+      document.querySelector<HTMLElement>('h-state[name="empty"]')!,
+      { text: 'x' },
+      empty
+    );
     await flush();
     expect(document.querySelector('h-state[name="kept"]')!.innerHTML).toBe('<h1>SSR</h1>');
     expect(
@@ -218,7 +214,7 @@ describe('ComponentHost', () => {
   it('hydrates islands with static children and renders client:only islands (V-03)', async () => {
     const OnlyClient = vi.fn(((props: { label: string }, children: unknown) =>
       el('p', { class: 'only' }, props.label, children as never)) as unknown as TagFunction);
-    await serverRender(
+    const slots = await serverRender(
       island(
         'Counter.tsx#default',
         Counter,
@@ -235,11 +231,11 @@ describe('ComponentHost', () => {
     );
     expect(OnlyClient).not.toHaveBeenCalled();
     vi.stubGlobal('requestIdleCallback', (run: () => void) => (setTimeout(run, 0), 1));
-    const { host: components } = host(
-      {},
-      { 'Counter.tsx#default': Counter, 'Only.tsx#default': OnlyClient }
-    );
-    components.scan();
+    const { host: components } = host({
+      'Counter.tsx#default': Counter,
+      'Only.tsx#default': OnlyClient,
+    });
+    components.scan(document, slots);
     await flush();
     const [first, second] = Array.from(document.querySelectorAll('button'));
     first.click();
@@ -247,18 +243,31 @@ describe('ComponentHost', () => {
     expect(first.textContent).toBe('2');
     expect(second.textContent).toBe('10');
     expect(document.querySelector('h-children em')!.textContent).toBe('kid');
-    const only = document.querySelector('h-island[data-only]')!;
+    const only = document.querySelector('h-island[data-island="$2"]')!;
     expect(only.querySelector('span')).toBeNull();
     expect(only.querySelector('template')).toBeNull();
     expect(only.querySelector('p.only')!.textContent).toBe('hi!');
   });
 
-  it('treats only slots with data-component as updatable', () => {
-    const { host: components } = host({}, {});
-    const callbacks = components.callbacks();
-    const client = document.createElement('h-state');
-    client.setAttribute('data-component', 'x');
-    expect(callbacks.isUpdatable('a', client)).toBe(true);
-    expect(callbacks.isUpdatable('b', document.createElement('h-state'))).toBe(false);
+  it('adopts islands of new server HTML and disposes islands of replaced HTML (DC-08)', async () => {
+    document.body.innerHTML = '<h-state name="panel"></h-state>';
+    const panel = document.querySelector<HTMLElement>('h-state')!;
+    const { host: components, requested } = host({ 'Counter.tsx#default': Counter });
+    panel.innerHTML =
+      '<h-island data-island="panel$0" style="display:contents"><div class="counter"><button type="button">5</button><span class="label"></span></div></h-island>';
+    const meta = { id: 'panel$0', component: 'Counter.tsx#default', props: { start: 5 } };
+    components.adopt(panel, [meta]);
+    await flush();
+    expect(requested).toEqual(['Counter.tsx#default']);
+    panel.querySelector('button')!.click();
+    await flush();
+    expect(panel.querySelector('button')!.textContent).toBe('6');
+    // IC-06: same component and props → the instance may be kept; different → not.
+    expect(components.sameIsland('panel$0', meta)).toBe(true);
+    expect(components.sameIsland('panel$0', { ...meta, props: { start: 6 } })).toBe(false);
+    components.rekey('panel$0', 'panel$1');
+    expect(panel.querySelector('h-island')!.getAttribute('data-island')).toBe('panel$1');
+    components.disposeWithin(panel);
+    expect(components.has('panel$1')).toBe(false);
   });
 });

@@ -42,11 +42,11 @@ export default function Layout(
               : 'mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-6 md:px-8'
           }
         >
-          <Slot name="page:header" client:load>
+          <Slot name="page:header" mode="server">
             <PageHeader {...header} />
           </Slot>
           {children}
-          <Slot name="system:error" client:load component={SystemError} />
+          <Slot name="system:error" mode="server" component={SystemError} />
         </div>
       </body>
     </html>

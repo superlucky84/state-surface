@@ -1,17 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { encodeFrame, encodeFrames, decodeFrames, createNdjsonParser } from './ndjson.js';
-import type { StateFrame } from './protocol.js';
+import type { WireFrame } from './protocol.js';
+
+// Parser tests use arbitrary JSON lines; frame structure is checked elsewhere.
+type StateFrame = any;
 
 describe('encodeFrame', () => {
   it('encodes a frame as JSON + newline', () => {
-    const frame: StateFrame = { type: 'done' };
+    const frame: WireFrame = { type: 'done' };
     expect(encodeFrame(frame)).toBe('{"type":"done"}\n');
   });
 });
 
 describe('encodeFrames', () => {
   it('encodes multiple frames as NDJSON', () => {
-    const frames: StateFrame[] = [{ type: 'state', states: { a: { x: 1 } } }, { type: 'done' }];
+    const frames = [
+      { type: 'state', states: { a: { x: 1 } } },
+      { type: 'done' },
+    ] as unknown as WireFrame[];
     const result = encodeFrames(frames);
     const lines = result.trim().split('\n');
     expect(lines).toHaveLength(2);
@@ -168,5 +174,24 @@ describe('createNdjsonParser (streaming)', () => {
     expect(received[1].type).toBe('done');
     expect(parseErrors).toHaveLength(1);
     expect(parseErrors[0].stage).toBe('stream');
+  });
+});
+
+describe('createNdjsonParser line limit (DC-14)', () => {
+  it('stops at an over-long line, including one still being buffered', () => {
+    const frames: unknown[] = [];
+    const errors: string[] = [];
+    const parser = createNdjsonParser(
+      frame => frames.push(frame),
+      event => errors.push(event.stage),
+      { maxLine: 20 }
+    );
+    parser.push('{"type":"done"}\n');
+    parser.push('{"type":"patch","ops":[');
+    expect(errors).toEqual(['limit']);
+    parser.push(']}\n{"type":"done"}\n');
+    parser.flush();
+    expect(frames).toEqual([{ type: 'done' }]);
+    expect(parser.stopped).toBe(true);
   });
 });

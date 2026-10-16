@@ -2,7 +2,7 @@
  * shared/basePath.ts — single source of truth for basePath.
  *
  * setBasePath(path)  — call once at server startup (from process.env.BASE_PATH)
- *                      and once at client bootstrap (from __BASE_PATH__ script tag).
+ *                      and once at client bootstrap (from the `__SURFACE__` JSON).
  * getBasePath()      — return the current basePath (empty string by default).
  * prefixPath(url)    — prepend basePath to a URL; no-op when basePath is empty.
  *

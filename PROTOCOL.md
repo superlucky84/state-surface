@@ -1,182 +1,250 @@
-# StateSurface Protocol (v1)
+# StateSurface Protocol (v2: two layers)
 
-This file is the implementation-facing contract for NDJSON frame exchange.
-It tracks active decisions in `docs/ui-protocol/DESIGN.md` and legacy baseline decisions in `docs/completed/DESIGN.md`.
+This file is the implementation-facing contract for transitions. It follows
+[docs/surface-expansion/DESIGN.md](docs/surface-expansion/DESIGN.md) 6장 (DC-09, DC-10, DC-13, DC-14),
+which supersedes the single-layer frame contract of `docs/ui-protocol/DESIGN.md`.
 
-## Transport
+There are two layers:
 
-- Endpoint: `POST /transition/:name`
-- Response type: `application/x-ndjson`
-- One JSON frame per line
-- Stream order is preserved
-- Empty lines are permitted as transport heartbeats and ignored by the decoder; they are not frames.
-- POST validates Origin (or Sec-Fetch-Site when Origin is absent); an explicit allowed-origin list is configurable.
-- The core reads the body with a 100 KiB default byte limit (413 on overflow); malformed/non-object JSON returns 400.
-- Server handlers use explicit `SurfaceContext`; Express request/response hooks are removed.
-- Cookies set before the first transition yield are committed with response headers; late writes are ignored.
-- Abort/timeout closes the stream and returns the generator; application I/O must observe `ctx.signal`.
-- Runtime adapters and deployment requirements: [server-adapters.md](docs/server-adapters.md).
+1. **Authoring layer** — what a transition yields or returns. Logical state frames
+   (full · partial · accumulate · removed · ui). Public API.
+2. **Transport layer** — what the server sends to the browser. Per-slot op lists. Engine
+   internal; the browser executes ops in order and does not interpret merge rules.
 
-## Frame Types
+```text
+transition yields StateFrame ─▶ server: validate → request reducer → project per slot mode
+                                 (server slot: render HTML, client slot: props / merge)
+                              ─▶ { type: 'patch', reset?, ops: [...] } … { type: 'done' }
+```
+
+## Requests
+
+- Endpoint: `POST {BASE_PATH}/transition/:name`, body = JSON object of params (100 KiB default
+  limit, 413 above; malformed or non-object JSON is 400).
+- Required headers (sent by the engine runtime):
+  - `X-Surface-Build: <buildId>` — must equal the server's build id, else **409** (the browser
+    reopens the current URL as a document load).
+  - `X-Surface-Page: <pageId>` — the page manifest used to resolve slots (route file path without
+    extension, e.g. `guide/[slug]`); missing or unknown is **400**. It is not an authorization input.
+- POST validates `Origin` (or `Sec-Fetch-Site` when `Origin` is absent); an allowed-origin list is
+  configurable. Unknown request headers are accepted.
+- Response: `application/x-ndjson` when the handler is an async generator (one JSON frame per line,
+  empty lines ignored), `application/json` `{ "frames": [...] }` when it is an async function.
+- Cookies set before the first frame are committed with the response headers; later writes are
+  ignored (development warns).
+- `X-Surface-View-Transition: 1` marks a transition declared with `viewTransition: true`.
+
+## Authoring Layer
 
 ```ts
-type StateFrame =
-  | {
-      type: 'state';
-      states: Record<string, any>;
-      full?: boolean; // default true
-      accumulate?: boolean; // default false — stack delta into existing slot state
-      changed?: string[];
-      removed?: string[];
-    }
-  | { type: 'error'; message?: string; template?: string; data?: any }
-  | { type: 'done' };
+type StateFrame = {
+  type: 'state';
+  states: Record<string, any>;
+  ui?: Record<string, UiPatch | null>;
+  full?: boolean; // default true
+  accumulate?: boolean; // default false
+  changed?: string[];
+  removed?: string[];
+  uiChanged?: string[];
+};
+
+// async function transitions return one result, normalized to a full frame
+type TransitionResult = {
+  states?: Record<string, any>;
+  ui?: Record<string, UiPatch | null>;
+} | void;
 ```
 
-## State Frame Rules
+Rules (violations: development throws with the transition name and frame number, production
+sends an `error` frame and ends the request):
 
-- `type` and `states` are required for `state`
-- `full` defaults to `true`
-- `accumulate` defaults to `false`
-- First frame in a stream MUST be full (not accumulate)
-- If `full === false`, at least one of `changed` or `removed` is required
-- If `full === false` and `changed` exists, all keys in `changed` must exist in `states`
-- If `full === false`, keys in `removed` must NOT exist in `states`
-- Delete-only partial is valid (`states: {}` with `removed`)
-- If `accumulate === true`, `removed` is not allowed and `full` is ignored
+- The first state frame is **full**. Partial or accumulate first is invalid.
+- There is **no `done`** in the authoring layer: when the handler returns, the engine sends it.
+  Yielding `{ type: 'done' }` is invalid. Yielding `{ type: 'error' }` is invalid: **throw**.
+  Throw `TransitionError` (from `state-surface/server`) for a message the user may see in
+  production; other errors become `Transition failed` outside development.
+- **Targets**: `defineTransition(name, { targets, handler })` declares the slots the transition may
+  change. Without it, the slots of the first full frame become the targets. Any frame that touches
+  a slot outside the targets, a slot that is not on the page, or a static slot is invalid.
+- `full` (default) replaces the **targets** — not the whole page. Target slots missing from a full
+  frame are removed; slots outside the targets and static content stay.
+- Partial (`full: false`) needs at least one of `changed`, `removed`, `uiChanged`. `changed` keys
+  must exist in `states`, `removed` keys must not, and a key cannot be in both.
+- Accumulate (`accumulate: true`) merges deltas: arrays concat, strings concat, other values
+  replace (shallow). It cannot carry `removed` or `ui` and is never the first frame.
+- UI patches: `classAdd`/`classRemove` are arrays of tokens matching `[A-Za-z0-9_:/\[\].-]+`;
+  `cssVars` keys start with `--` and values must not contain `;`, `{`, `}`, `\`, `url(` or
+  `expression(`. A full frame sets the UI of every target slot (missing → cleared).
+- An empty handler (no frame) is a successful request: the engine sends only `done`.
 
-## Precedence Rules
+The slot state exists for **one request**. Every request starts empty; read what you need from a
+server source again (DC-10). The server never trusts client snapshots.
 
-- If `accumulate === true`: merge delta into `activeStates` per slot (arrays concat, strings concat, objects shallow-merge, scalars replace); `full` and `removed` are ignored
-- If `full !== false` (and not accumulate), treat as full and ignore `changed`/`removed`
-- If `full === false` (and not accumulate), apply `removed` first, then apply `changed` via `states`
-- A key cannot appear in both `changed` and `removed` in one frame (invalid)
-
-## Accumulate Merge Semantics
-
-Per slot, the incoming data is merged into the existing `activeStates[slot]`:
-
-| Field type                     | Merge behavior                                 |
-| ------------------------------ | ---------------------------------------------- |
-| Array                          | `[...existing, ...incoming]` (concat)          |
-| String                         | `existing + incoming` (concat)                 |
-| Object                         | `{ ...existing, ...incoming }` (shallow merge) |
-| Scalar (number, boolean, null) | `incoming` (replace)                           |
-
-If the slot does not yet exist in `activeStates`, the incoming data is used as-is.
-
-## Valid NDJSON Examples
-
-### Full (first frame)
+### Valid examples
 
 ```json
-{
-  "type": "state",
-  "states": { "page:article:view": { "articleId": 1 }, "loading": { "articleId": 1 } }
-}
+{ "type": "state", "states": { "search:results": { "loading": true, "query": "q" } } }
+{ "type": "state", "full": false, "states": { "search:results": { "items": [] } }, "changed": ["search:results"] }
+{ "type": "state", "full": false, "states": {}, "removed": ["chat:typing"] }
+{ "type": "state", "accumulate": true, "states": { "chat:current": { "text": " world" } } }
+{ "type": "state", "full": false, "states": {}, "ui": { "card": { "classAdd": ["is-new"] } }, "uiChanged": ["card"] }
 ```
 
-### Partial update
+### Invalid examples
 
 ```json
-{
-  "type": "state",
-  "full": false,
-  "states": { "page:article:view": { "article": { "id": 1, "title": "A" } } },
-  "changed": ["page:article:view"],
-  "removed": []
-}
-```
-
-### Partial remove-only
-
-```json
-{ "type": "state", "full": false, "states": {}, "removed": ["loading"] }
-```
-
-### Error
-
-```json
-{ "type": "error", "template": "system:error", "data": { "message": "db timeout" } }
-```
-
-### Done
-
-```json
+{ "type": "state", "full": false, "states": { "a": {} } }
+{ "type": "state", "full": false, "states": {}, "changed": ["a"] }
+{ "type": "state", "full": false, "states": { "a": {} }, "removed": ["a"] }
+{ "type": "state", "accumulate": true, "states": { "a": { "t": "x" } }, "removed": ["b"] }
+{ "type": "state", "states": { "a": {} }, "ui": { "a": { "classAdd": "not-an-array" } } }
 { "type": "done" }
 ```
 
-### Accumulate — string delta (streaming text)
+An accumulate or partial frame as the first frame is invalid as well.
 
-```json
-{ "type": "state", "accumulate": true, "states": { "chat:current": { "text": " world" } } }
+### External frames
+
+Frames from an outside source (an agent, a queue) enter only through the transition:
+`yield* ctx.external(source)`. Each frame may only touch slots declared with `external` and a
+Standard Schema `schema` (`<Slot external schema={s}>`); the values are validated by the schema.
+A violating external frame is dropped and logged; the transition continues. There is no public
+endpoint for frames.
+
+## Transport Layer
+
+```ts
+type WireFrame =
+  | { type: 'patch'; reset?: true; ops: Op[] }
+  | { type: 'done' }
+  | {
+      type: 'error';
+      message: string;
+      slot?: string;
+      html?: string;
+      islands?: IslandMeta[];
+      props?: object;
+    };
+
+type Op =
+  | { slot: string; html: string; islands?: IslandMeta[] } // server slot
+  | { slot: string; props: object } // client slot: replace props
+  | { slot: string; merge: object } // client slot: accumulate delta
+  | { slot: string; remove: true } // any slot: cleanup and clear
+  | { slot: string; ui: UiPatch | null }; // any slot: the slot's whole UI patch
+
+type IslandMeta = {
+  id: string;
+  component: string;
+  props: object;
+  activation?: 'idle' | 'visible' | 'media';
+  media?: string;
+  only?: true;
+};
 ```
 
-Runtime concatenates `activeStates['chat:current'].text += ' world'`.
-
-### Accumulate — array append (chat history)
-
 ```json
-{
-  "type": "state",
-  "accumulate": true,
-  "states": { "chat:messages": { "messages": [{ "id": "b-1", "role": "bot", "text": "Hello" }] } }
-}
+{"type":"patch","reset":true,"ops":[{"slot":"article:body","html":"<article>…</article>"},{"slot":"chat:current","props":{"text":""}},{"slot":"article:body","ui":null}]}
+{"type":"patch","ops":[{"slot":"chat:current","merge":{"text":"Hel"}}]}
+{"type":"done"}
 ```
 
-Runtime concatenates `activeStates['chat:messages'].messages = [...existing, newMsg]`.
+Server projection:
 
-## Invalid NDJSON Examples
+- One authoring frame becomes at most one patch (`reset: true` for a full frame); a frame that
+  changes server and client slots produces one patch with both kinds of ops.
+- Within a patch: `remove` ops, then content ops, then `ui` ops.
+- Server slots re-run `load` and render on every update, coalesced per slot: the first update
+  renders immediately, later ones at most once per 33 ms, and pending renders are flushed before
+  `done`/`error`. Client ops are not coalesced on the server.
+- `html` contains only the output of the slot's registered component, rendered with the slot's
+  capability (below). Islands inside it are listed in `islands`.
 
-### Invalid: partial without changed/removed
+Browser state table (per request):
 
-```json
-{ "type": "state", "full": false, "states": { "a": { "x": 1 } } }
+| State                        | Accepts                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| awaiting-baseline            | `reset` patch → active · `done` → completed (empty success) · `error` → failed · other patch → protocol error |
+| active                       | patch → active · `done` → completed · `error` → failed                                                        |
+| completed / failed / aborted | nothing (later frames are ignored)                                                                            |
+
+- EOF without `done` or `error` is an error; applied ops are not rolled back.
+- The browser re-checks op structure only. A malformed content op, an unknown op (version
+  mismatch) or an op whose kind does not match the slot mode stops the request; an invalid `ui`
+  op is skipped and traced.
+- Queued ops are coalesced once per animation frame: per slot the last `html`/`props` wins,
+  `merge` folds into the preceding `props`/`merge`, ops after `remove` are a new appearance.
+- Abort previous: a new transition invalidates the queue and DOM work of the previous one.
+- `error`: when `slot` names a slot on the page, its `html` (server slot) or `props` (client slot)
+  is shown there regardless of targets; it is cleared by the next request's baseline. Without an
+  error slot nothing is shown; development warns. Both cases call `reportError`.
+
+Receive limits (browser and server, configurable with `createHandler({ limits })`): one NDJSON
+line 1 MB, one response 32 MB, 10,000 ops per request, one `html` op 512 KB, 30 s idle between
+frames and 5 minutes per request. Development warns at 80%.
+
+## Server HTML Application
+
+- `swap="replace"` (default): plugin cleanup → dispose islands in the slot → `innerHTML` →
+  restore focus, selection and scroll by element `id` → plugin `attach` → activate `islands`.
+- `swap="morph"`: idiomorph 0.7.4 (own chunk, loaded only on pages with a morph slot) patches the
+  DOM; an island with the same component and props keeps its instance, a changed one is disposed
+  and activated again (IC-06); plugins get `update`.
+- Scripts inside applied HTML never run; development warns.
+
+## Capability
+
+| Capability       | Slot content                                                                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| strict (default) | Component props only. No raw HTML (`innerHTML` is an error). URL attributes (`href`, `src`, `action`, `formaction`, …) outside http, https, mailto and relative references are dropped. |
+| rich             | strict plus Markdown through `Markdown` from `state-surface/rich` (mdast → hast allowlist, raw HTML dropped).                                                                           |
+| unsafe           | Raw HTML allowed; `<script>` is made inert. `sandbox="iframe"` renders the content into a sandboxed iframe `srcdoc`.                                                                    |
+
+Capability is fixed by the page manifest; a frame cannot raise it.
+
+## Bootstrap
+
+One JSON script per page (written only when the page needs the engine or has an app entry):
+
+```html
+<script id="__SURFACE__" type="application/json">
+  {
+    "buildId": "…",
+    "pageId": "examples/search",
+    "basePath": "",
+    "slots": [
+      { "id": "search:input", "mode": "server", "swap": "morph" },
+      { "id": "chat:current", "mode": "client", "component": "routes/…/chatCurrent.tsx#default" },
+      {
+        "id": "$0",
+        "mode": "client",
+        "component": "…#default",
+        "props": {},
+        "activation": "visible"
+      }
+    ],
+    "boot": [{ "transition": "guide-load", "params": { "slug": "quickstart" } }],
+    "plugins": [{ "id": "client/plugins/prism.ts#prism", "load": "load" }]
+  }
+</script>
 ```
 
-### Invalid: changed key missing in states
+- `<`, `>`, `&`, U+2028 and U+2029 are written as `\u` escapes.
+- Server slots carry no props; client slots and islands carry their SSR snapshot props.
+- Island ids: `$N` at page level, `<slot>$N` inside a slot. Hosts are `<h-island data-island="id">`.
+- `defer` holds the sealed token of a deferred server slot (below).
 
-```json
-{ "type": "state", "full": false, "states": {}, "changed": ["a"] }
-```
+## Deferred Server Slots
 
-### Invalid: removed key present in states
+`<Slot name="cart" mode="server" server:defer fallback={…} cache="public, max-age=60">` renders the
+fallback during SSR and a token: the slot props, componentId, slot name, buildId and capability,
+encrypted with AES-GCM using a key derived (HKDF-SHA256, `state-surface/defer/v1`) from
+`SURFACE_SECRET` (or the build-generated secret; `SURFACE_SECRET_PREVIOUS` decrypts during
+rotation; secrets shorter than 32 bytes are rejected).
 
-```json
-{ "type": "state", "full": false, "states": { "a": { "x": 1 } }, "removed": ["a"] }
-```
-
-### Invalid: same key in changed and removed
-
-```json
-{
-  "type": "state",
-  "full": false,
-  "states": { "a": { "x": 1 } },
-  "changed": ["a"],
-  "removed": ["a"]
-}
-```
-
-### Invalid: accumulate with removed
-
-```json
-{
-  "type": "state",
-  "accumulate": true,
-  "states": { "chat:current": { "text": "x" } },
-  "removed": ["chat:typing"]
-}
-```
-
-### Invalid: accumulate as first frame in stream
-
-Accumulate presupposes an existing baseline. The first frame must always be full.
-Using accumulate as the first frame is a protocol violation — runtime behavior is undefined.
-
-## Error/Done Handling Contract
-
-- Error key convention: `system:error` (anchor is recommended, not required)
-- If matching error anchor exists, render error template as full state
-- If no matching anchor exists, stop stream and surface error
-- `done` means flush queued frames, then end stream
+- `GET {BASE_PATH}/_surface/island/:componentId?p=<token>` (POST with the token as the body when it
+  is longer than 2 KB) passes the middleware, decrypts and checks the token (400 when invalid, 409
+  for another build), runs `load` and returns `{ "html": "…", "islands": [...] }`.
+- `Cache-Control` is `private, no-store` unless the slot declares `cache` (GET only).
+- The browser requests every deferred slot in parallel, drops a response when a transition already
+  changed the slot, retries once after 1 s, then keeps the fallback and calls `reportError`.

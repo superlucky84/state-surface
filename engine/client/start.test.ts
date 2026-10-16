@@ -7,10 +7,17 @@ import { startLoader } from './start.js';
 const flush = () => new Promise(resolve => setTimeout(resolve, 30));
 
 function ndjson() {
-  return new Response('{"type":"state","states":{}}\n{"type":"done"}\n', {
+  return new Response('{"type":"patch","reset":true,"ops":[]}\n{"type":"done"}\n', {
     headers: { 'content-type': 'application/x-ndjson' },
   });
 }
+const bootstrap = (value: Record<string, unknown>) =>
+  `<script id="__SURFACE__" type="application/json">${JSON.stringify({
+    buildId: 'b1',
+    pageId: 'index',
+    basePath: '',
+    ...value,
+  })}</script>`;
 
 describe('startLoader', () => {
   afterEach(() => {
@@ -25,10 +32,11 @@ describe('startLoader', () => {
       'fetch',
       vi.fn(async (url: string, init: RequestInit) => {
         calls.push([url, JSON.parse(String(init.body))]);
+        expect(init.headers).toMatchObject({ 'X-Surface-Build': 'b1', 'X-Surface-Page': 'index' });
         return ndjson();
       })
     );
-    document.head.innerHTML = '<script id="__BASE_PATH__" type="application/json">"/demo"</script>';
+    document.head.innerHTML = bootstrap({ basePath: '/demo' });
     document.body.innerHTML = '<button data-action="like" data-params=\'{"id":7}\'>Like</button>';
     const loader = startLoader();
     document.querySelector('button')!.click();
@@ -50,10 +58,41 @@ describe('startLoader', () => {
         return ndjson();
       })
     );
-    document.head.innerHTML =
-      '<script id="__BOOT__" type="application/json">[{"transition":"first","params":{}},{"transition":"second","params":{}}]</script>';
+    document.head.innerHTML = bootstrap({
+      boot: [
+        { transition: 'first', params: {} },
+        { transition: 'second', params: {} },
+      ],
+    });
     await startLoader().runtime();
     expect(calls).toEqual(['/transition/first', '/transition/second']);
+  });
+
+  it('starts the runtime for deferred slots and requests them in parallel (DC-21)', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return Response.json({ html: `<p>${url.includes('a.tsx') ? 'A' : 'B'}</p>` });
+      })
+    );
+    document.head.innerHTML = bootstrap({
+      slots: [
+        { id: 'a', mode: 'server', component: 'a.tsx#default', defer: 'tokA' },
+        { id: 'b', mode: 'server', component: 'b.tsx#default', defer: 'tokB' },
+      ],
+    });
+    document.body.innerHTML =
+      '<h-state name="a"><p>loading</p></h-state><h-state name="b"><p>loading</p></h-state>';
+    await startLoader().runtime();
+    await flush();
+    expect(calls).toEqual([
+      '/_surface/island/a.tsx%23default?p=tokA',
+      '/_surface/island/b.tsx%23default?p=tokB',
+    ]);
+    expect(document.querySelector('h-state[name="a"]')!.innerHTML).toBe('<p>A</p>');
+    expect(document.querySelector('h-state[name="b"]')!.innerHTML).toBe('<p>B</p>');
   });
 
   it('does not load the action runtime without actions, boot or debug', async () => {

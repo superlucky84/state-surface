@@ -5,19 +5,28 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StateSurface } from './stateSurface.js';
 import type { TraceEvent } from './stateSurface.js';
 import { attachDevOverlay } from './devOverlay.js';
+import { ComponentHost } from './componentHost.js';
+import { SlotDom } from './slotDom.js';
 
-function createMockSurface() {
+function createMockSurface(props: Record<string, Record<string, unknown>> = {}) {
   const traces: TraceEvent[] = [];
+  const host = new ComponentHost({ loaders: {} });
   const surface = new StateSurface({
-    renderTemplate: () => {},
-    hydrateTemplate: () => () => {},
-    updateTemplate: () => {},
-    unmountTemplate: () => {},
+    bootstrap: { buildId: 'b', pageId: 'p', basePath: '' },
+    slots: Object.entries(props).map(([id, value]) => ({
+      id,
+      mode: 'client' as const,
+      component: `${id}#default`,
+      props: value,
+    })),
+    host,
+    dom: new SlotDom(host, undefined),
     trace: event => traces.push(event),
-    frameBudgetMs: 1000,
   });
   return { surface, traces };
 }
+const setStates = (surface: StateSurface, states: Record<string, unknown>) =>
+  Object.defineProperty(surface, 'activeStates', { value: states, configurable: true });
 
 function setDebugMode(enabled: boolean) {
   // happy-dom supports location manipulation
@@ -53,8 +62,7 @@ describe('devOverlay', () => {
 
   it('shows initial activeStates', () => {
     setDebugMode(true);
-    const { surface } = createMockSurface();
-    surface.activeStates = { 'page:article': { id: 1 } };
+    const { surface } = createMockSurface({ 'page:article': { id: 1 } });
 
     attachDevOverlay(surface);
 
@@ -69,7 +77,7 @@ describe('devOverlay', () => {
     attachDevOverlay(surface);
 
     // Simulate a trace event
-    surface.activeStates = { test: { v: 42 } };
+    setStates(surface, { test: { v: 42 } });
     surface.trace?.({ kind: 'applied', detail: { full: true, stateCount: 1 } });
 
     const statesPanel = document.querySelector('[data-panel="states"]');

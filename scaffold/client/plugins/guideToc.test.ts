@@ -4,7 +4,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { guideToc } from './guideToc.js';
 
-
 function installAnimationFrameStub() {
   globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
     cb(0);

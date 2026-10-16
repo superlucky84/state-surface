@@ -11,10 +11,10 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="uipatch:controls" client:load>
+        <Slot name="uipatch:controls" mode="server">
           <UiPatchControls {...content['uipatch:controls']} />
         </Slot>
-        <Slot name="uipatch:preview" client:load>
+        <Slot name="uipatch:preview" mode="server">
           <UiPatchPreview {...content['uipatch:preview']} />
         </Slot>
       </main>

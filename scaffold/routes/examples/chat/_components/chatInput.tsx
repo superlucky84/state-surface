@@ -5,8 +5,8 @@ type ChatInputProps = {
   hint?: string;
 };
 
-// history is no longer a form field — the chatMessages component accumulates
-// conversation history client-side via Lithent local state.
+// The conversation history lives on the server (history.server.ts); the input is a server
+// slot re-rendered empty after each message, and its id lets the engine restore focus.
 const ChatInput = ({ placeholder, submitLabel, lang, hint }: ChatInputProps) => (
   <form
     data-action="chat"
@@ -16,6 +16,7 @@ const ChatInput = ({ placeholder, submitLabel, lang, hint }: ChatInputProps) => 
     <input type="hidden" name="lang" value={lang ?? 'en'} />
     <div class="flex gap-2">
       <input
+        id="chat-message"
         name="message"
         type="text"
         placeholder={placeholder ?? 'Type a message...'}

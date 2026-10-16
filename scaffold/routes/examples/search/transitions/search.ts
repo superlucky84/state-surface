@@ -38,8 +38,6 @@ async function* search(
     },
     changed: ['search:results'],
   };
-
-  yield { type: 'done' };
 }
 
 export default defineTransition('search', search);

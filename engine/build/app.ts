@@ -5,12 +5,26 @@ import {
   type ImportBinding,
   type IslandUse,
   type ModuleAnalysis,
+  type SlotFacts,
 } from './analyze.js';
 import { SurfaceBuildError } from './diagnostics.js';
 import { scanRoutes, type ScannedRoute } from './routeScanner.js';
 import type { PagePlugin } from '../server/ssrRenderer.js';
 
 export type Resolve = (source: string, importer: string) => Promise<string | undefined>;
+
+/** A module export the server manifest imports (component or schema). */
+export interface ExportRef {
+  file: string;
+  exportName: string;
+}
+
+/** One Slot of a page as the server sees it when projecting transitions (DESIGN 6.2). */
+export interface PageSlotFacts extends Omit<SlotFacts, 'schema'> {
+  componentId: string;
+  component: ExportRef;
+  schema?: ExportRef;
+}
 
 const SCRIPT = /\.(?:[cm]?[jt]sx?)$/;
 
@@ -92,8 +106,7 @@ export class SurfaceAnalyzer {
     if (server && slotMode !== 'server')
       fail(`<Slot name="${use.slot!.name}">: defineServerComponent children need mode="server".`);
     if (target.usesSlot) fail(`<${use.local}> renders a <Slot>; Slots cannot be nested.`);
-    const clientRendered =
-      use.kind === 'island' || (slotMode !== 'server' && slotMode !== 'static');
+    const clientRendered = use.kind === 'island' || slotMode === 'client';
     if (clientRendered && target.usesBoot)
       fail(`<${use.local}> is rendered on the client and cannot contain <Boot>.`);
     if (clientRendered && target.islands.length)
@@ -127,6 +140,7 @@ export class SurfaceAnalyzer {
     const client = new Map<string, { file: string; exportName: string }>();
     const plugins = new Map<string, { file: string; exportName: string }>();
     const pagePlugins = new Map<string, PagePlugin[]>();
+    const pageSlots = new Map<string, PageSlotFacts[]>();
     const files = new Set<string>();
     for (const page of pages) {
       const facts = await this.module(page.filePath);
@@ -138,6 +152,8 @@ export class SurfaceAnalyzer {
       const names = new Map<string, string>();
       const declared: PagePlugin[] = [];
       pagePlugins.set(page.filePath, declared);
+      const slots: PageSlotFacts[] = [];
+      pageSlots.set(page.filePath, slots);
       const seen = new Set<string>();
       const queue = [page.filePath];
       while (queue.length) {
@@ -160,12 +176,19 @@ export class SurfaceAnalyzer {
         for (const use of module.islands) {
           const target = await this.resolve(use.binding.source, file);
           if (!target) continue;
-          const mode = use.slot?.mode;
-          if (use.kind === 'island' || (mode !== 'server' && mode !== 'static'))
-            client.set(this.componentId(target, use.binding), {
-              file: target,
-              exportName: use.binding.imported,
+          const componentId = this.componentId(target, use.binding);
+          const component = { file: target, exportName: use.binding.imported };
+          if (use.kind === 'island' || use.slot?.mode === 'client')
+            client.set(componentId, component);
+          if (use.slot) {
+            const { schema, ...facts } = use.slot;
+            slots.push({
+              ...facts,
+              componentId,
+              component,
+              ...(schema ? { schema: await this.schemaRef(module, file, schema.local) } : {}),
             });
+          }
         }
         for (const use of module.plugins) {
           const target = await this.resolve(use.binding.source, file);
@@ -190,7 +213,19 @@ export class SurfaceAnalyzer {
         }
       }
     }
-    return { pages, client, plugins, pagePlugins, files };
+    return { pages, client, plugins, pagePlugins, pageSlots, files };
+  }
+
+  /** `schema={x}`: an imported binding or a module-level export of the declaring module. */
+  private async schemaRef(module: ModuleAnalysis, file: string, local: string): Promise<ExportRef> {
+    const binding = module.imports.get(local);
+    if (binding && binding.imported !== '*') {
+      const target = await this.resolve(binding.source, file);
+      if (target) return { file: target, exportName: binding.imported };
+    }
+    const exported = module.exports.get(local);
+    if (exported) return { file, exportName: exported };
+    throw new SurfaceBuildError(`Cannot resolve schema \`${local}\`.`, { file });
   }
 }
 

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { createDemo } from '../../testing/server.js';
+import { createDemo, surfaceHeaders } from '../../testing/server.js';
+import { decodeFrames } from '../shared/ndjson.js';
+import type { Op, PatchFrame, WireFrame } from '../shared/protocol.js';
 
 let app: any;
 beforeAll(async () => {
@@ -22,12 +24,17 @@ describe('demo SSR page', () => {
     expect(res.text).toContain('StateSurface');
     expect(res.text).not.toContain('data-ssr-hash');
 
-    // __STATE__ script present
-    expect(res.text).toContain('id="__STATE__"');
-    expect(res.text).toContain('page:header');
-    expect(res.text).toContain('page:hero');
-    expect(res.text).toContain('page:concepts');
-    expect(res.text).toContain('page:features');
+    // One bootstrap: every home slot is a server slot (no client code, no props).
+    const bootstrap = JSON.parse(res.text.match(/id="__SURFACE__"[^>]*>(.*?)<\/script>/)![1]);
+    expect(bootstrap).toMatchObject({ pageId: 'index', basePath: '' });
+    expect(bootstrap.slots).toEqual([
+      { id: 'page:header', mode: 'server' },
+      { id: 'page:hero', mode: 'server' },
+      { id: 'page:concepts', mode: 'server' },
+      { id: 'page:features', mode: 'server' },
+      { id: 'system:error', mode: 'server' },
+    ]);
+    expect(res.text).not.toContain('__STATE__');
   });
 
   it('GET / keeps cross-page slots out of home surface', async () => {
@@ -67,219 +74,132 @@ describe('demo SSR page', () => {
   });
 });
 
-describe('demo transitions', () => {
-  it('guide-load streams correct NDJSON frames', async () => {
-    const res = await request(app)
-      .post('/transition/guide-load')
-      .send({ slug: 'surface' })
-      .set('Content-Type', 'application/json');
+async function transition(name: string, params: Record<string, unknown>, page: string) {
+  const res = await request(app)
+    .post(`/transition/${name}`)
+    .set(surfaceHeaders(page))
+    .send(params)
+    .set('Content-Type', 'application/json');
+  expect(res.status).toBe(200);
+  return { res, frames: decodeFrames<WireFrame>(res.text) };
+}
+const patches = (frames: WireFrame[]) => frames.filter((f): f is PatchFrame => f.type === 'patch');
+const op = (frame: WireFrame, slot: string, kind: string) =>
+  (frame as PatchFrame).ops.find(item => item.slot === slot && kind in item) as
+    | (Op & Record<string, any>)
+    | undefined;
 
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // First frame: full state
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].states).toHaveProperty('page:header');
-    expect(lines[0].states).toHaveProperty('guide:toc');
-    expect(lines[0].states).toHaveProperty('guide:content');
-
-    // Second frame: partial content update
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-    expect(lines[1].changed).toContain('guide:content');
-    expect(lines[1].states['guide:content'].sections.length).toBeGreaterThan(0);
-
-    // Third frame: done
-    expect(lines[2].type).toBe('done');
+describe('demo transitions (server slots → html ops)', () => {
+  it('guide-load: reset patch with the loading state, then the content, then done', async () => {
+    const { frames } = await transition('guide-load', { slug: 'surface' }, 'guide/[slug]');
+    expect(frames.map(f => f.type)).toEqual(['patch', 'patch', 'done']);
+    expect(frames[0]).toMatchObject({ reset: true });
+    expect(op(frames[0], 'page:header', 'html')).toBeDefined();
+    expect(op(frames[0], 'guide:toc', 'html')!.html).toContain('href="#');
+    expect(op(frames[1], 'guide:content', 'html')!.html).toContain('<h2');
   });
 
-  it('search streams correct NDJSON frames', async () => {
-    const res = await request(app)
-      .post('/transition/search')
-      .send({ query: 'streaming' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].states).toHaveProperty('search:input');
-    expect(lines[0].states).toHaveProperty('search:results');
-
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-    expect(lines[1].changed).toContain('search:results');
-    expect(lines[1].states['search:results'].items.length).toBeGreaterThan(0);
-
-    expect(lines[2].type).toBe('done');
+  it('search: header, input and loading results first, results second', async () => {
+    const { frames } = await transition('search', { query: 'streaming' }, 'examples/search');
+    expect(frames.map(f => f.type)).toEqual(['patch', 'patch', 'done']);
+    expect(op(frames[0], 'search:input', 'html')!.html).toContain('value="streaming"');
+    expect(op(frames[0], 'search:results', 'html')).toBeDefined();
+    expect(op(frames[1], 'search:results', 'html')!.html).toContain('/examples/streaming');
   });
 
-  it('stream-demo streams full sequence frames', async () => {
-    const res = await request(app)
-      .post('/transition/stream-demo')
-      .send({ mode: 'full-sequence' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // Full → partial(changed) → accumulate → partial(removed) → full → done
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].full).not.toBe(false);
-
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-    expect(lines[1].changed).toContain('demo:timeline');
-
-    expect(lines[2].type).toBe('state');
-    expect(lines[2].accumulate).toBe(true);
-    expect(lines[2].states['demo:timeline'].frames).toHaveLength(1);
-
-    expect(lines[3].type).toBe('state');
-    expect(lines[3].full).toBe(false);
-    expect(lines[3].removed).toContain('demo:output');
-
-    expect(lines[4].type).toBe('state');
-    expect(lines[4].full).not.toBe(false);
-
-    expect(lines[5].type).toBe('done');
+  it('stream-demo: full → partial → accumulate → removed → full, done from the engine', async () => {
+    const { frames } = await transition(
+      'stream-demo',
+      { mode: 'full-sequence' },
+      'examples/streaming'
+    );
+    const list = patches(frames);
+    expect(frames.at(-1)).toEqual({ type: 'done' });
+    expect(list[0].reset).toBe(true);
+    expect(list.some(p => op(p, 'demo:output', 'remove'))).toBe(true);
+    expect(list.at(-1)!.reset).toBe(true);
+    expect(op(list.at(-1)!, 'demo:output', 'html')!.html).toContain('restored');
+    // The accumulated timeline entry is rendered by the server (DC-10).
+    expect(list.some(p => op(p, 'demo:timeline', 'html')?.html.includes('Accumulate'))).toBe(true);
   });
 
-  it('switch-lang transition yields full frame with target language', async () => {
-    const res = await request(app)
-      .post('/transition/switch-lang')
-      .send({ lang: 'ko', page: 'home' })
-      .set('Content-Type', 'application/json');
+  it('stream-demo error mode ends with an error frame for the error slot', async () => {
+    const { frames } = await transition(
+      'stream-demo',
+      { mode: 'error-demo' },
+      'examples/streaming'
+    );
+    expect(frames.at(-1)).toMatchObject({
+      type: 'error',
+      slot: 'system:error',
+      message: expect.stringContaining('demonstration error'),
+    });
+    expect((frames.at(-1) as { html: string }).html).toContain('demonstration error');
+  });
 
-    expect(res.status).toBe(200);
-
-    // Verify Set-Cookie header
+  it('switch-lang sets the cookie and re-renders the page in the target language', async () => {
+    const { res, frames } = await transition('switch-lang', { lang: 'ko', page: 'home' }, 'index');
     const cookies = res.headers['set-cookie'];
-    expect(cookies).toBeDefined();
-    const cookieStr = Array.isArray(cookies) ? cookies.join('; ') : cookies;
-    expect(cookieStr).toContain('lang=ko');
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // Full frame with Korean content
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].states['page:header'].lang).toBe('ko');
-    expect(lines[0].states['page:hero'].badge).toContain('상태-레이아웃');
-
-    expect(lines[1].type).toBe('done');
+    expect(Array.isArray(cookies) ? cookies.join('; ') : cookies).toContain('lang=ko');
+    expect(frames.map(f => f.type)).toEqual(['patch', 'done']);
+    expect(op(frames[0], 'page:hero', 'html')!.html).toContain('상태-레이아웃');
+    const english = await transition('switch-lang', { lang: 'en', page: 'home' }, 'index');
+    expect(op(english.frames[0], 'page:hero', 'html')!.html).toContain(
+      'State-Layout Mapping Runtime'
+    );
   });
 
-  it('switch-lang to English yields English content', async () => {
-    const res = await request(app)
-      .post('/transition/switch-lang')
-      .send({ lang: 'en', page: 'home' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const cookieStr = Array.isArray(res.headers['set-cookie'])
-      ? res.headers['set-cookie'].join('; ')
-      : res.headers['set-cookie'];
-    expect(cookieStr).toContain('lang=en');
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    expect(lines[0].states['page:header'].lang).toBe('en');
-    expect(lines[0].states['page:hero'].badge).toBe('State-Layout Mapping Runtime');
+  it('action-demo: reset patch then the processed result', async () => {
+    const { frames } = await transition(
+      'action-demo',
+      { type: 'button', variant: 'primary' },
+      'examples/actions'
+    );
+    expect(frames.map(f => f.type)).toEqual(['patch', 'patch', 'done']);
+    expect(op(frames[1], 'actions:playground', 'html')!.html).toContain('processed');
+    expect(op(frames[1], 'actions:log', 'html')!.html).toContain('DONE');
   });
 
-  it('action-demo streams correct NDJSON frames', async () => {
-    const res = await request(app)
-      .post('/transition/action-demo')
-      .send({ type: 'button', variant: 'primary' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].states).toHaveProperty('actions:playground');
-    expect(lines[0].states).toHaveProperty('actions:log');
-
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-    expect(lines[1].changed).toContain('actions:playground');
-
-    expect(lines[2].type).toBe('done');
+  it('ui-patch-demo theme: ui ops after content, partial keeps the patch', async () => {
+    const { frames } = await transition(
+      'ui-patch-demo',
+      { action: 'theme', theme: 'warning' },
+      'examples/ui-patch'
+    );
+    const ui = op(frames[0], 'uipatch:preview', 'ui')!.ui;
+    expect(ui.classAdd).toContain('tone-warning');
+    expect(ui.cssVars).toHaveProperty('--card-accent');
+    const ops = (frames[0] as PatchFrame).ops;
+    expect(ops.findIndex(o => 'ui' in o)).toBeGreaterThan(ops.findIndex(o => 'html' in o));
+    expect(op(frames[1], 'uipatch:preview', 'ui')).toBeUndefined();
   });
 
-  it('ui-patch-demo streams full frame with ui field', async () => {
-    const res = await request(app)
-      .post('/transition/ui-patch-demo')
-      .send({ action: 'theme', theme: 'warning' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // Frame 1: full with ui
-    expect(lines[0].type).toBe('state');
-    expect(lines[0].states).toHaveProperty('uipatch:preview');
-    expect(lines[0].ui).toHaveProperty('uipatch:preview');
-    expect(lines[0].ui['uipatch:preview'].classAdd).toContain('tone-warning');
-    expect(lines[0].ui['uipatch:preview'].cssVars).toHaveProperty('--card-accent');
-
-    // Frame 2: partial update
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-
-    // Done
-    expect(lines[2].type).toBe('done');
+  it('ui-patch-demo style-only: a ui op without content', async () => {
+    const { frames } = await transition(
+      'ui-patch-demo',
+      { action: 'style-only', theme: 'success' },
+      'examples/ui-patch'
+    );
+    expect(frames[1]).toEqual({
+      type: 'patch',
+      ops: [
+        { slot: 'uipatch:preview', ui: expect.objectContaining({ classAdd: ['tone-success'] }) },
+      ],
+    });
   });
 
-  it('ui-patch-demo style-only sends uiChanged without changed', async () => {
+  it('vt-demo is an action-level View Transition with a public not-found error', async () => {
+    const ok = await transition('vt-demo', {}, 'examples/view-transition');
+    expect(ok.res.headers['x-surface-view-transition']).toBe('1');
+    // A failure before the first frame is a 500 whose body is still the error frame.
     const res = await request(app)
-      .post('/transition/ui-patch-demo')
-      .send({ action: 'style-only', theme: 'success' })
-      .set('Content-Type', 'application/json');
-
-    expect(res.status).toBe(200);
-
-    const lines = res.text
-      .trim()
-      .split('\n')
-      .map((l: string) => JSON.parse(l));
-
-    // Frame 1: full (no ui)
-    expect(lines[0].type).toBe('state');
-
-    // Frame 2: style-only partial with uiChanged
-    expect(lines[1].type).toBe('state');
-    expect(lines[1].full).toBe(false);
-    expect(lines[1].uiChanged).toContain('uipatch:preview');
-    expect(lines[1].ui['uipatch:preview'].classAdd).toContain('tone-success');
-
-    expect(lines[2].type).toBe('done');
+      .post('/transition/vt-demo')
+      .set(surfaceHeaders('examples/view-transition'))
+      .send({ card: 'missing' });
+    expect(res.status).toBe(500);
+    expect(decodeFrames<WireFrame>(res.text).at(-1)).toMatchObject({
+      type: 'error',
+      message: 'Card "missing" not found',
+    });
   });
 });

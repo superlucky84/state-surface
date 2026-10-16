@@ -7,13 +7,16 @@ The runtime core lives in `engine/`:
 - `engine/server/core/` for Web Request/Response routing, context, middleware, and streaming.
 - `engine/adapters/` for Node, Express, Bun, Deno, and Cloudflare transports/static assets.
 - `engine/build/` and `engine/vite.ts` for page discovery, the oxc call-site transform, diagnostics and generated manifests.
-- `engine/client/` for browser runtime and transition application.
-- `engine/shared/` for protocol, NDJSON parsing, and shared contracts.
+- `engine/server/projection.ts` and `transitionResponse.ts` for the request reducer and slot projection
+  (authoring frames → per-slot `html`/`props`/`merge`/`remove`/`ui` ops).
+- `engine/client/` for the browser runtime: loader, component host, patch apply pipeline, morph chunk.
+- `engine/shared/` for the two-layer protocol, NDJSON parsing, capability helpers, and shared contracts.
 
 User/project code lives in `client/`, `layouts/`, `routes/`, and `shared/`. Pages are `routes/**/*.tsx`
 (files and folders starting with `_` are not pages); slot components live in `_components/` next to pages.
 Scaffolding CLI lives in `create-state-surface/` (GitHub tarball에서 `scaffold/` 추출). `scaffold/`는 `pnpm build` 시 루트 파일 + `create-state-surface/overrides/`로 자동 생성.
-The StateSurface 2.0 plan is `docs/surface-expansion/` (REQUIREMENTS → DESIGN → IMPLEMENT → MANUAL_TEST_CHECKLIST). Other primary docs are active `docs/ui-protocol/DESIGN.md`, `NEXT_IDEA.md`, `PROTOCOL.md`, and archive docs in `docs/completed/` (`DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`).
+The StateSurface 2.0 plan is `docs/surface-expansion/` (REQUIREMENTS → DESIGN → IMPLEMENT → MANUAL_TEST_CHECKLIST). Other primary docs are `PROTOCOL.md` (two-layer contract), `NEXT_IDEA.md`, the superseded
+`docs/ui-protocol/DESIGN.md`, and archive docs in `docs/completed/` (`DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`).
 
 ## Build, Test, and Development Commands
 

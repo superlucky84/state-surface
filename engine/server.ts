@@ -1,4 +1,4 @@
-export { defineTransition } from './server/transition.js';
+export { defineTransition, TransitionError } from './server/transition.js';
 export { defineServerComponent } from './server/serverComponent.js';
 export type { ServerComponent, ServerComponentDefinition } from './server/serverComponent.js';
 export { resolveAsset, resolveAssetCss } from './server/assets.js';
@@ -10,5 +10,11 @@ export type { SurfaceContext, Middleware, CookieOptions } from './server/core/co
 export type { HandlerOptions, SurfaceHandler } from './server/core/handler.js';
 export type { ServerManifest, AssetManifest, DocumentConfig } from './server/core/manifest.js';
 export type { PageFunction, PageModule, StaticPath } from './shared/routeModule.js';
-export type { TransitionHandler } from './server/transition.js';
+export type {
+  TransitionHandler,
+  TransitionDefinition,
+  TransitionOptions,
+} from './server/transition.js';
+export type { TransitionLimits } from './server/projection.js';
+export type { PageDefinition, PageSlotDefinition, StandardSchema } from './server/core/manifest.js';
 export type { LogLevel, Logger } from './server/logger.js';

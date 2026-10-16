@@ -13,7 +13,7 @@ import type { WDom } from 'lithent';
 const NODE = Symbol.for('state-surface.node');
 
 export type SlotMode = 'static' | 'server' | 'client';
-export type Capability = 'strict' | 'rich' | 'unsafe' | 'external';
+export type Capability = 'strict' | 'rich' | 'unsafe';
 /** Namespaced engine attributes such as `client:idle` or `client:media="(…)"`. */
 export type Directives = Record<string, string | true>;
 
@@ -49,11 +49,19 @@ export interface SlotMarker {
   child: ComponentDescriptor;
   empty: boolean;
   fallback?: unknown;
-  /** Defaults to `strict` (DC-13); enforcement arrives with server HTML projection. */
+  /** Defaults to `strict` (DC-13). */
   capability: Capability;
+  /** `capability="unsafe" sandbox="iframe"`: render into a sandboxed iframe `srcdoc`. */
+  sandbox?: 'iframe';
   resetKey?: string | string[];
   swap?: 'replace' | 'morph';
   viewTransition?: boolean;
+  /** `server:defer` (DC-21): SSR writes the fallback and the browser fetches the content. */
+  defer: boolean;
+  cache?: string;
+  /** Accepts frames from `ctx.external()`, validated by `schema` (DESIGN 8.1). */
+  external?: boolean;
+  schema?: unknown;
 }
 
 export interface IslandMarker extends ComponentDescriptor {
@@ -133,6 +141,8 @@ function splitDirectives(props: Record<string, unknown>, where: string) {
     const [namespace, directive] = key.split(':');
     if (namespace === 'client' && !(CLIENT_DIRECTIVES as readonly string[]).includes(directive))
       throw new SurfaceError(`${where}: unknown directive "${key}".`);
+    if (namespace === 'server' && directive !== 'defer')
+      throw new SurfaceError(`${where}: unknown directive "${key}".`);
     if (key === 'client:media' ? typeof value !== 'string' || !value : value !== true)
       throw new SurfaceError(
         key === 'client:media'
@@ -186,11 +196,15 @@ const SLOT_KEYS = new Set([
   'resetKey',
   'swap',
   'viewTransition',
+  'sandbox',
+  'cache',
+  'external',
+  'schema',
   'key',
   '__ssComponentId',
 ]);
 const MODES = new Set(['static', 'server', 'client']);
-const CAPABILITIES = new Set(['strict', 'rich', 'unsafe', 'external']);
+const CAPABILITIES = new Set(['strict', 'rich', 'unsafe']);
 
 export interface SlotProps {
   /** Stable transition target, unique within the page. */
@@ -200,10 +214,21 @@ export interface SlotProps {
   component?: (props: any, children?: any) => unknown;
   fallback?: unknown;
   capability?: Capability;
+  /** With `capability="unsafe"`: isolate the HTML in a sandboxed iframe. */
+  sandbox?: 'iframe';
   resetKey?: string | string[];
+  /** Server slots: how `html` updates are applied (DC-03). */
   swap?: 'replace' | 'morph';
+  /** Wrap this slot's changes (first appearance included) in a View Transition (DC-06). */
   viewTransition?: boolean;
+  /** Server slot rendered after the page (DC-21); SSR writes `fallback`. */
   'server:defer'?: boolean;
+  /** Deferred response `Cache-Control` (default `private, no-store`). */
+  cache?: string;
+  /** Accepts frames from `ctx.external()`; requires `schema`. */
+  external?: boolean;
+  /** Standard Schema validating external frames for this slot. */
+  schema?: unknown;
   /** The single child component element; its props are the slot state. */
   children?: unknown;
   class?: string;
@@ -245,6 +270,18 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
   const capability = (rest.capability as Capability | undefined) ?? 'strict';
   if (!CAPABILITIES.has(capability))
     throw new SurfaceError(`${where}: unknown capability "${capability}".`);
+  const defer = directives['server:defer'] === true;
+  if (defer && mode !== 'server')
+    throw new SurfaceError(`${where}: server:defer needs mode="server".`);
+  if (
+    rest.swap !== undefined &&
+    (mode !== 'server' || !['replace', 'morph'].includes(rest.swap as string))
+  )
+    throw new SurfaceError(`${where}: swap="replace" | "morph" applies to mode="server" slots.`);
+  if (rest.sandbox !== undefined && (rest.sandbox !== 'iframe' || capability !== 'unsafe'))
+    throw new SurfaceError(`${where}: sandbox="iframe" needs capability="unsafe".`);
+  if (rest.external && rest.schema === undefined)
+    throw new SurfaceError(`${where}: an external slot needs a Standard Schema \`schema\`.`);
 
   const content = meaningful(children);
   let child: ComponentDescriptor;
@@ -289,9 +326,13 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
     empty: child.props === undefined,
     fallback: rest.fallback,
     capability,
+    ...(rest.sandbox ? { sandbox: 'iframe' as const } : {}),
     resetKey: rest.resetKey as string | string[] | undefined,
     swap: rest.swap as 'replace' | 'morph' | undefined,
-    viewTransition: rest.viewTransition as boolean | undefined,
+    viewTransition: rest.viewTransition === true,
+    defer,
+    ...(typeof rest.cache === 'string' ? { cache: rest.cache } : {}),
+    ...(rest.external ? { external: true, schema: rest.schema } : {}),
   });
 }
 

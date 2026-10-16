@@ -2,8 +2,9 @@ import { Window } from 'happy-dom';
 
 /**
  * Normalize an SSR document for semantic comparison: element tree with sorted attributes
- * and collapsed text, bootstrap JSON by script id, stylesheet hrefs and entry count.
- * Comments, script/link placement and the `data-component` slot attribute are ignored.
+ * and collapsed text, the bootstrap (base path, boot entries, rendered slot names), stylesheet
+ * hrefs and entry count. Comments, script/link placement and the `data-component` slot
+ * attribute are ignored.
  */
 function sortKeys(value) {
   if (Array.isArray(value)) return value.map(sortKeys);
@@ -31,6 +32,22 @@ export function normalizeDocument(html) {
   if (json.__BOOT__ && !Array.isArray(json.__BOOT__)) json.__BOOT__ = [json.__BOOT__];
   // Stage 3 per-page plugin list (the stage 1 runtime loaded every plugin globally).
   delete json.__PLUGINS__;
+  // Stage 4: one __SURFACE__ bootstrap. Compare what both versions express: base path,
+  // boot entries and the set of rendered slots. Server slot props are no longer sent (DC-09).
+  const bootstrap = {};
+  if (json.__SURFACE__) {
+    const surface = json.__SURFACE__;
+    bootstrap.basePath = surface.basePath;
+    bootstrap.boot = surface.boot ?? [];
+    bootstrap.slots = (surface.slots ?? [])
+      .map(slot => slot.id)
+      .filter(id => !id.includes('$'))
+      .sort();
+  } else if (json.__STATE__ || json.__BASE_PATH__ !== undefined) {
+    bootstrap.basePath = json.__BASE_PATH__ ?? '';
+    bootstrap.boot = json.__BOOT__ ?? [];
+    bootstrap.slots = Object.keys(json.__STATE__ ?? {}).sort();
+  }
   for (const link of Array.from(document.querySelectorAll('link[rel="modulepreload"]')))
     link.remove();
   const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(link => {
@@ -45,6 +62,8 @@ export function normalizeDocument(html) {
     if (node.nodeType !== 1) return undefined;
     const attributes = Array.from(node.attributes)
       .filter(attr => attr.name !== 'data-component')
+      // Stage 4: the chat input id lets server HTML replacement restore focus (DESIGN 4.3).
+      .filter(attr => !(attr.name === 'id' && attr.value === 'chat-message'))
       .map(attr => [attr.name, attr.value])
       .sort(([a], [b]) => a.localeCompare(b));
     const children = Array.from(node.childNodes)
@@ -54,7 +73,7 @@ export function normalizeDocument(html) {
   };
   const result = {
     tree: tree(document.documentElement),
-    json: sortKeys(json),
+    json: sortKeys(bootstrap),
     styles: styles.sort(),
     entry,
   };
