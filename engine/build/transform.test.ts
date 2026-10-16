@@ -217,6 +217,41 @@ describe('build diagnostics', () => {
   });
 });
 
+describe('plugin declarations', () => {
+  const plugin = (options: string) =>
+    analyzeModule(
+      `import { definePlugin } from 'state-surface/client';\nexport const p = definePlugin(${options});`,
+      '/app/client/p.ts'
+    );
+
+  it('reads literal load and slots of exported definePlugin() calls', () => {
+    const facts = plugin("{ name: 'p', load: 'visible', slots: ['a', 'b'], attach() {} }");
+    expect(facts.pluginDefinitions.get('p')).toEqual({ load: 'visible', slots: ['a', 'b'] });
+    expect(plugin("{ name: 'p' }").pluginDefinitions.get('p')).toEqual({ load: 'idle' });
+  });
+
+  it('rejects non-literal plugin options and plugins exports', () => {
+    expect(() => plugin("{ name: 'p', load: when }")).toThrow('`load` must be');
+    expect(() => plugin("{ name: 'p', slots: names }")).toThrow('`slots` must be an array');
+    expect(() => analyzeModule('export const plugins = list;', '/app/routes/a.tsx')).toThrow(
+      'array literal'
+    );
+    expect(() =>
+      analyzeModule('const local = {};\nexport const plugins = [local];', '/app/routes/a.tsx')
+    ).toThrow('statically imported definePlugin() exports');
+  });
+
+  it('records the plugins a page declares', () => {
+    const facts = analyzeModule(
+      "import { scroll } from '../client/scroll';\nexport const plugins = [scroll];\nexport default () => <html />;",
+      '/app/routes/a.tsx'
+    );
+    expect(facts.plugins.map(entry => [entry.local, entry.binding])).toEqual([
+      ['scroll', { source: '../client/scroll', imported: 'scroll' }],
+    ]);
+  });
+});
+
 describe('app analysis', () => {
   it('collects client components reachable from demo pages', async () => {
     const real = new SurfaceAnalyzer(
@@ -238,6 +273,17 @@ describe('app analysis', () => {
     );
     const app = await real.app();
     expect(app.pages).toHaveLength(9);
+    const pluginsOf = (page: string) =>
+      app.pagePlugins.get(path.resolve('routes', page))?.map(plugin => [plugin.id, plugin.load]);
+    expect(pluginsOf('guide/[slug].tsx')).toEqual([
+      ['client/plugins/prism.ts#prism', 'load'],
+      ['client/plugins/guideToc.ts#guideToc', 'idle'],
+    ]);
+    expect(pluginsOf('examples/chat.tsx')).toEqual([
+      ['client/plugins/chatScroll.ts#chatScroll', 'load'],
+    ]);
+    expect(pluginsOf('index.tsx')).toEqual([]);
+    expect(app.plugins.size).toBe(3);
     expect([...app.client.keys()]).toContain('routes/_shared/components/pageHeader.tsx#default');
     expect([...app.client.keys()]).toContain(
       'routes/examples/chat/_components/chatTyping.tsx#default'

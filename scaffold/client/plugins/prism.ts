@@ -4,7 +4,7 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-tsx';
-import type { StateSurfacePlugin } from 'state-surface/client';
+import { definePlugin } from 'state-surface/client';
 
 function readRawSource(el: HTMLElement): string {
   const stored = el.getAttribute('data-prism-raw');
@@ -50,17 +50,21 @@ function highlightAfterRender(root: Element) {
   setTimeout(() => highlight(root), 0);
 }
 
-export function prismPlugin(): StateSurfacePlugin {
-  return {
-    name: 'prism',
-    onMount(_slotName, el) {
-      highlight(el);
-      // Some DOM updates can finalize after hook timing; re-apply once on next frame.
-      highlightAfterRender(el);
-    },
-    onUpdate(_slotName, el) {
-      highlight(el);
-      highlightAfterRender(el);
-    },
-  };
-}
+/**
+ * Highlights guide code blocks after the slot renders or updates. Loaded only on pages that
+ * declare it (`export const plugins = [prism]`).
+ */
+export const prism = definePlugin({
+  name: 'prism',
+  slots: ['guide:content'],
+  load: 'load',
+  attach(el) {
+    highlight(el);
+    // Some DOM updates can finalize after hook timing; re-apply once on next frame.
+    highlightAfterRender(el);
+  },
+  update(el) {
+    highlight(el);
+    highlightAfterRender(el);
+  },
+});

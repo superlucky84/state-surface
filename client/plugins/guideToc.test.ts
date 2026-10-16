@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { guideTocPlugin } from './guideToc.js';
+import { guideToc } from './guideToc.js';
 
 function installAnimationFrameStub() {
   globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
@@ -53,7 +53,7 @@ function createGuideTocDom() {
   return { slot, activeLink };
 }
 
-describe('guideTocPlugin', () => {
+describe('guideToc plugin', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     installAnimationFrameStub();
@@ -65,7 +65,7 @@ describe('guideTocPlugin', () => {
     const scrollSpy = vi.fn();
     activeLink.scrollIntoView = scrollSpy;
 
-    guideTocPlugin().onMount?.('guide:toc', slot, {});
+    guideToc.attach(slot);
 
     expect(scrollSpy).toHaveBeenCalledTimes(1);
     expect(scrollSpy).toHaveBeenCalledWith({
@@ -81,7 +81,7 @@ describe('guideTocPlugin', () => {
     const scrollSpy = vi.fn();
     activeLink.scrollIntoView = scrollSpy;
 
-    guideTocPlugin().onUpdate?.('guide:toc', slot, {});
+    guideToc.update(slot);
 
     expect(scrollSpy).not.toHaveBeenCalled();
   });

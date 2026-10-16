@@ -18,7 +18,13 @@ export interface StateSurfaceOptions {
   hydrateTemplate: TemplateHydrator;
   updateTemplate: TemplateUpdater;
   unmountTemplate: (name: string, el: HTMLElement) => void;
-  plugins?: StateSurfacePlugin[];
+  /**
+   * Whether frames may change the slot's content. Static and server slots keep their SSR
+   * HTML (V-01); UI patches still apply. Defaults to every anchor.
+   */
+  isUpdatable?: (name: string, el: HTMLElement) => boolean;
+  /** Action start/end notifications (client plugins' `onAction`). */
+  onAction?: (event: { name: string; phase: 'start' | 'end'; error?: Error }) => void;
   maxQueue?: number;
   frameBudgetMs?: number;
   transitionTimeout?: number;
@@ -28,16 +34,6 @@ export interface StateSurfaceOptions {
 
 export interface TransitionOptions {
   pendingTargets?: string[];
-}
-
-export interface StateSurfacePlugin {
-  name: string;
-  onInit?(surface: StateSurface): void;
-  onMount?(slotName: string, el: Element, data: unknown): void;
-  onUpdate?(slotName: string, el: Element, data: unknown): void;
-  onUnmount?(slotName: string, el: Element): void;
-  onTransitionStart?(name: string): void;
-  onTransitionEnd?(name: string, error?: Error): void;
 }
 
 // ── StateSurface ──
@@ -59,8 +55,9 @@ export class StateSurface {
   private hydrateTemplate: TemplateHydrator;
   private updateTemplate: TemplateUpdater;
   private unmountTemplate: (name: string, el: HTMLElement) => void;
+  private isUpdatable: (name: string, el: HTMLElement) => boolean;
+  private onAction?: StateSurfaceOptions['onAction'];
   private basePath: string;
-  private plugins: StateSurfacePlugin[];
 
   trace?: (event: TraceEvent) => void;
 
@@ -69,7 +66,8 @@ export class StateSurface {
     this.hydrateTemplate = options.hydrateTemplate;
     this.updateTemplate = options.updateTemplate;
     this.unmountTemplate = options.unmountTemplate;
-    this.plugins = options.plugins ?? [];
+    this.isUpdatable = options.isUpdatable ?? (() => true);
+    this.onAction = options.onAction;
     this.maxQueue = options.maxQueue ?? 20;
     this.frameBudgetMs = options.frameBudgetMs ?? 33;
     this.transitionTimeout = options.transitionTimeout ?? 30_000;
@@ -111,11 +109,10 @@ export class StateSurface {
 
     for (const [name, data] of Object.entries(initialStates)) {
       const el = this.anchors.get(name);
-      if (!el) continue;
+      if (!el || !this.isUpdatable(name, el)) continue;
 
       this.hydrateTemplate(name, data, el);
       this.mounted.add(name);
-      this.notifyMount(name, el, data);
     }
 
     // Apply initial UI patches after hydration
@@ -147,7 +144,7 @@ export class StateSurface {
       timedOut = true;
       transitionController.abort();
     }, this.transitionTimeout);
-    this.notifyTransitionStart(name);
+    this.notifyAction({ name, phase: 'start' });
     this.markPending(options.pendingTargets);
     let firstFrameHandled = false;
 
@@ -222,7 +219,11 @@ export class StateSurface {
       }
     } finally {
       clearTimeout(timeoutTimer);
-      this.notifyTransitionEnd(name, transitionError);
+      this.notifyAction({
+        name,
+        phase: 'end',
+        ...(transitionError ? { error: transitionError } : {}),
+      });
     }
   }
 
@@ -396,7 +397,6 @@ export class StateSurface {
           this.unmountTemplate(key, el!);
           this.mounted.delete(key);
           if (el) {
-            this.notifyUnmount(key, el);
             // Clear previous UI patch before clearing content
             if (prevUi[key]) this.clearUiPatch(key, el, prevUi[key]!);
             el.innerHTML = '';
@@ -410,16 +410,18 @@ export class StateSurface {
 
         const el = this.anchors.get(key);
         if (!el) continue;
+        if (!this.isUpdatable(key, el)) {
+          this.trace?.({ kind: 'dropped', detail: { slot: key, reason: 'not a client slot' } });
+          continue;
+        }
 
         if (!this.mounted.has(key)) {
           // First render for this anchor
           this.renderTemplate(key, nextStates[key], el);
           this.mounted.add(key);
-          this.notifyMount(key, el, nextStates[key]);
         } else {
           // Update existing
           this.updateTemplate(key, nextStates[key], el);
-          this.notifyUpdate(key, el, nextStates[key]);
         }
 
         // Trigger reveal animation (opt-in via data-animate on <h-state>)
@@ -524,39 +526,14 @@ export class StateSurface {
     this.pendingAnchors.clear();
   }
 
-  private notifyMount(slotName: string, el: Element, data: unknown) {
-    this.runPluginHook('onMount', plugin => plugin.onMount?.(slotName, el, data));
-  }
-
-  private notifyUpdate(slotName: string, el: Element, data: unknown) {
-    this.runPluginHook('onUpdate', plugin => plugin.onUpdate?.(slotName, el, data));
-  }
-
-  private notifyUnmount(slotName: string, el: Element) {
-    this.runPluginHook('onUnmount', plugin => plugin.onUnmount?.(slotName, el));
-  }
-
-  private notifyTransitionStart(name: string) {
-    this.runPluginHook('onTransitionStart', plugin => plugin.onTransitionStart?.(name));
-  }
-
-  private notifyTransitionEnd(name: string, error?: Error) {
-    this.runPluginHook('onTransitionEnd', plugin => plugin.onTransitionEnd?.(name, error));
-  }
-
-  private runPluginHook(
-    hook: keyof StateSurfacePlugin,
-    callback: (plugin: StateSurfacePlugin) => void
-  ) {
-    for (const plugin of this.plugins) {
-      try {
-        callback(plugin);
-      } catch (err) {
-        this.trace?.({
-          kind: 'error',
-          detail: { plugin: plugin.name, hook, message: err instanceof Error ? err.message : err },
-        });
-      }
+  private notifyAction(event: { name: string; phase: 'start' | 'end'; error?: Error }) {
+    try {
+      this.onAction?.(event);
+    } catch (err) {
+      this.trace?.({
+        kind: 'error',
+        detail: { hook: 'onAction', message: err instanceof Error ? err.message : err },
+      });
     }
   }
 }

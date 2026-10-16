@@ -8,6 +8,7 @@ import {
 } from './analyze.js';
 import { SurfaceBuildError } from './diagnostics.js';
 import { scanRoutes, type ScannedRoute } from './routeScanner.js';
+import type { PagePlugin } from '../server/ssrRenderer.js';
 
 export type Resolve = (source: string, importer: string) => Promise<string | undefined>;
 
@@ -124,6 +125,8 @@ export class SurfaceAnalyzer {
     const routesDir = path.join(this.root, 'routes');
     const pages = await scanRoutes(routesDir);
     const client = new Map<string, { file: string; exportName: string }>();
+    const plugins = new Map<string, { file: string; exportName: string }>();
+    const pagePlugins = new Map<string, PagePlugin[]>();
     const files = new Set<string>();
     for (const page of pages) {
       const facts = await this.module(page.filePath);
@@ -133,6 +136,8 @@ export class SurfaceAnalyzer {
           hint: 'export default async function Page(ctx: SurfaceContext) { … }',
         });
       const names = new Map<string, string>();
+      const declared: PagePlugin[] = [];
+      pagePlugins.set(page.filePath, declared);
       const seen = new Set<string>();
       const queue = [page.filePath];
       while (queue.length) {
@@ -162,13 +167,30 @@ export class SurfaceAnalyzer {
               exportName: use.binding.imported,
             });
         }
+        for (const use of module.plugins) {
+          const target = await this.resolve(use.binding.source, file);
+          const definition =
+            target && (await this.module(target))?.pluginDefinitions.get(use.binding.imported);
+          if (!target || !definition)
+            throw new SurfaceBuildError(
+              `\`${use.local}\` in \`plugins\` is not an exported definePlugin() from 'state-surface/client'.`,
+              {
+                file,
+                offset: use.offset,
+                code: await readFile(file, 'utf8').catch(() => undefined),
+              }
+            );
+          const id = this.componentId(target, use.binding);
+          plugins.set(id, { file: target, exportName: use.binding.imported });
+          if (!declared.some(plugin => plugin.id === id)) declared.push({ id, ...definition });
+        }
         for (const source of module.sources) {
           const target = await this.resolve(source, file);
           if (this.isProjectFile(target) && !seen.has(target)) queue.push(target);
         }
       }
     }
-    return { pages, client, files };
+    return { pages, client, plugins, pagePlugins, files };
   }
 }
 

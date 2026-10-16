@@ -7,6 +7,9 @@ import ChatTyping from './chat/_components/chatTyping.js';
 import ChatInput from './chat/_components/chatInput.js';
 import { getLang } from '../../shared/i18n.js';
 import { chatContent } from '../../shared/content.js';
+import { chatScroll } from '../../client/plugins/chatScroll.js';
+
+export const plugins = [chatScroll];
 
 /** chat:messages fills the remaining height and scrolls; typing and input sit below it. */
 export default async function Page(ctx: SurfaceContext) {
@@ -14,12 +17,16 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']} variant="chat">
       <main class="flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-2 self-center pb-4 pt-4 md:pt-6">
-        <Slot name="chat:messages" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <Slot
+          name="chat:messages"
+          client:load
+          style="flex:1;min-height:0;display:flex;flex-direction:column"
+        >
           <ChatMessages {...content['chat:messages']} />
         </Slot>
-        <Slot name="chat:current" component={ChatCurrent} />
-        <Slot name="chat:typing" component={ChatTyping} />
-        <Slot name="chat:input">
+        <Slot name="chat:current" client:load component={ChatCurrent} />
+        <Slot name="chat:typing" client:load component={ChatTyping} />
+        <Slot name="chat:input" client:load>
           <ChatInput {...content['chat:input']} />
         </Slot>
       </main>

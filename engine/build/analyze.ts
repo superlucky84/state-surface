@@ -46,6 +46,10 @@ export interface ModuleAnalysis {
   hasDefaultExport: boolean;
   /** Export names whose value is `defineServerComponent(...)`. */
   serverExports: Set<string>;
+  /** `definePlugin({...})` exports with their statically declared options (DC-12). */
+  pluginDefinitions: Map<string, { load: 'load' | 'idle' | 'visible'; slots?: string[] }>;
+  /** `export const plugins = [a, b]`: imported plugin identifiers applied to the page. */
+  plugins: Array<{ local: string; binding: ImportBinding; offset: number }>;
 }
 
 const PACKAGE = 'state-surface';
@@ -63,6 +67,8 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     usesBoot: false,
     hasDefaultExport: false,
     serverExports: new Set(),
+    pluginDefinitions: new Map(),
+    plugins: [],
   };
   const parsed = parseSync(file, code);
   // Syntax errors are reported by the TypeScript/esbuild transform with better context.
@@ -74,6 +80,7 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
   const program = parsed.program as any;
   const serverLocals = new Set<string>();
   let defineServerLocal: string | undefined;
+  let definePluginLocal: string | undefined;
   for (const node of program.body) {
     if (node.type === 'ImportDeclaration') {
       if (node.importKind === 'type') continue;
@@ -89,6 +96,8 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         result.imports.set(spec.local.name, { source: node.source.value, imported });
         if (node.source.value === `${PACKAGE}/server` && imported === 'defineServerComponent')
           defineServerLocal = spec.local.name;
+        if (node.source.value === `${PACKAGE}/client` && imported === 'definePlugin')
+          definePluginLocal = spec.local.name;
       }
     } else if (
       (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
@@ -110,6 +119,76 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         if (exported) result.serverExports.add(item.id.name);
       }
   };
+  // Plugin options must be literals: the server decides which chunk to load and when
+  // without importing client code into the decision.
+  const pluginOptions = (call: any) => {
+    const options = call.arguments[0];
+    if (options?.type !== 'ObjectExpression')
+      fail('definePlugin() needs an object literal.', call.start);
+    let load: 'load' | 'idle' | 'visible' = 'idle';
+    let slots: string[] | undefined;
+    for (const property of options.properties) {
+      const key =
+        property.type === 'Property' ? (property.key.name ?? property.key.value) : undefined;
+      if (key === 'load') {
+        const value = property.value;
+        if (value.type !== 'Literal' || !['load', 'idle', 'visible'].includes(value.value))
+          fail(
+            'definePlugin `load` must be "load", "idle" or "visible" as a literal.',
+            property.start
+          );
+        load = value.value;
+      } else if (key === 'slots') {
+        const value = property.value;
+        if (
+          value.type !== 'ArrayExpression' ||
+          value.elements.some(
+            (item: any) => item?.type !== 'Literal' || typeof item.value !== 'string'
+          )
+        )
+          fail('definePlugin `slots` must be an array of string literals.', property.start);
+        slots = value.elements.map((item: any) => item.value);
+      }
+    }
+    return { load, slots };
+  };
+  const isPluginCall = (node: any) =>
+    node?.type === 'CallExpression' &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name === definePluginLocal;
+  const pluginLocals = new Map<string, { load: 'load' | 'idle' | 'visible'; slots?: string[] }>();
+  for (const node of program.body) {
+    const declaration =
+      node.type === 'ExportNamedDeclaration'
+        ? node.declaration
+        : node.type === 'VariableDeclaration'
+          ? node
+          : undefined;
+    if (declaration?.type !== 'VariableDeclaration') continue;
+    for (const item of declaration.declarations) {
+      if (item.id.type !== 'Identifier') continue;
+      if (isPluginCall(item.init)) {
+        pluginLocals.set(item.id.name, pluginOptions(item.init));
+        if (node.type === 'ExportNamedDeclaration')
+          result.pluginDefinitions.set(item.id.name, pluginLocals.get(item.id.name)!);
+      }
+      if (node.type === 'ExportNamedDeclaration' && item.id.name === 'plugins') {
+        const list = item.init;
+        if (list?.type !== 'ArrayExpression')
+          fail('`export const plugins` must be an array literal of imported plugins.', item.start);
+        for (const element of list.elements) {
+          const binding =
+            element?.type === 'Identifier' ? result.imports.get(element.name) : undefined;
+          if (!binding || binding.imported === '*')
+            fail(
+              '`plugins` entries must be statically imported definePlugin() exports.',
+              element?.start ?? list.start
+            );
+          result.plugins.push({ local: element.name, binding: binding!, offset: element.start });
+        }
+      }
+    }
+  }
   for (const node of program.body) {
     if (node.type === 'VariableDeclaration') declare(node, false);
     if (node.type === 'ExportNamedDeclaration') {
@@ -118,6 +197,8 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
         const exported = spec.exported.name ?? spec.exported.value;
         if (exported === 'default') result.hasDefaultExport = true;
         if (!node.source && serverLocals.has(spec.local.name)) result.serverExports.add(exported);
+        if (!node.source && pluginLocals.has(spec.local.name))
+          result.pluginDefinitions.set(exported, pluginLocals.get(spec.local.name)!);
       }
     }
     if (node.type === 'ExportDefaultDeclaration') {
@@ -125,6 +206,9 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
       const value = node.declaration;
       if (isServerCall(value) || (value.type === 'Identifier' && serverLocals.has(value.name)))
         result.serverExports.add('default');
+      if (isPluginCall(value)) result.pluginDefinitions.set('default', pluginOptions(value));
+      if (value.type === 'Identifier' && pluginLocals.has(value.name))
+        result.pluginDefinitions.set('default', pluginLocals.get(value.name)!);
     }
   }
 

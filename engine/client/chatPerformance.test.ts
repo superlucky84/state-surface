@@ -2,12 +2,11 @@
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createLithentBridge } from './lithentBridge.js';
+import { mountComponent } from './lithentBridge.js';
 import ChatMessages from '../../routes/examples/chat/_components/chatMessages.js';
 import type { TagFunction } from 'lithent';
 
-const CHAT_MESSAGES = 'routes/examples/chat/_components/chatMessages.tsx#default';
-const components = { [CHAT_MESSAGES]: ChatMessages as unknown as TagFunction };
+const component = ChatMessages as unknown as TagFunction;
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 
@@ -83,12 +82,12 @@ describe('chat performance: 100+ messages with pure function template', () => {
   it('renders 120 messages correctly', () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
-    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
-    bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
+    const mounted = mountComponent(component, { messages: initialMessages }, anchor, {
+      hydrate: false,
+    });
 
     const bubbles = collectBubbles(anchor);
     expect(bubbles).toHaveLength(120);
@@ -98,12 +97,12 @@ describe('chat performance: 100+ messages with pure function template', () => {
   it('updating with one more message adds exactly one DOM node and keeps all previous intact', async () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
-    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
-    bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
+    const mounted = mountComponent(component, { messages: initialMessages }, anchor, {
+      hydrate: false,
+    });
 
     const before = collectBubbles(anchor);
     expect(before).toHaveLength(120);
@@ -113,7 +112,7 @@ describe('chat performance: 100+ messages with pure function template', () => {
     const allMessages = [...initialMessages, appended];
 
     const mutations = await captureMutations(anchor, () => {
-      bridge.updateTemplate('chat:messages', { messages: allMessages }, anchor);
+      mounted.update({ messages: allMessages });
     });
 
     const after = collectBubbles(anchor);
@@ -125,12 +124,12 @@ describe('chat performance: 100+ messages with pure function template', () => {
   it('no-op refresh with identical message contents causes zero DOM mutations', async () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
-    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
-    bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
+    const mounted = mountComponent(component, { messages: initialMessages }, anchor, {
+      hydrate: false,
+    });
 
     const before = collectBubbles(anchor);
     const beforeByText = mapByText(before);
@@ -138,7 +137,7 @@ describe('chat performance: 100+ messages with pure function template', () => {
 
     const sameContentNewRefs = cloneMessages(initialMessages);
     const mutations = await captureMutations(anchor, () => {
-      bridge.updateTemplate('chat:messages', { messages: sameContentNewRefs }, anchor);
+      mounted.update({ messages: sameContentNewRefs });
     });
 
     const after = collectBubbles(anchor);

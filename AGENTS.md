@@ -24,6 +24,8 @@ Use Node.js (latest stable) with `pnpm@10.13.1`. Key commands:
 - `pnpm start` runs the production server from `dist/server.js`.
 - `pnpm test` runs unit/integration tests with Vitest.
 - `pnpm test:e2e` runs browser parity and architecture probes on production builds.
+- `pnpm test:modes` builds the `e2e/modes` fixture (entry selection, lazy chunks, server-only checks) and runs its browser tests.
+- `pnpm test:parity` compares production SSR with the stage 1 snapshot semantically (after `pnpm build`).
 - `pnpm build:conformance`, `pnpm check:core`, and `pnpm test:conformance <adapter>` validate runtime portability.
 - `pnpm typecheck:server` checks the portable server and adapter API.
 - `pnpm format` and `pnpm format:check` apply or verify Prettier formatting.

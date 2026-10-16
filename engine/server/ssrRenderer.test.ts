@@ -18,8 +18,13 @@ const island = (component: unknown, props: Record<string, unknown> = {}, ...chil
     { __ssComponent: component, __ssId: `${(component as Function).name}.tsx#default`, ...props },
     ...children
   );
-const slot = (props: Record<string, unknown>, child?: unknown) =>
-  child === undefined ? el(Slot, props) : el(Slot, props, child);
+// Client slot unless the test sets a mode or a directive (no directive normalizes to static).
+const slot = (props: Record<string, unknown>, child?: unknown) => {
+  const client =
+    props.mode === undefined && !Object.keys(props).some(key => key.startsWith('client:'));
+  const input = client ? { ...props, 'client:load': true } : props;
+  return child === undefined ? el(Slot, input) : el(Slot, input, child);
+};
 const documentOf = (...body: unknown[]) =>
   el('html', { lang: 'en' }, el('head', {}, el('title', {}, 'Test')), el('body', {}, ...body));
 const page = (render: PageModule['default']): PageModule => ({ default: render });
@@ -107,14 +112,25 @@ describe('document assembly', () => {
     const html = await renderPage(
       page(() => documentOf(slot({ name: 'title' }, island(Title, { text: 'Hello' })))),
       ctx,
-      { styles: ['/assets/app.css'], entry: '/assets/main.js' }
+      {
+        plugins: [{ id: 'p.ts#scroll', load: 'idle' }],
+        tags: () => ({
+          styles: ['/assets/app.css'],
+          preload: ['/assets/title.js'],
+          appEntry: '/assets/app.js',
+          engineEntry: '/assets/loader.js',
+        }),
+      }
     );
     expect(html).toBe(
       '<!doctype html><html lang="en"><head><!--ss:head--><title>Test</title>' +
         '<link rel="stylesheet" href="/assets/app.css">' +
+        '<link rel="modulepreload" href="/assets/title.js">' +
         '<script id="__STATE__" type="application/json">{"title":{"text":"Hello"}}</script>' +
+        '<script id="__PLUGINS__" type="application/json">[{"id":"p.ts#scroll","load":"idle"}]</script>' +
         '<script id="__BASE_PATH__" type="application/json">""</script>' +
-        `<script type="module" src="/assets/main.js" nonce="${ctx.nonce}"></script>` +
+        `<script type="module" src="/assets/app.js" nonce="${ctx.nonce}"></script>` +
+        `<script type="module" src="/assets/loader.js" nonce="${ctx.nonce}"></script>` +
         '<!--/ss:head--></head><body><!--ss:body-->' +
         '<h-state name="title" data-component="Title.tsx#default"><h1>Hello</h1></h-state>' +
         '<!--/ss:body--></body></html>'
@@ -164,6 +180,85 @@ describe('async components', () => {
         context()
       )
     ).rejects.toThrow('<AsyncWidget> returned a Promise');
+  });
+});
+
+describe('entry selection', () => {
+  const tags = vi.fn(() => ({
+    styles: ['/app.css'],
+    preload: [],
+    appEntry: '/app.js',
+    engineEntry: '/loader.js',
+  }));
+  const usageOf = async (...body: unknown[]) => {
+    tags.mockClear();
+    const html = await renderPage(
+      page(() => documentOf(...body)),
+      context(),
+      { tags }
+    );
+    return { html, usage: (tags.mock.calls[0] as unknown[])[0] as Record<string, unknown> };
+  };
+
+  it('writes no engine script or bootstrap JSON for a static page (V-01)', async () => {
+    const { html, usage } = await usageOf(
+      el(Slot, { name: 'hero' }, island(Title, { text: 'static' })),
+      el('a', { href: '/x' }, 'link')
+    );
+    expect(usage).toMatchObject({ engine: false, actions: false, components: [] });
+    expect(html).toContain('<h-state name="hero"><h1>static</h1></h-state>');
+    expect(html).not.toContain('__STATE__');
+    expect(html).not.toContain('/loader.js');
+    // The app entry still runs on every page (DC-18), with the base path it may need.
+    expect(html).toContain('<script id="__BASE_PATH__"');
+    expect(html).toContain('src="/app.js"');
+  });
+
+  it('starts the engine for actions and <Boot> without client components', async () => {
+    const { html, usage } = await usageOf(el('button', { 'data-action': 'like' }, 'Like'));
+    expect(usage).toMatchObject({ engine: true, actions: true, components: [] });
+    expect(html).toContain('src="/loader.js"');
+    expect((await usageOf(el(Boot, { transition: 'go' }))).usage).toMatchObject({ actions: true });
+  });
+
+  it('lists rendered client components once and preloads only client:load ones', async () => {
+    const { usage } = await usageOf(
+      island(Counter, { count: 1, 'client:idle': true }),
+      island(Counter, { count: 2, 'client:load': true }),
+      island(Title, { text: 'x', 'client:visible': true }),
+      false && island(Counter, { count: 3, 'client:load': true })
+    );
+    expect(usage.components).toEqual([
+      { componentId: 'Counter.tsx#default', preload: true },
+      { componentId: 'Title.tsx#default', preload: false },
+    ]);
+    expect(usage.actions).toBe(false);
+  });
+
+  it('writes activation metadata and skips SSR for client:only slots', async () => {
+    const Heavy = vi.fn(() => el('canvas', {}));
+    const html = await renderPage(
+      page(() =>
+        documentOf(
+          el(
+            Slot,
+            {
+              name: 'chart',
+              'client:only': true,
+              'client:media': '(min-width: 800px)',
+              fallback: el('p', {}, 'Loading'),
+            },
+            island(Heavy, { points: [1, 2] })
+          )
+        )
+      ),
+      context()
+    );
+    expect(Heavy).not.toHaveBeenCalled();
+    expect(html).toContain(
+      '<h-state name="chart" data-component="Mock.tsx#default" data-activation="media" data-media="(min-width: 800px)" data-only=""><p>Loading</p></h-state>'
+    );
+    expect(json(html, '__STATE__')).toEqual({ chart: { points: [1, 2] } });
   });
 });
 
@@ -307,7 +402,7 @@ describe('islands', () => {
       context()
     );
     expect(html).toContain(
-      '<h-island data-island="$0" data-component="Card.tsx#default" data-props="{&quot;title&quot;:&quot;Card&quot;}" style="display:contents">' +
+      '<h-island data-island="$0" data-component="Card.tsx#default" data-props="{&quot;title&quot;:&quot;Card&quot;}" data-activation="idle" style="display:contents">' +
         '<section><h2>Card</h2><h-children style="display:contents"><p>server child</p></h-children></section></h-island>'
     );
     expect(html).not.toContain('<template');

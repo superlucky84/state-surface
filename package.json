@@ -12,7 +12,11 @@
     "./adapters/*": "./engine/adapters/*.ts",
     "./internal/assets": "./engine/server/assets.ts",
     "./internal/basePath": "./engine/shared/basePath.ts",
-    "./internal/island": "./engine/island.ts"
+    "./internal/island": "./engine/island.ts",
+    "./server-only": {
+      "browser": "./engine/serverOnly.browser.ts",
+      "default": "./engine/serverOnly.ts"
+    }
   },
   "files": [
     "engine/**/*.ts",
@@ -52,8 +56,8 @@
     "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false && node scripts/build-scaffold.mjs",
     "start": "NODE_ENV=production node dist/server.js",
     "test": "vitest run",
-    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
-    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
+    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'e2e/**/*.tsx' 'e2e/**/*.mjs' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
+    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'e2e/**/*.tsx' 'e2e/**/*.mjs' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
     "build:scaffold": "node scripts/build-scaffold.mjs",
     "test:e2e": "playwright test",
     "perf": "node perf/measure.mjs",
@@ -64,7 +68,8 @@
     "check:core": "node conformance/guard.mjs",
     "test:parity": "node conformance/parity.mjs",
     "typecheck:server": "tsc -p tsconfig.server.json",
-    "build:adapter-app": "tsx conformance/app-build.ts"
+    "build:adapter-app": "tsx conformance/app-build.ts",
+    "test:modes": "node e2e/modes/build.mjs && playwright test -c e2e/modes/playwright.config.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

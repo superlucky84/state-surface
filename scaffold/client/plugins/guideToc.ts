@@ -1,4 +1,4 @@
-import type { StateSurfacePlugin } from 'state-surface/client';
+import { definePlugin } from 'state-surface/client';
 
 function isMobileViewport(): boolean {
   if (typeof window.matchMedia !== 'function') return false;
@@ -34,16 +34,14 @@ function scheduleScroll(slotEl: Element) {
   setTimeout(() => scrollActiveGuideCategory(slotEl), 0);
 }
 
-export function guideTocPlugin(): StateSurfacePlugin {
-  return {
-    name: 'guide-toc',
-    onMount(slotName, el) {
-      if (slotName !== 'guide:toc') return;
-      scheduleScroll(el);
-    },
-    onUpdate(slotName, el) {
-      if (slotName !== 'guide:toc') return;
-      scheduleScroll(el);
-    },
-  };
-}
+/** Keeps the active guide category visible in the mobile category row. */
+export const guideToc = definePlugin({
+  name: 'guide-toc',
+  slots: ['guide:toc'],
+  attach(el) {
+    scheduleScroll(el);
+  },
+  update(el) {
+    scheduleScroll(el);
+  },
+});

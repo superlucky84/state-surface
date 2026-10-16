@@ -2,7 +2,8 @@
  * @vitest-environment happy-dom
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { prismPlugin } from './prism.js';
+import { prism } from './prism.js';
+
 
 const SAMPLE_CODE = `const value = 1;
 console.log(value);`;
@@ -19,7 +20,7 @@ function mountFixture(source: string) {
   return { root, code };
 }
 
-describe('prismPlugin', () => {
+describe('prism plugin', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
@@ -29,10 +30,9 @@ describe('prismPlugin', () => {
   });
 
   it('applies syntax highlight and line numbers on mount', () => {
-    const plugin = prismPlugin();
     const { root, code } = mountFixture(SAMPLE_CODE);
 
-    plugin.onMount?.('guide:content', root, {});
+    prism.attach(root);
 
     expect(code.querySelectorAll('.code-ln')).toHaveLength(2);
     expect(code.innerHTML).toContain('token');
@@ -40,17 +40,16 @@ describe('prismPlugin', () => {
   });
 
   it('re-highlights updated code even when data-prism-raw is stale', () => {
-    const plugin = prismPlugin();
     const { root, code } = mountFixture(SAMPLE_CODE);
 
-    plugin.onMount?.('guide:content', root, {});
+    prism.attach(root);
     const updatedCode = `const next = 2;
 console.log(next);
 console.log(next + 1);`;
 
     // Simulate DOM diff reusing the same <code> node but replacing text content.
     code.textContent = updatedCode;
-    plugin.onUpdate?.('guide:content', root, {});
+    prism.update(root);
 
     expect(code.querySelectorAll('.code-ln')).toHaveLength(3);
     expect(code.getAttribute('data-prism-raw')).toBe(updatedCode);

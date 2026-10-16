@@ -5,11 +5,14 @@ import { Island, Slot } from '../engine/shared/surfaceTree.js';
 const el = (tag: unknown, props: Record<string, unknown> = {}, ...children: unknown[]) =>
   h(tag as never, props as never, ...(children as never[]));
 const Fixture = (props: { value: unknown }) => h('p', {}, String(props.value));
-// Compiled form of <Slot name="fixture:state"><Fixture {...props} /></Slot>.
-const state = (props: Record<string, unknown>) =>
+// Compiled form of <Slot name="fixture:state" client:load><Fixture {...props} /></Slot>.
+const state = (
+  props: Record<string, unknown>,
+  directives: Record<string, unknown> = { 'client:load': true }
+) =>
   el(
     Slot,
-    { name: 'fixture:state' },
+    { name: 'fixture:state', ...directives },
     el(Island, { __ssComponent: Fixture, __ssId: 'conformance/Fixture.tsx#default', ...props })
   );
 const documentOf = (body: unknown) =>
@@ -39,7 +42,13 @@ export function fixture(basePath = '/demo'): HandlerOptions {
       },
     ],
     manifest: {
-      document: { entry: '/assets/probe-12345678.js' },
+      document: {
+        engine: {
+          loader: '/assets/probe-12345678.js',
+          runtime: '/assets/runtime.js',
+          bridge: '/assets/bridge.js',
+        },
+      },
       routes: [
         {
           pattern: '/',
@@ -54,6 +63,11 @@ export function fixture(basePath = '/demo'): HandlerOptions {
                 })
               ),
           },
+        },
+        {
+          // No directive: a static slot, so the page needs no engine script (V-01).
+          pattern: '/static',
+          module: { default: () => documentOf(state({ value: 'static' }, {})) },
         },
         {
           pattern: '/dynamic/:id',

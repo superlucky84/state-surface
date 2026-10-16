@@ -1,14 +1,30 @@
 import type { PageModule } from '../../shared/routeModule.js';
 import type { TransitionHandler, TransitionModule } from '../transition.js';
+import type { PagePlugin } from '../ssrRenderer.js';
 
-export type AssetManifest = Record<string, { file: string; css?: string[] }>;
-/** Source paths of the engine-managed head tags, resolved through the asset manifest. */
+/** Vite build manifest entries (keys are project-relative source paths). */
+export type AssetManifest = Record<
+  string,
+  { file: string; css?: string[]; imports?: string[]; dynamicImports?: string[] }
+>;
+/**
+ * Project-relative source paths (leading `/`) of the engine-managed head tags, resolved
+ * through the asset manifest: global styles, the optional app entry (`client/entry.ts`)
+ * and the engine chunks (loader entry, action runtime, Lithent bridge).
+ */
 export interface DocumentConfig {
   styles?: string[];
-  entry?: string;
+  appEntry?: string;
+  engine?: { loader: string; runtime: string; bridge: string };
+}
+export interface ServerRoute {
+  pattern: string;
+  module: PageModule;
+  /** Plugins declared by the page and the modules it imports (build analysis). */
+  plugins?: PagePlugin[];
 }
 export interface ServerManifest {
-  routes: Array<{ pattern: string; module: PageModule }>;
+  routes: ServerRoute[];
   transitions: Record<string, TransitionHandler>;
   document?: DocumentConfig;
   assets?: AssetManifest;

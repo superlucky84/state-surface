@@ -45,6 +45,7 @@ pnpm test path/to/file.test.ts    # run a single test file
 pnpm test -- -t "keyword"         # run tests matching a keyword
 pnpm format                       # format with Prettier
 pnpm format:check                 # check formatting without writing
+pnpm test:modes                   # stage 3 fixture: entry selection, lazy chunks, server-only build checks
 
 # Sub-path mounting (basePath)
 BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
@@ -78,10 +79,15 @@ engine/              # Framework core — users should not edit these files
     ssr.ts           # Bootstrap JSON builders (__STATE__, __BOOT__, __BASE_PATH__)
     transition.ts    # Transition registry & handler
   client/
-    main.ts          # Browser bootstrap (componentId registry, islands, <Boot> entries, action binding)
-    stateSurface.ts  # Core: anchor discovery, hydration, transition streaming, frame queue
-    lithentBridge.ts # Lithent VDOM integration (resolves components by data-component)
-    islands.ts       # Direct directive islands (<h-island>) hydration
+    loader.ts        # Engine entry chunk (only on pages that need the engine) → start.ts
+    start.ts         # Reads bootstrap, schedules components/plugins, loads the runtime, captures early data-action
+    scheduler.ts     # Activation timing: load / idle / visible / media
+    componentHost.ts # Client slots & islands: lazy Lithent bridge + component chunks, hydrate/render/update
+    pluginHost.ts    # definePlugin, per-page plugin loading, attach/update/cleanup, onPage/onAction
+    runtime.ts       # Action runtime chunk: StateSurface + delegation + <Boot> + devOverlay(?debug=1)
+    stateSurface.ts  # Core: anchor discovery, transition streaming, frame queue (static slots keep content)
+    lithentBridge.ts # Lithent chunk: mountComponent (DataProxy, hydrate/render, island children)
+    actionEvents.ts  # data-action event → invocation (shared by loader capture and delegation)
     actionDelegation.ts  # Declarative action binding (data-action click/submit delegation)
     devOverlay.ts    # Debug overlay UI (?debug=1)
   shared/
@@ -91,8 +97,9 @@ engine/              # Framework core — users should not edit these files
     ndjson.ts        # NDJSON encode/decode with streaming chunk parser
     routeModule.ts   # PageModule contract (default page function, prerender, getStaticPaths, plugins)
 client/              # User assets
-  main.ts            # Engine entry (createStateSurface with plugins)
   styles.css         # Tailwind CSS entry point (linked by the engine)
+  plugins/           # definePlugin() client plugins, declared per page with `export const plugins`
+  entry.ts           # (optional) app entry run on every page before the engine
 shared/              # User data helpers
   content.ts         # Bilingual content data (ko/en) for all pages
   i18n.ts            # i18n helpers (getLang(ctx) from cookie)
@@ -175,15 +182,23 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 - `<Slot name="ns:name">` wraps exactly one statically imported component element; that element's props are the
   slot state that transitions update. `<Slot name component={X} />` declares an initially empty slot.
   Host attributes (`class`, `style`, `id`, `data-*`, `aria-*`) are written on the `<h-state>` element.
-- `mode="server"` slots render on the server only; `defineServerComponent({ load, render })` children have their
-  `load` awaited in parallel. Until mode normalization (IMPLEMENT stage 3) a Slot without `mode` behaves as today:
-  SSR + hydration from `__STATE__` + client updates.
+- Mode normalization: no directive → `static` (SSR only, frames cannot change content, no JS); `client:*`
+  directive → client slot (SSR + hydration from `__STATE__` when its chunk loads); `client:only` skips SSR and shows
+  `fallback`; `mode="server"` renders on the server only and `defineServerComponent({ load, render })` children have
+  their `load` awaited in parallel. Until server HTML updates (stage 4) the demo marks every transition-updated slot
+  `client:load`.
+- Entry selection: the engine loader script is written only when the page renders client components, `data-action`,
+  `<Boot>` or plugins; `client:load` chunks and the action runtime get `modulepreload`, rendered components' chunk CSS
+  is linked. `client/entry.ts` (if present) runs on every page.
+- Server-only code: `import 'state-surface/server-only'`, `*.server.ts(x)` and `node:*` reachable from a client
+  component fail the client build with the import chain.
 - Direct islands `<C client:idle />` render as `<h-island>` with JSON `data-props`; children are a static fragment.
 - `<Boot transition params />` records an auto-run transition in `__BOOT__` (array, document order).
 - The Vite plugin (`enforce: 'pre'`) transforms Slot children/islands into `Island` descriptors so Lithent does not
   run them at JSX time, and reports diagnostics with `file:line:column`. `engine/build/` discovers pages
   (`routes/**/*.tsx` minus `_` files/folders) and transitions (`routes/**/transitions/*.ts`), and generates
-  `virtual:state-surface/manifest` (server) and `virtual:state-surface/islands` (componentId → client component).
+  `virtual:state-surface/manifest` (server, with per-page plugins), `virtual:state-surface/islands`
+  (componentId → lazy chunk loader) and `virtual:state-surface/plugins` (plugin id → lazy chunk loader).
 - componentId = project-relative module path + `#` + export name (e.g. `routes/examples/chat/_components/chatInput.tsx#default`).
 
 ### i18n (Korean / English)

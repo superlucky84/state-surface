@@ -29,17 +29,28 @@ export interface ComponentDescriptor {
   children: WDom[];
 }
 
+/** When a client component starts; `only` skips SSR and shows the fallback until then. */
+export interface Activation {
+  timing: 'load' | 'idle' | 'visible' | 'media';
+  media?: string;
+  only: boolean;
+}
+
 export interface SlotMarker {
   kind: 'slot';
   name: string;
-  mode?: SlotMode;
+  /** Normalized: explicit `mode`, else `client` with a client directive, else `static`. */
+  mode: SlotMode;
+  /** Present for client slots. */
+  activation?: Activation;
   directives: Directives;
   /** class/style/id/data-* attributes written on the `<h-state>` host. */
   host: Record<string, unknown>;
   child: ComponentDescriptor;
   empty: boolean;
   fallback?: unknown;
-  capability?: Capability;
+  /** Defaults to `strict` (DC-13); enforcement arrives with server HTML projection. */
+  capability: Capability;
   resetKey?: string | string[];
   swap?: 'replace' | 'morph';
   viewTransition?: boolean;
@@ -47,6 +58,7 @@ export interface SlotMarker {
 
 export interface IslandMarker extends ComponentDescriptor {
   kind: 'island';
+  activation: Activation;
 }
 
 export interface BootMarker {
@@ -141,6 +153,22 @@ function hasClientDirective(directives: Directives) {
   return Object.keys(directives).some(key => key.startsWith('client:'));
 }
 
+/** Normalize client directives (DC-04): no timing means `load`; `only` may combine with one. */
+export function activationOf(directives: Directives): Activation {
+  const media = directives['client:media'];
+  return {
+    timing: directives['client:idle']
+      ? 'idle'
+      : directives['client:visible']
+        ? 'visible'
+        : typeof media === 'string'
+          ? 'media'
+          : 'load',
+    ...(typeof media === 'string' ? { media } : {}),
+    only: directives['client:only'] === true,
+  };
+}
+
 function meaningful(children: WDom[]) {
   return children.filter(
     child =>
@@ -162,6 +190,7 @@ const SLOT_KEYS = new Set([
   '__ssComponentId',
 ]);
 const MODES = new Set(['static', 'server', 'client']);
+const CAPABILITIES = new Set(['strict', 'rich', 'unsafe', 'external']);
 
 export interface SlotProps {
   /** Stable transition target, unique within the page. */
@@ -204,11 +233,18 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
       );
     if (value !== undefined && value !== false) host[key] = value;
   }
-  const mode = rest.mode as SlotMode | undefined;
-  if (mode !== undefined && !MODES.has(mode))
+  const explicit = rest.mode as SlotMode | undefined;
+  if (explicit !== undefined && !MODES.has(explicit))
     throw new SurfaceError(`${where}: mode must be "static", "server" or "client".`);
-  if (mode && mode !== 'client' && hasClientDirective(directives))
-    throw new SurfaceError(`${where}: mode="${mode}" cannot be combined with client directives.`);
+  if (explicit && explicit !== 'client' && hasClientDirective(directives))
+    throw new SurfaceError(
+      `${where}: mode="${explicit}" cannot be combined with client directives.`
+    );
+  // DC-01/DC-04 normalization: no mode and no directive → static.
+  const mode: SlotMode = explicit ?? (hasClientDirective(directives) ? 'client' : 'static');
+  const capability = (rest.capability as Capability | undefined) ?? 'strict';
+  if (!CAPABILITIES.has(capability))
+    throw new SurfaceError(`${where}: unknown capability "${capability}".`);
 
   const content = meaningful(children);
   let child: ComponentDescriptor;
@@ -239,19 +275,20 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
       throw new SurfaceError(
         `${where}: the child element cannot have JSX children; pass fixed content as props.`
       );
-    const { kind: _kind, ...rest } = descriptor;
+    const { kind: _kind, activation: _activation, ...rest } = descriptor;
     child = rest;
   }
   return marker({
     kind: 'slot',
     name,
     mode,
+    ...(mode === 'client' ? { activation: activationOf(directives) } : {}),
     directives,
     host,
     child,
     empty: child.props === undefined,
     fallback: rest.fallback,
-    capability: rest.capability as Capability | undefined,
+    capability,
     resetKey: rest.resetKey as string | string[] | undefined,
     swap: rest.swap as 'replace' | 'morph' | undefined,
     viewTransition: rest.viewTransition as boolean | undefined,
@@ -275,6 +312,7 @@ export function Island(props: Record<string, unknown>, children: WDom[] = []): W
     component: __ssComponent as ComponentDescriptor['component'],
     props: direct ? componentProps : rest,
     directives,
+    activation: activationOf(directives),
     children: meaningful(children),
   };
   if (direct) {

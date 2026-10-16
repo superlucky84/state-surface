@@ -1,4 +1,4 @@
-import type { StateSurfacePlugin } from 'state-surface/client';
+import { definePlugin } from 'state-surface/client';
 
 function scrollToBottom(el: Element) {
   const container = el.querySelector('[data-chat-scroll]') ?? el;
@@ -13,16 +13,15 @@ function scheduleScroll(el: Element) {
   setTimeout(() => scrollToBottom(el), 0);
 }
 
-export function chatScrollPlugin(): StateSurfacePlugin {
-  return {
-    name: 'chat-scroll',
-    onMount(slotName, el) {
-      if (slotName !== 'chat:messages') return;
-      scheduleScroll(el);
-    },
-    onUpdate(slotName, el) {
-      if (slotName !== 'chat:messages') return;
-      scheduleScroll(el);
-    },
-  };
-}
+/** Scrolls the chat to the latest message when messages render or update. */
+export const chatScroll = definePlugin({
+  name: 'chat-scroll',
+  slots: ['chat:messages'],
+  load: 'load',
+  attach(el) {
+    scheduleScroll(el);
+  },
+  update(el) {
+    scheduleScroll(el);
+  },
+});

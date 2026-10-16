@@ -29,6 +29,10 @@ export function normalizeDocument(html) {
     script.remove();
   }
   if (json.__BOOT__ && !Array.isArray(json.__BOOT__)) json.__BOOT__ = [json.__BOOT__];
+  // Stage 3 per-page plugin list (the stage 1 runtime loaded every plugin globally).
+  delete json.__PLUGINS__;
+  for (const link of Array.from(document.querySelectorAll('link[rel="modulepreload"]')))
+    link.remove();
   const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(link => {
     link.remove();
     return link.getAttribute('href');

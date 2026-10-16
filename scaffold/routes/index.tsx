@@ -12,18 +12,18 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-8 pt-4 md:pt-6">
-        <Slot name="page:hero">
+        <Slot name="page:hero" client:load>
           <PageHero {...content['page:hero']} />
         </Slot>
         <section class="border-t border-slate-200 pt-8">
           <h2 class="mb-4 text-lg font-semibold text-slate-800">Core Concepts</h2>
-          <Slot name="page:concepts">
+          <Slot name="page:concepts" client:load>
             <PageConcepts {...content['page:concepts']} />
           </Slot>
         </section>
         <section class="border-t border-slate-200 pt-8">
           <h2 class="mb-4 text-lg font-semibold text-slate-800">Features</h2>
-          <Slot name="page:features">
+          <Slot name="page:features" client:load>
             <PageFeatures {...content['page:features']} />
           </Slot>
         </section>

@@ -30,6 +30,15 @@ export function buildBootScript(
 }
 
 /**
+ * Build the __PLUGINS__ script tag: client plugins the loader fetches for this page.
+ */
+export function buildPluginsScript(
+  plugins: Array<{ id: string; load: string; slots?: string[] }>
+): string {
+  return `<script id="__PLUGINS__" type="application/json">${safeStateJSON(plugins)}</script>`;
+}
+
+/**
  * Build the __BASE_PATH__ script tag for client basePath bootstrap.
  * Embedded in SSR HTML; client reads it in main.ts before hydration.
  */

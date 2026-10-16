@@ -7,18 +7,48 @@ import {
   SurfaceError,
   assertJsonValue,
   readMarker,
+  type Activation,
   type BootMarker,
   type IslandMarker,
   type SlotMarker,
 } from '../shared/surfaceTree.js';
 import { readServerComponent } from './serverComponent.js';
-import { buildBasePathScript, buildBootScript, buildStateScript } from './ssr.js';
+import {
+  buildBasePathScript,
+  buildBootScript,
+  buildPluginsScript,
+  buildStateScript,
+} from './ssr.js';
+
+/** A client plugin declared by the page or a module it imports (build-time analysis). */
+export interface PagePlugin {
+  id: string;
+  load: 'load' | 'idle' | 'visible';
+  slots?: string[];
+}
+
+/** What the rendered page needs in the browser; drives entry selection (DESIGN 5.1). */
+export interface PageUsage {
+  /** Client components actually rendered, in document order, deduplicated. */
+  components: Array<{ componentId: string; preload: boolean }>;
+  /** `data-action` elements or `<Boot>`: the action runtime starts with the page. */
+  actions: boolean;
+  plugins: PagePlugin[];
+  /** False for static pages: no engine script and no bootstrap JSON. */
+  engine: boolean;
+}
+
+/** Resolved URLs of the engine-managed head tags for one page. */
+export interface DocumentTags {
+  styles: string[];
+  preload: string[];
+  appEntry?: string;
+  engineEntry?: string;
+}
 
 export interface PageRenderOptions {
-  /** Resolved stylesheet URLs written first among the engine-managed head tags. */
-  styles?: string[];
-  /** Resolved engine entry script URL. */
-  entry?: string;
+  plugins?: PagePlugin[];
+  tags?: (usage: PageUsage) => DocumentTags;
 }
 
 /**
@@ -32,6 +62,8 @@ interface RenderState {
   ctx: SurfaceContext;
   loaded: Map<SlotMarker, unknown>;
   states: Record<string, unknown>;
+  components: Map<string, boolean>;
+  actions: boolean;
   boot: Array<{ transition: string; params: Record<string, unknown> }>;
   islands: number;
   structure: Record<'html' | 'head' | 'body', number>;
@@ -101,6 +133,8 @@ export async function renderPage(
     ctx,
     loaded: new Map(loads.map(([marker], i) => [marker, results[i]])),
     states: {},
+    components: new Map(),
+    actions: false,
     boot: [],
     islands: 0,
     structure: { html: 0, head: 0, body: 0 },
@@ -119,16 +153,27 @@ export async function renderPage(
         `(found ${html}, ${head}, ${body}).`
     );
 
+  const plugins = options.plugins ?? [];
+  const usage: PageUsage = {
+    components: [...state.components].map(([componentId, preload]) => ({ componentId, preload })),
+    actions: state.actions || state.boot.length > 0,
+    plugins,
+    engine: false,
+  };
+  usage.engine = usage.components.length > 0 || usage.actions || plugins.length > 0;
+  const tags = options.tags?.(usage) ?? { styles: [], preload: [] };
+  const script = (src: string) =>
+    `<script type="module" src="${escapeAttr(src)}" nonce="${ctx.nonce}"></script>`;
+  // Order (DESIGN 4.4): CSS → modulepreload → bootstrap JSON → app entry → engine entry.
   const managed =
-    (options.styles ?? [])
-      .map(href => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
-      .join('') +
-    (Object.keys(state.states).length ? buildStateScript(state.states) : '') +
-    (state.boot.length ? buildBootScript(state.boot) : '') +
-    buildBasePathScript(ctx.basePath) +
-    (options.entry
-      ? `<script type="module" src="${escapeAttr(options.entry)}" nonce="${ctx.nonce}"></script>`
-      : '');
+    tags.styles.map(href => `<link rel="stylesheet" href="${escapeAttr(href)}">`).join('') +
+    tags.preload.map(href => `<link rel="modulepreload" href="${escapeAttr(href)}">`).join('') +
+    (usage.engine && Object.keys(state.states).length ? buildStateScript(state.states) : '') +
+    (usage.engine && state.boot.length ? buildBootScript(state.boot) : '') +
+    (usage.engine && plugins.length ? buildPluginsScript(plugins) : '') +
+    (usage.engine || tags.appEntry ? buildBasePathScript(ctx.basePath) : '') +
+    (tags.appEntry ? script(tags.appEntry) : '') +
+    (usage.engine && tags.engineEntry ? script(tags.engineEntry) : '');
   let output = renderToString(root);
   const replacements: Array<[WDom, string]> = [
     [state.marks.headStart, '<!--ss:head-->'],
@@ -155,6 +200,7 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
   }
   const tag = node.type === 'e' ? node.tag : undefined;
   if (tag === 'html' || tag === 'head' || tag === 'body') state.structure[tag]++;
+  if (tag && node.props && node.props['data-action'] !== undefined) state.actions = true;
   const children = node.children ?? [];
   for (const child of children)
     if (typeof (child as { then?: unknown } | undefined)?.then === 'function') {
@@ -186,14 +232,29 @@ function assertNotServerComponent(marker: IslandMarker) {
     );
 }
 
+function useComponent(state: RenderState, componentId: string, activation: Activation) {
+  const preload = activation.timing === 'load';
+  state.components.set(componentId, (state.components.get(componentId) ?? false) || preload);
+}
+
+/** Host attributes the loader reads (stage 4 moves them into `__SURFACE__.slots`). */
+function activationAttributes(activation: Activation) {
+  const attributes: Record<string, unknown> = {};
+  if (activation.timing !== 'load') attributes['data-activation'] = activation.timing;
+  if (activation.media) attributes['data-media'] = activation.media;
+  if (activation.only) attributes['data-only'] = '';
+  return attributes;
+}
+
 function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom {
   const where = `<Slot name="${marker.name}">`;
   if (scope !== 'page') throw new SurfaceError(`${where} cannot be used ${scopeName(scope)}.`);
   const { child } = marker;
   const attributes: Record<string, unknown> = { name: marker.name, ...marker.host };
   let content: WDom | undefined;
-  if (marker.mode === 'server' || marker.mode === 'static') {
-    // SSR-only until server HTML projection exists; no client state is sent.
+  if (marker.mode !== 'client') {
+    // static and server slots render on the server only; no client state or code is sent.
+    // Server HTML updates arrive with the stage 4 projection.
     if (!marker.empty) {
       const server = readServerComponent(child.component);
       const rendered = server
@@ -202,12 +263,18 @@ function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom
       content = project(rendered, 'ssr-slot', state);
     }
   } else {
-    // Client-rendered until mode normalization: SSR + hydration from the slot state.
+    const activation = marker.activation!;
     attributes['data-component'] = child.componentId;
+    Object.assign(attributes, activationAttributes(activation));
+    useComponent(state, child.componentId, activation);
     if (!marker.empty) {
       assertJsonValue(child.props, where);
       state.states[marker.name] = child.props;
-      content = project(h(child.component as never, child.props as never), 'client', state);
+      content = activation.only
+        ? isNode(marker.fallback)
+          ? project(marker.fallback, 'static', state)
+          : undefined
+        : project(h(child.component as never, child.props as never), 'client', state);
     }
   }
   return content ? h('h-state', attributes, content) : h('h-state', attributes);
@@ -222,7 +289,8 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
   assertNotServerComponent(marker);
   assertJsonValue(marker.props, where);
   const id = `$${state.islands++}`;
-  const only = marker.directives['client:only'] === true;
+  const only = marker.activation.only;
+  useComponent(state, marker.componentId, marker.activation);
 
   // IC-03: island children are server-rendered once and passed as a static fragment.
   let childrenHtml: string | undefined;
@@ -250,9 +318,9 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
     'data-island': id,
     'data-component': marker.componentId,
     'data-props': JSON.stringify(marker.props ?? {}),
+    ...activationAttributes(marker.activation),
     style: 'display:contents',
   };
-  if (only) attributes['data-only'] = '';
   return h('h-island', attributes, ...transport, ...(content ? [content] : []));
 }
 

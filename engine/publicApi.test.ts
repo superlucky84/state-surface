@@ -33,6 +33,7 @@ describe('public API split', () => {
   it('exposes client-only APIs on state-surface/client', async () => {
     const clientApi = await import('state-surface/client');
 
-    expect(clientApi).toHaveProperty('createStateSurface');
+    expect(clientApi).toHaveProperty('definePlugin');
+    expect(clientApi).not.toHaveProperty('createStateSurface');
   });
 });

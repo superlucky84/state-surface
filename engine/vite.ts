@@ -1,32 +1,47 @@
-import { access, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 import { listFiles, hasSegment, isModuleFile } from './build/fsUtils.js';
 import { SurfaceAnalyzer, type FactsCache } from './build/app.js';
 import { transformSurface } from './build/transform.js';
+import { SurfaceBuildError } from './build/diagnostics.js';
 import { nodeListener } from './adapters/http.js';
 import type { Adapter } from './adapters/types.js';
 
 const VIRTUAL = 'virtual:state-surface/manifest';
 const ISLANDS = 'virtual:state-surface/islands';
+const PLUGINS = 'virtual:state-surface/plugins';
 const ENTRY = 'virtual:state-surface/entry';
 const ENGINE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ENGINE_CLIENT = {
+  loader: path.join(ENGINE_DIR, 'client/loader.ts'),
+  runtime: path.join(ENGINE_DIR, 'client/runtime.ts'),
+  bridge: path.join(ENGINE_DIR, 'client/lithentBridge.ts'),
+};
+const SERVER_ONLY_MARKERS = [
+  path.join(ENGINE_DIR, 'serverOnly.ts'),
+  path.join(ENGINE_DIR, 'serverOnly.browser.ts'),
+];
 type PluginContext = Pick<Rollup.PluginContext, 'resolve'>;
 
 export interface SurfacePluginOptions {
   adapter?: Adapter;
-  /**
-   * Engine-managed document tags. Defaults to `client/main.ts` (engine entry) and
-   * `client/styles.css` when those files exist.
-   */
-  client?: { entry?: string; styles?: string[] };
+  /** App entry run on every page before the engine (DC-18). Default `client/entry.ts`. */
+  clientEntry?: string;
+  /** Global stylesheets linked on every page. Default `client/styles.css` when present. */
+  styles?: string[];
 }
 
-async function exists(file: string) {
-  return access(file).then(
-    () => true,
-    () => false
+/** Server-only modules (DC-02): marker import, `*.server.*` files and Node builtins. */
+function isServerOnly(id: string) {
+  const file = id.split('?')[0];
+  return (
+    /\.server\.[cm]?[jt]sx?$/.test(file) ||
+    SERVER_ONLY_MARKERS.includes(file) ||
+    file.startsWith('node:') ||
+    file.startsWith('__vite-browser-external')
   );
 }
 
@@ -46,17 +61,101 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       },
       facts
     );
+  const appEntryFile = (root: string) => {
+    const file = path.resolve(root, options.clientEntry ?? 'client/entry.ts');
+    return existsSync(file) ? file : undefined;
+  };
+  const styleFiles = (root: string) =>
+    options.styles
+      ? options.styles.map(file => path.resolve(root, file.replace(/^\//, '')))
+      : [path.join(root, 'client/styles.css')].filter(file => existsSync(file));
+  // Document paths are project-relative (manifest keys); dev serves files outside the root
+  // through /@fs.
+  const documentPath = (file: string) => {
+    const relative = path.relative(config.root, file).split(path.sep).join('/');
+    return config.command === 'serve' && relative.startsWith('..') ? '/@fs' + file : '/' + relative;
+  };
+  const isClient = (context: unknown) =>
+    (context as { environment?: { config: { consumer?: string } } }).environment?.config
+      .consumer === 'client';
   const adapter = options.adapter;
   return {
     name: 'state-surface',
     enforce: 'pre',
+    config(user, env) {
+      const base = {
+        ssr: { noExternal: ['lithent'] },
+        define: { __SURFACE_ADAPTER__: JSON.stringify(adapter?.name ?? 'node') },
+      };
+      if (env.command !== 'build' || env.isSsrBuild || user.build?.ssr) return base;
+      // Client build inputs: engine loader (its runtime, bridge, component and plugin chunks
+      // are dynamic imports), global styles and the app entry.
+      const root = path.resolve(user.root ?? process.cwd());
+      const existing = user.build?.rollupOptions?.input;
+      const input: Record<string, string> =
+        typeof existing === 'string'
+          ? { main: existing }
+          : Array.isArray(existing)
+            ? Object.fromEntries(existing.map((file, i) => [`input${i}`, file]))
+            : { ...(existing ?? {}) };
+      input['surface-loader'] = ENGINE_CLIENT.loader;
+      styleFiles(root).forEach((file, i) => (input[i ? `styles${i}` : 'styles'] = file));
+      const entry = appEntryFile(root);
+      if (entry) input['app-entry'] = entry;
+      // The server writes modulepreload links per page (client:load chunks, action runtime),
+      // so Vite's dynamic-import preload helper would only grow the loader.
+      return {
+        ...base,
+        build: {
+          rollupOptions: { input },
+          ...(user.build?.modulePreload === undefined ? { modulePreload: false as const } : {}),
+        },
+      };
+    },
     configResolved(resolved) {
       config = resolved;
     },
-    resolveId(id) {
+    resolveId(id, importer) {
       if (id === VIRTUAL) return '\0' + VIRTUAL;
       if (id === ISLANDS) return '\0' + ISLANDS;
+      if (id === PLUGINS) return '\0' + PLUGINS;
       if (id === ENTRY || id === path.resolve(config.root, ENTRY)) return '\0' + ENTRY;
+      // Dev reports server-only imports immediately; builds report the full chain in buildEnd.
+      // Vitest's DOM environments are "client" too but mix server and browser code on purpose.
+      if (
+        config.command === 'serve' &&
+        !process.env.VITEST &&
+        importer &&
+        isClient(this) &&
+        (id === 'state-surface/server-only' ||
+          id.startsWith('node:') ||
+          /\.server(\.[cm]?[jt]sx?)?$/.test(id))
+      )
+        forRollup(
+          new SurfaceBuildError(
+            `"${id}" is server-only and cannot be imported into the browser bundle.`,
+            { file: importer }
+          )
+        );
+    },
+    buildEnd(error) {
+      if (error || config.command !== 'build' || !isClient(this)) return;
+      const chains: string[] = [];
+      for (const id of this.getModuleIds()) {
+        if (!isServerOnly(id)) continue;
+        chains.push(importChain(this, id, config.root).join(' → '));
+      }
+      if (chains.length)
+        forRollup(
+          new SurfaceBuildError(
+            `Server-only modules are reachable from the browser bundle:\n  ${chains.join('\n  ')}`,
+            {
+              hint:
+                'Move the server code behind a server Slot (defineServerComponent) or a ' +
+                'transition, or pass the data as public props.',
+            }
+          )
+        );
     },
     async load(id) {
       if (id === '\0' + ENTRY) {
@@ -67,32 +166,39 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           return `import manifest from '${VIRTUAL}';import express from 'express';import {surface} from 'state-surface/adapters/express';const app=express();app.use(surface({manifest}));app.listen(Number(process.env.PORT??3000));`;
         return `import manifest from '${VIRTUAL}';import {serve} from 'state-surface/adapters/${name}';serve({manifest});`;
       }
-      if (id !== '\0' + VIRTUAL && id !== '\0' + ISLANDS) return;
+      if (![VIRTUAL, ISLANDS, PLUGINS].some(name => id === '\0' + name)) return;
       const root = config.root;
-      const app = await analyzerFor(this).app();
+      const app = await analyzerFor(this).app().catch(forRollup);
       analyzed = app.files;
       for (const file of app.files) this.addWatchFile(file);
 
-      if (id === '\0' + ISLANDS) {
-        // Stage 2 keeps every client component eager; dynamic chunks replace this map.
-        const entries = [...app.client].sort(([a], [b]) => a.localeCompare(b));
-        return [
-          ...entries.map(([, c], i) => `import * as m${i} from ${JSON.stringify(c.file)};`),
-          `export default {${entries
-            .map(([cid, c], i) => `${JSON.stringify(cid)}: m${i}[${JSON.stringify(c.exportName)}]`)
-            .join(',')}};`,
-        ].join('\n');
+      if (id === '\0' + ISLANDS || id === '\0' + PLUGINS) {
+        // One dynamic chunk per client component / plugin; shared code (Lithent, engine)
+        // becomes common chunks.
+        const entries = [...(id === '\0' + ISLANDS ? app.client : app.plugins)].sort(([a], [b]) =>
+          a.localeCompare(b)
+        );
+        return `export default {${entries
+          .map(
+            ([key, c]) =>
+              `${JSON.stringify(key)}: () => import(${JSON.stringify(c.file)}).then(m => m[${JSON.stringify(c.exportName)}])`
+          )
+          .join(',\n')}};`;
       }
 
       const files = (await listFiles(path.join(root, 'routes'))).filter(isModuleFile).sort();
       const transitions = files.filter(file => hasSegment(file, 'transitions'));
       for (const file of transitions) this.addWatchFile(file);
-      const entry =
-        options.client?.entry ??
-        ((await exists(path.join(root, 'client/main.ts'))) ? '/client/main.ts' : undefined);
-      const styles =
-        options.client?.styles ??
-        ((await exists(path.join(root, 'client/styles.css'))) ? ['/client/styles.css'] : []);
+      const entry = appEntryFile(root);
+      const document = {
+        styles: styleFiles(root).map(documentPath),
+        ...(entry ? { appEntry: documentPath(entry) } : {}),
+        engine: {
+          loader: documentPath(ENGINE_CLIENT.loader),
+          runtime: documentPath(ENGINE_CLIENT.runtime),
+          bridge: documentPath(ENGINE_CLIENT.bridge),
+        },
+      };
       let assets = {};
       if (config.command === 'build') {
         try {
@@ -111,7 +217,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         ...app.pages.map((r, i) => `import * as route${i} from ${JSON.stringify(r.filePath)};`),
         ...transitions.map((file, i) => `import transition${i} from ${JSON.stringify(file)};`),
         `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({basePath:${JSON.stringify(base)},assets:${JSON.stringify(assets)},document:${JSON.stringify({ entry, styles })},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
+        `export default defineManifest({basePath:${JSON.stringify(base)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
       ].join('\n');
     },
     async transform(code, id) {
@@ -119,7 +225,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       const file = id.split('?')[0];
       const analyzer = analyzerFor(this);
       if (!analyzer.isProjectFile(file)) return;
-      return transformSurface(code, file, analyzer);
+      return transformSurface(code, file, analyzer).catch(forRollup);
     },
     configureServer(server) {
       const changed = (file: string) => {
@@ -127,7 +233,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         const graphChanged =
           analyzed.has(file) || file.startsWith(path.join(config.root, 'routes'));
         if (!graphChanged) return;
-        for (const id of ['\0' + VIRTUAL, '\0' + ISLANDS]) {
+        for (const id of ['\0' + VIRTUAL, '\0' + ISLANDS, '\0' + PLUGINS]) {
           const mod = server.moduleGraph.getModuleById(id);
           if (mod) server.moduleGraph.invalidateModule(mod);
         }
@@ -150,11 +256,43 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         });
       };
     },
-    config() {
-      return {
-        ssr: { noExternal: ['lithent'] },
-        define: { __SURFACE_ADAPTER__: JSON.stringify(adapter?.name ?? 'node') },
-      };
-    },
   };
+}
+
+/** Shortest importer path from an entry to `id`, as project-relative names. */
+function importChain(context: Rollup.PluginContext, id: string, root: string): string[] {
+  const label = (module: string) =>
+    SERVER_ONLY_MARKERS.includes(module)
+      ? 'state-surface/server-only'
+      : module.startsWith('\0')
+        ? module.slice(1)
+        : path.isAbsolute(module)
+          ? path.relative(root, module).split(path.sep).join('/')
+          : module;
+  const previous = new Map<string, string | undefined>([[id, undefined]]);
+  const queue = [id];
+  let entry: string | undefined;
+  while (queue.length && !entry) {
+    const current = queue.shift()!;
+    const info = context.getModuleInfo(current);
+    const importers = [...(info?.importers ?? []), ...(info?.dynamicImporters ?? [])];
+    if (info?.isEntry || !importers.length) entry = current;
+    for (const importer of importers)
+      if (!previous.has(importer)) {
+        previous.set(importer, current);
+        queue.push(importer);
+      }
+  }
+  const chain: string[] = [];
+  for (let at: string | undefined = entry ?? id; at; at = previous.get(at)) chain.push(label(at));
+  // Start at the island/plugin module: loader → islands map is engine plumbing.
+  const start = chain.findIndex(name => name === ISLANDS || name === PLUGINS);
+  return start >= 0 && start < chain.length - 1 ? chain.slice(start + 1) : chain;
+}
+
+/** Rollup prefixes hook errors with the plugin name; drop ours to avoid printing it twice. */
+function forRollup(error: unknown): never {
+  if (error instanceof SurfaceBuildError)
+    error.message = error.message.replace(/^\[state-surface\] /, '');
+  throw error;
 }

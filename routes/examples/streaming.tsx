@@ -12,13 +12,13 @@ export default async function Page(ctx: SurfaceContext) {
   return (
     <Layout header={content['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="demo:controls">
+        <Slot name="demo:controls" client:load>
           <DemoControls {...content['demo:controls']} />
         </Slot>
-        <Slot name="demo:timeline" data-animate="slide-up">
+        <Slot name="demo:timeline" client:load data-animate="slide-up">
           <DemoTimeline {...content['demo:timeline']} />
         </Slot>
-        <Slot name="demo:output" data-animate="fade">
+        <Slot name="demo:output" client:load data-animate="fade">
           <DemoOutput {...content['demo:output']} />
         </Slot>
       </main>

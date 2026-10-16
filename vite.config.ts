@@ -13,13 +13,8 @@ export default defineConfig({
   base,
   build: {
     outDir: 'dist/client',
+    // Inputs (engine loader, client/styles.css, client/entry.ts) come from the surface plugin.
     manifest: true,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'client/main.ts'),
-        styles: path.resolve(__dirname, 'client/styles.css'),
-      },
-    },
   },
   ssr: {
     noExternal: ['lithent', 'state-surface'],

@@ -9,8 +9,8 @@ import { startServer } from '../perf/server.mjs';
  *
  * Allowed differences (IMPLEMENT stage 2 Exit): doctype spelling, comment markers,
  * position of engine-managed tags (stylesheets, bootstrap JSON, entry script), the
- * entry asset hash and nonce, the `data-component` slot attribute, and `__BOOT__` as an
- * array of entries. Element structure, attributes, text and bootstrap JSON must match.
+ * entry asset hash and nonce, the `data-component` slot attribute, `__BOOT__` as an array of
+ * entries, and (stage 3) modulepreload links and the per-page `__PLUGINS__` list. Element structure, attributes, text and bootstrap JSON must match.
  */
 
 const snapshot = JSON.parse(await readFile(new URL('./stage1-demo.json', import.meta.url), 'utf8'));

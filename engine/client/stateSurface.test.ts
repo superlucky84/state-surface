@@ -3,10 +3,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StateSurface } from './stateSurface.js';
-import type { StateSurfacePlugin } from './stateSurface.js';
 import type { TraceEvent } from './stateSurface.js';
 
-function createMockSurface(options: { transitionTimeout?: number } = {}) {
+function createMockSurface(
+  options: {
+    transitionTimeout?: number;
+    isUpdatable?: (name: string, el: HTMLElement) => boolean;
+    onAction?: (event: { name: string; phase: 'start' | 'end'; error?: Error }) => void;
+  } = {}
+) {
   const rendered: Array<{ name: string; data: any }> = [];
   const hydrated: Array<{ name: string; data: any }> = [];
   const updated: Array<{ name: string; data: any }> = [];
@@ -30,16 +35,11 @@ function createMockSurface(options: { transitionTimeout?: number } = {}) {
     trace: event => traces.push(event),
     frameBudgetMs: 1000, // high budget so flushQueue drains all in tests
     transitionTimeout: options.transitionTimeout,
+    isUpdatable: options.isUpdatable,
+    onAction: options.onAction,
   });
 
   return { surface, rendered, hydrated, updated, unmounted, traces };
-}
-
-function createMockPlugin(overrides: Partial<StateSurfacePlugin> = {}): StateSurfacePlugin {
-  return {
-    name: 'mock-plugin',
-    ...overrides,
-  };
 }
 
 function setupDOM(anchors: string[], stateJson?: Record<string, any>) {
@@ -541,71 +541,45 @@ describe('StateSurface', () => {
     });
   });
 
-  // ── Plugin Hooks ──
+  // ── Static slots and action notifications ──
 
-  describe('plugin hooks', () => {
-    it('calls mount/update/unmount plugin hooks during state sync', () => {
-      setupDOM(['a', 'b']);
-
-      const mounted: string[] = [];
-      const updated: string[] = [];
-      const unmounted: string[] = [];
-
-      const plugin = createMockPlugin({
-        onMount(slotName) {
-          mounted.push(slotName);
-        },
-        onUpdate(slotName) {
-          updated.push(slotName);
-        },
-        onUnmount(slotName) {
-          unmounted.push(slotName);
-        },
+  describe('non-updatable slots', () => {
+    it('keeps static slot content when frames target it but still applies UI patches', () => {
+      document.body.innerHTML =
+        '<h-state name="hero"><p>SSR hero</p></h-state><h-state name="live" data-component="x"></h-state>';
+      const { surface, rendered, unmounted, traces } = createMockSurface({
+        isUpdatable: (_name, el) => el.hasAttribute('data-component'),
       });
-
-      const { surface } = createMockSurface();
-      (surface as any).plugins = [plugin];
       surface.discoverAnchors();
+      surface.hydrate({ hero: { title: 'ignored' } });
 
       (surface as any).frameQueue.push({
         type: 'state',
-        states: {
-          a: { v: 1 },
-          b: { v: 1 },
-        },
+        states: { hero: { title: 'new' }, live: { v: 1 } },
+        ui: { hero: { classAdd: ['is-active'] } },
       });
       (surface as any).flushQueue(true);
-
       (surface as any).frameQueue.push({
         type: 'state',
         full: false,
-        states: { a: { v: 2 } },
-        changed: ['a'],
-        removed: ['b'],
+        states: {},
+        removed: ['hero'],
       });
       (surface as any).flushQueue(true);
 
-      expect(mounted).toEqual(['a', 'b']);
-      expect(updated).toEqual(['a']);
-      expect(unmounted).toEqual(['b']);
+      expect(rendered.map(entry => entry.name)).toEqual(['live']);
+      expect(unmounted).toEqual([]);
+      const hero = document.querySelector('h-state[name="hero"]')!;
+      expect(hero.innerHTML).toBe('<p>SSR hero</p>');
+      expect(traces.some(event => event.kind === 'dropped')).toBe(true);
     });
+  });
 
-    it('calls transition start/end hooks and propagates transition error', async () => {
+  describe('onAction', () => {
+    it('reports start and end with the transition error', async () => {
       setupDOM(['a']);
-
-      const starts: string[] = [];
-      const ends: Array<{ name: string; error?: Error }> = [];
-      const plugin = createMockPlugin({
-        onTransitionStart(name) {
-          starts.push(name);
-        },
-        onTransitionEnd(name, error) {
-          ends.push({ name, error });
-        },
-      });
-
-      const { surface } = createMockSurface();
-      (surface as any).plugins = [plugin];
+      const events: Array<{ name: string; phase: string; error?: Error }> = [];
+      const { surface } = createMockSurface({ onAction: event => events.push(event) });
       surface.discoverAnchors();
 
       const fetchSpy = vi
@@ -614,12 +588,28 @@ describe('StateSurface', () => {
 
       await surface.transition('demo');
 
-      expect(starts).toEqual(['demo']);
-      expect(ends).toHaveLength(1);
-      expect(ends[0].name).toBe('demo');
-      expect(ends[0].error).toBeInstanceOf(Error);
-      expect(ends[0].error?.message).toBe('HTTP 500');
+      expect(events.map(event => [event.name, event.phase])).toEqual([
+        ['demo', 'start'],
+        ['demo', 'end'],
+      ]);
+      expect(events[1].error?.message).toBe('HTTP 500');
 
+      fetchSpy.mockRestore();
+    });
+
+    it('keeps the transition running when an onAction listener throws', async () => {
+      setupDOM(['a']);
+      const { surface, traces } = createMockSurface({
+        onAction: () => {
+          throw new Error('listener failed');
+        },
+      });
+      surface.discoverAnchors();
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{"type":"done"}\n'));
+      await expect(surface.transition('demo')).resolves.toBeUndefined();
+      expect(traces.some(event => event.kind === 'error')).toBe(true);
       fetchSpy.mockRestore();
     });
   });

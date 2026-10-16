@@ -1,10 +1,7 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { surface } from 'state-surface/vite';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rawBase = process.env.BASE_PATH;
 const base = rawBase ? `${rawBase.replace(/\/$/, '')}/` : '/';
 
@@ -13,13 +10,8 @@ export default defineConfig({
   base,
   build: {
     outDir: 'dist/client',
+    // Inputs (engine loader, client/styles.css, client/entry.ts) come from the surface plugin.
     manifest: true,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'client/main.ts'),
-        styles: path.resolve(__dirname, 'client/styles.css'),
-      },
-    },
   },
   ssr: {
     noExternal: ['lithent', 'state-surface'],

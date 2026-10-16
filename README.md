@@ -65,11 +65,11 @@ export default async function Page(ctx: SurfaceContext) {
     <Layout title="Stock Dashboard">
       <main class="mx-auto max-w-6xl p-6">
         <h1 class="mb-6 text-2xl font-bold">Stock Dashboard</h1>
-        <Slot name="stock:price">
+        <Slot name="stock:price" client:load>
           <StockPrice symbol={symbol} price={0} change={0} loading />
         </Slot>
         {/* An empty slot declares its component and is filled by the first frame. */}
-        <Slot name="stock:news" component={StockNews} data-animate="fade" />
+        <Slot name="stock:news" component={StockNews} client:visible data-animate="fade" />
         <Boot transition="dashboard-load" params={{ symbol }} />
       </main>
     </Layout>
@@ -83,6 +83,12 @@ export default async function Page(ctx: SurfaceContext) {
   adds the doctype, comment markers, stylesheets, bootstrap JSON and the entry script.
 - Files and folders starting with `_` are not pages, so helpers live next to pages in `_components/`.
 - `<Boot>` starts a transition right after the page loads (here: streaming the real data).
+- **Modes**: a Slot without directives is `static` (server HTML only, no JS); `client:load`,
+  `client:idle`, `client:visible`, `client:media` and `client:only` make it a client slot that
+  Lithent hydrates when its chunk loads; `mode="server"` renders on the server only.
+- **Per-page JavaScript**: every client component is its own chunk. A page without client
+  components, `data-action`, `<Boot>` or plugins ships no engine script at all; the action runtime
+  and Lithent load only on pages that need them.
 
 ### 2. Template — Pure projection
 
@@ -110,6 +116,30 @@ export default function StockPrice({ symbol, price, change }: Props) {
 Server-only data steps use `defineServerComponent({ load, render })` from `state-surface/server` as
 the child of `<Slot mode="server">`; the engine awaits every `load` of the page in parallel before
 rendering. Independent client islands use directives such as `<LikeButton client:idle />`.
+Modules that must never reach the browser `import 'state-surface/server-only'` or are named
+`*.server.ts`; the build fails with the import chain if a client component reaches one.
+
+Browser-only enhancements are client plugins declared per page (or layout):
+
+```ts
+// client/plugins/chatScroll.ts
+import { definePlugin } from 'state-surface/client';
+
+export const chatScroll = definePlugin({
+  name: 'chat-scroll',
+  slots: ['chat:messages'],
+  load: 'load', // 'load' | 'idle' (default) | 'visible'
+  attach(el) {
+    el.scrollTop = el.scrollHeight;
+  },
+  update(el) {
+    el.scrollTop = el.scrollHeight;
+  },
+});
+
+// routes/examples/chat.tsx
+export const plugins = [chatScroll];
+```
 
 ### 3. Transition — Server-side state generator
 
@@ -215,7 +245,7 @@ routes/                  # Pages (routes/**/*.tsx, auto-loaded)
 
 layouts/                 # Layout components (Layout.tsx)
 shared/                  # Data helpers, i18n utilities
-client/                  # Assets (styles.css, plugins/)
+client/                  # styles.css, plugins/, optional entry.ts (runs on every page)
 
 engine/                  # Framework core (do not edit)
   server/                #   Web-standard core, page renderer, transition handler
@@ -278,8 +308,8 @@ import {
 } from 'state-surface/server';
 import { serve } from 'state-surface/adapters/node';
 
-// Client runtime
-import { createStateSurface } from 'state-surface/client';
+// Client plugins (the engine entry itself is generated)
+import { definePlugin } from 'state-surface/client';
 ```
 
 ```typescript
@@ -291,7 +321,7 @@ import type {
   TransitionHandler,
   Middleware,
 } from 'state-surface/server';
-import type { StateSurfacePlugin } from 'state-surface/client';
+import type { PluginDefinition } from 'state-surface/client';
 ```
 
 ## Tech Stack

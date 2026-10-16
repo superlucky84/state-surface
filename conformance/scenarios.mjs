@@ -38,6 +38,11 @@ export async function scenarios(origin, runtime) {
     assert.ok(entry && entry[1].endsWith('/assets/probe-12345678.js'));
     assert.equal(entry[2], states['fixture:state'].nonce);
   });
+  await check('static page without engine script', async () => {
+    const html = await (await fetch(url('/static'))).text();
+    assert.ok(html.includes('<h-state name="fixture:state"><p>static</p></h-state>'));
+    assert.ok(!html.includes('<script'));
+  });
   await check('dynamic decoded params, HEAD, 404 and mount boundary', async () => {
     assert.ok((await (await fetch(url('/dynamic/hello%20world'))).text()).includes('hello world'));
     const head = await fetch(url('/'), { method: 'HEAD' });

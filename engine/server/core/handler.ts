@@ -1,7 +1,8 @@
 import { createContext, sequence, type Middleware, type SurfaceContext } from './context.js';
 import type { ServerManifest } from './manifest.js';
-import { renderPage } from '../ssrRenderer.js';
-import { resolveAsset, resolveAssetCss } from '../assets.js';
+import { renderPage, type DocumentTags, type PageUsage } from '../ssrRenderer.js';
+import { resolveAsset, resolveAssetCss, resolveChunk } from '../assets.js';
+import type { DocumentConfig } from './manifest.js';
 import { validateStateFrame, type StateFrame } from '../../shared/protocol.js';
 import { encodeFrame } from '../../shared/ndjson.js';
 import type { Logger } from '../logger.js';
@@ -51,11 +52,7 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
   const bodyLimit = options.bodyLimit ?? 100 * 1024;
   if (!Number.isSafeInteger(bodyLimit) || bodyLimit < 0)
     throw new Error('bodyLimit must be a nonnegative byte count');
-  // Asset URLs are immutable build configuration; resolve them once per handler.
-  const documentTags = {
-    styles: (options.manifest.document?.styles ?? []).flatMap(resolveAssetCss),
-    entry: options.manifest.document?.entry && resolveAsset(options.manifest.document.entry),
-  };
+  const documentTags = createDocumentTags(options.manifest.document ?? {});
   const routes = options.manifest.routes.map(route => ({
     ...route,
     segments: route.pattern.split('/').filter(Boolean),
@@ -126,9 +123,15 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         }
         const dispatch = async (): Promise<Response> => {
           if (ctx.route.kind === 'page' && selected)
-            return new Response(await renderPage(selected.module, ctx, documentTags), {
-              headers: { 'content-type': 'text/html; charset=utf-8' },
-            });
+            return new Response(
+              await renderPage(selected.module, ctx, {
+                plugins: selected.plugins,
+                tags: documentTags,
+              }),
+              {
+                headers: { 'content-type': 'text/html; charset=utf-8' },
+              }
+            );
           if (ctx.route.kind !== 'transition') return new Response('Not Found', { status: 404 });
           const handler = Object.hasOwn(options.manifest.transitions, transitionName!)
             ? options.manifest.transitions[transitionName!]
@@ -345,5 +348,41 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         if (!streamOwnsCleanup) cleanup();
       }
     },
+  };
+}
+
+/**
+ * Entry selection (DESIGN 5.1): every page gets the global styles and the app entry; the
+ * engine loader only when the page uses client components, actions, `<Boot>` or plugins.
+ * Rendered client components add their chunk CSS; `client:load` components and the action
+ * runtime are modulepreloaded so the loader does not wait on a request waterfall.
+ */
+function createDocumentTags(document: DocumentConfig) {
+  // Asset URLs are immutable build configuration; resolve the static parts once.
+  const styles = (document.styles ?? []).flatMap(resolveAssetCss);
+  const appEntry = document.appEntry && resolveAsset(document.appEntry);
+  const engine = document.engine;
+  const engineEntry = engine && resolveAsset(engine.loader);
+  const loaded = new Set(engine ? (resolveChunk(engine.loader)?.files ?? []) : []);
+  return (usage: PageUsage): DocumentTags => {
+    if (!usage.engine || !engine) return { styles, preload: [], appEntry };
+    const css = new Set(styles);
+    const preload = new Set<string>();
+    const add = (source: string, eager: boolean) => {
+      const chunk = resolveChunk(source);
+      for (const file of chunk?.css ?? []) css.add(file);
+      if (eager) for (const file of chunk?.files ?? []) if (!loaded.has(file)) preload.add(file);
+    };
+    const eager = usage.components.some(component => component.preload);
+    if (usage.actions) add(engine.runtime, true);
+    if (usage.components.length) add(engine.bridge, eager);
+    for (const component of usage.components)
+      add(
+        '/' + component.componentId.slice(0, component.componentId.lastIndexOf('#')),
+        component.preload
+      );
+    for (const plugin of usage.plugins)
+      add('/' + plugin.id.slice(0, plugin.id.lastIndexOf('#')), false);
+    return { styles: [...css], preload: [...preload], appEntry, engineEntry };
   };
 }

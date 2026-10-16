@@ -5,6 +5,10 @@ import GuideToc from './_components/guideToc.js';
 import GuideContent from './_components/guideContent.js';
 import { getLang } from '../../shared/i18n.js';
 import { guideLoadingState } from '../../shared/content.js';
+import { prism } from '../../client/plugins/prism.js';
+import { guideToc } from '../../client/plugins/guideToc.js';
+
+export const plugins = [prism, guideToc];
 
 const VALID_SLUGS = [
   'quickstart',
@@ -33,12 +37,12 @@ export default async function Page(ctx: SurfaceContext) {
     <Layout header={state['page:header']}>
       <main class="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6">
         <div class="w-full md:w-56 md:shrink-0">
-          <Slot name="guide:toc">
+          <Slot name="guide:toc" client:load>
             <GuideToc {...state['guide:toc']} />
           </Slot>
         </div>
         <div class="min-w-0 flex-1">
-          <Slot name="guide:content">
+          <Slot name="guide:content" client:load>
             <GuideContent {...state['guide:content']} />
           </Slot>
         </div>

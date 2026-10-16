@@ -86,7 +86,7 @@ describe('all routes render valid HTML', () => {
       expect(res.text).toContain('<html');
       expect(res.text).toContain('</html>');
       expect(res.text).toMatch(
-        /<script type="module" src="\/client\/main.ts" nonce="[0-9a-f]+"><\/script>/
+        /<script type="module" src="\/engine\/client\/loader.ts" nonce="[0-9a-f]+"><\/script>/
       );
     });
   }
