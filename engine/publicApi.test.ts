@@ -4,10 +4,14 @@ describe('public API split', () => {
   it('keeps root entry focused on shared APIs', async () => {
     const rootApi = await import('state-surface');
 
-    expect(rootApi).toHaveProperty('defineTemplate');
+    expect(rootApi).toHaveProperty('Slot');
+    expect(rootApi).toHaveProperty('Boot');
     expect(rootApi).toHaveProperty('prefixPath');
     expect(rootApi).toHaveProperty('getBasePath');
 
+    expect(rootApi).not.toHaveProperty('defineTemplate');
+    expect(rootApi).not.toHaveProperty('Island');
+    expect(rootApi).not.toHaveProperty('defineServerComponent');
     expect(rootApi).not.toHaveProperty('defineTransition');
     expect(rootApi).not.toHaveProperty('createHandler');
     expect(rootApi).not.toHaveProperty('createStateSurface');
@@ -21,6 +25,7 @@ describe('public API split', () => {
 
     expect(serverApi).toHaveProperty('createHandler');
     expect(serverApi).toHaveProperty('defineTransition');
+    expect(serverApi).toHaveProperty('defineServerComponent');
     expect(serverApi).toHaveProperty('resolveAsset');
     expect(serverApi).toHaveProperty('resolveAssetCss');
   });

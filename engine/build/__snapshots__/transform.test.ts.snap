@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`call-site transform > turns directive islands and Slot children into descriptors 1`] = `
+"import { Island as __SurfaceIsland } from 'state-surface/internal/island';
+import { Slot } from 'state-surface';
+import Title from '../components/Title';
+import { Like as Heart } from '../components/Like';
+import Cart from '../components/Cart';
+export default async function Page() {
+  const props = { text: "hi" };
+  return (
+    <main>
+      <Slot name="page:title" data-animate="fade">
+        <__SurfaceIsland __ssComponent={Title} __ssId={"components/Title.tsx#default"} {...props} />
+      </Slot>
+      <Slot __ssComponentId={"components/Title.tsx#default"} name="page:empty" component={Title} />
+      <Slot name="cart" mode="server"><__SurfaceIsland __ssComponent={Cart} __ssId={"components/Cart.tsx#default"} userId="u1" /></Slot>
+      <__SurfaceIsland __ssComponent={Heart} __ssId={"components/Like.tsx#Like"} count={1} client:idle>
+        <p>static child</p>
+      </__SurfaceIsland>
+    </main>
+  );
+}"
+`;

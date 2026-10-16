@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { h } from 'lithent';
 import { createHandler } from './handler.js';
 import { defineManifest } from './manifest.js';
 
@@ -10,26 +11,24 @@ describe('request context and middleware', () => {
           {
             pattern: '/:id',
             module: {
-              layout: (_, ctx) =>
-                JSON.stringify({
+              default: async ctx => {
+                await new Promise(resolve =>
+                  setTimeout(resolve, ctx.params.id === 'slow' ? 10 : 0)
+                );
+                const data = JSON.stringify({
                   params: ctx.params,
                   locals: ctx.locals,
                   env: ctx.env,
                   cookie: ctx.cookies.get('value'),
                   nonce: ctx.nonce,
                   kind: ctx.route.kind,
-                }),
-              initial: async ctx => {
-                await new Promise(resolve =>
-                  setTimeout(resolve, ctx.params.id === 'slow' ? 10 : 0)
-                );
-                return {};
+                });
+                return h('html', {}, h('head', {}), h('body', {}, h('pre', {}, data)));
               },
             },
           },
         ],
         transitions: {},
-        templates: {},
       },
       middleware: [
         async (ctx, next) => {
@@ -47,8 +46,10 @@ describe('request context and middleware', () => {
         )
       )
     );
-    const a = JSON.parse(await slow.text()),
-      b = JSON.parse(await fast.text());
+    const read = async (response: Response) =>
+      JSON.parse((await response.text()).match(/<pre>(.*)<\/pre>/)![1]);
+    const a = await read(slow),
+      b = await read(fast);
     expect(a).toMatchObject({
       params: { id: 'slow' },
       locals: { id: 'slow' },
@@ -64,7 +65,7 @@ describe('request context and middleware', () => {
   it('runs onion middleware and permits early return and response decoration', async () => {
     const calls: string[] = [];
     const handler = createHandler({
-      manifest: { routes: [], transitions: {}, templates: {} },
+      manifest: { routes: [], transitions: {} },
       middleware: [
         async (_, next) => {
           calls.push('a');
@@ -87,7 +88,7 @@ describe('request context and middleware', () => {
   it('rejects duplicate next calls rather than dispatching a request twice', async () => {
     const handler = createHandler({
       development: true,
-      manifest: { routes: [], transitions: {}, templates: {} },
+      manifest: { routes: [], transitions: {} },
       middleware: [
         async (_, next) => {
           await next();
@@ -103,7 +104,6 @@ describe('request context and middleware', () => {
     expect(() =>
       defineManifest({
         routes: [],
-        templates: [],
         transitions: [
           { name: 'same', handler: async function* () {} },
           { name: 'same', handler: async function* () {} },

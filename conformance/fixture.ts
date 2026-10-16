@@ -1,5 +1,19 @@
 import { h } from 'lithent';
 import type { HandlerOptions } from '../engine/server/core/handler.js';
+import { Island, Slot } from '../engine/shared/surfaceTree.js';
+
+const el = (tag: unknown, props: Record<string, unknown> = {}, ...children: unknown[]) =>
+  h(tag as never, props as never, ...(children as never[]));
+const Fixture = (props: { value: unknown }) => h('p', {}, String(props.value));
+// Compiled form of <Slot name="fixture:state"><Fixture {...props} /></Slot>.
+const state = (props: Record<string, unknown>) =>
+  el(
+    Slot,
+    { name: 'fixture:state' },
+    el(Island, { __ssComponent: Fixture, __ssId: 'conformance/Fixture.tsx#default', ...props })
+  );
+const documentOf = (body: unknown) =>
+  el('html', {}, el('head', {}, el('title', {}, 'Fixture')), el('body', {}, body));
 
 export function fixture(basePath = '/demo'): HandlerOptions {
   let aborted = 0;
@@ -25,39 +39,35 @@ export function fixture(basePath = '/demo'): HandlerOptions {
       },
     ],
     manifest: {
+      document: { entry: '/assets/probe-12345678.js' },
       routes: [
         {
           pattern: '/',
           module: {
-            layout: s =>
-              `<!DOCTYPE html><html><head><title>Fixture</title></head><body><h-state name="fixture:state"></h-state>${s}</body></html>`,
-            initial: ctx => ({
-              'fixture:state': {
-                value: 'Hello',
-                runtime: ctx.env.RUNTIME ?? 'unknown',
-                cookie: ctx.cookies.get('lang') ?? '',
-                nonce: ctx.nonce,
-              },
-            }),
+            default: ctx =>
+              documentOf(
+                state({
+                  value: 'Hello',
+                  runtime: ctx.env.RUNTIME ?? 'unknown',
+                  cookie: ctx.cookies.get('lang') ?? '',
+                  nonce: ctx.nonce,
+                })
+              ),
           },
         },
         {
           pattern: '/dynamic/:id',
-          module: {
-            layout: s => `<h-state name="fixture:state"></h-state>${s}`,
-            initial: ctx => ({ 'fixture:state': { value: ctx.params.id } }),
-          },
+          module: { default: ctx => documentOf(state({ value: ctx.params.id })) },
         },
         {
           pattern: '/failure',
           module: {
-            layout() {
+            default() {
               throw new Error('secret-render-detail');
             },
           },
         },
       ],
-      templates: { 'fixture:state': props => h('p', {}, String(props.value)) },
       transitions: {
         stream: async function* (_, ctx) {
           ctx.cookies.set('first', 'yes', { httpOnly: true });

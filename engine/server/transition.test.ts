@@ -11,7 +11,7 @@ function fixture(
   return createHandler({
     development: true,
     ...options,
-    manifest: { routes: [], templates: {}, transitions },
+    manifest: { routes: [], transitions },
   });
 }
 function post(

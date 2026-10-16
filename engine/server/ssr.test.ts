@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeStateJSON, fillHState, buildStateScript, buildUiScript } from './ssr.js';
+import { safeStateJSON, buildStateScript, buildBootScript } from './ssr.js';
 
 describe('safeStateJSON', () => {
   it('escapes < > & for safe HTML embedding', () => {
@@ -19,81 +19,6 @@ describe('safeStateJSON', () => {
   });
 });
 
-describe('fillHState', () => {
-  const renderTemplate = (name: string, data: any) => {
-    if (name === 'page:article') return `<h1>${data.title}</h1>`;
-    if (name === 'panel:comments') return `<ul>${data.count} comments</ul>`;
-    return '';
-  };
-
-  it('fills matching anchors with rendered content', () => {
-    const html = '<main><h-state name="page:article"></h-state></main>';
-    const states = { 'page:article': { title: 'Hello' } };
-
-    const result = fillHState(html, states, renderTemplate);
-    expect(result).toContain('<h1>Hello</h1>');
-    expect(result).not.toContain('data-ssr-hash');
-  });
-
-  it('leaves anchors empty when no state provided', () => {
-    const html = '<h-state name="panel:sidebar"></h-state>';
-    const states = {};
-
-    const result = fillHState(html, states, renderTemplate);
-    expect(result).toBe('<h-state name="panel:sidebar"></h-state>');
-    expect(result).not.toContain('data-ssr-hash');
-  });
-
-  it('fills multiple anchors', () => {
-    const html = '<h-state name="page:article"></h-state><h-state name="panel:comments"></h-state>';
-    const states = {
-      'page:article': { title: 'Test' },
-      'panel:comments': { count: 5 },
-    };
-
-    const result = fillHState(html, states, renderTemplate);
-    expect(result).toContain('<h1>Test</h1>');
-    expect(result).toContain('5 comments');
-  });
-
-  it('preserves existing attributes on h-state', () => {
-    const html = '<h-state name="page:article" mode="visibility"></h-state>';
-    const states = { 'page:article': { title: 'Hi' } };
-
-    const result = fillHState(html, states, renderTemplate);
-    expect(result).toContain('mode="visibility"');
-    expect(result).toContain('<h1>Hi</h1>');
-  });
-
-  it('injects class attribute from ui classAdd', () => {
-    const html = '<h-state name="page:article"></h-state>';
-    const states = { 'page:article': { title: 'Test' } };
-    const ui = { 'page:article': { classAdd: ['highlight', 'active'] } };
-
-    const result = fillHState(html, states, renderTemplate, ui);
-    expect(result).toContain('class="highlight active"');
-    expect(result).toContain('<h1>Test</h1>');
-  });
-
-  it('injects style attribute from ui cssVars', () => {
-    const html = '<h-state name="page:article"></h-state>';
-    const states = { 'page:article': { title: 'Test' } };
-    const ui = { 'page:article': { cssVars: { '--accent': '#f00', '--size': '16px' } } };
-
-    const result = fillHState(html, states, renderTemplate, ui);
-    expect(result).toContain('style="--accent: #f00; --size: 16px"');
-  });
-
-  it('no ui → no class/style attributes added (regression)', () => {
-    const html = '<h-state name="page:article"></h-state>';
-    const states = { 'page:article': { title: 'Test' } };
-
-    const result = fillHState(html, states, renderTemplate);
-    expect(result).not.toContain('class=');
-    expect(result).not.toContain('style=');
-  });
-});
-
 describe('buildStateScript', () => {
   it('produces a script tag with safe JSON', () => {
     const states = { 'page:article': { title: '<Test>' } };
@@ -106,17 +31,18 @@ describe('buildStateScript', () => {
   });
 });
 
-describe('buildUiScript', () => {
-  it('produces a script tag with ui data', () => {
-    const ui = { 'page:article': { classAdd: ['highlight'] } };
-    const result = buildUiScript(ui);
-
-    expect(result).toMatch(/^<script id="__UI__" type="application\/json">/);
-    expect(result).toMatch(/<\/script>$/);
-    expect(result).toContain('highlight');
-  });
-
-  it('returns empty string when ui is empty', () => {
-    expect(buildUiScript({})).toBe('');
+describe('buildBootScript', () => {
+  it('serializes <Boot> entries as an ordered array', () => {
+    const script = buildBootScript([
+      { transition: 'first', params: { q: '</script>' } },
+      { transition: 'second', params: {} },
+    ]);
+    expect(script).toMatch(/^<script id="__BOOT__" type="application\/json">/);
+    expect(script.split('</script>')).toHaveLength(2);
+    const json = script.slice(script.indexOf('>') + 1, script.lastIndexOf('</script>'));
+    expect(JSON.parse(json)).toEqual([
+      { transition: 'first', params: { q: '</script>' } },
+      { transition: 'second', params: {} },
+    ]);
   });
 });

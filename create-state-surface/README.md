@@ -19,19 +19,19 @@ The generated project comes with a complete working app:
 
 ```
 my-app/
-  server.ts                # Express + Vite dev server entry
+  server.ts                # Node server entry (production build manifest)
   routes/
-    index.ts               # Home page (hero, concepts, features)
-    guide/[slug].ts        # Dynamic guide pages with TOC
+    index.tsx              # Home page (hero, concepts, features)
+    guide/[slug].tsx       # Dynamic guide pages with TOC
     examples/
-      streaming.ts         # Full/partial/accumulate frame demo
-      actions.ts           # Declarative action playground
-      chat.ts              # Streaming chatbot with abort
-      search.ts            # Form submission + pending state
-      view-transition.ts   # View Transition API morphing
-      ui-patch.ts          # CSS class/variable patching
-    _shared/               # Cross-route templates & transitions
-  layouts/                 # Page composition helpers
+      streaming.tsx        # Full/partial/accumulate frame demo
+      actions.tsx          # Declarative action playground
+      chat.tsx             # Streaming chatbot with abort
+      search.tsx           # Form submission + pending state
+      view-transition.tsx  # View Transition API morphing
+      ui-patch.tsx         # CSS class/variable patching
+    _shared/               # Cross-route components & transitions
+  layouts/Layout.tsx       # Document shell with shared slots
   shared/                  # Data helpers, i18n utilities
   client/                  # Tailwind CSS entry + plugins
   tsconfig.json
@@ -48,8 +48,8 @@ npx create-state-surface <project-name>
 npx create-state-surface --help
 ```
 
-| Argument | Description |
-|---|---|
+| Argument         | Description                                   |
+| ---------------- | --------------------------------------------- |
 | `<project-name>` | Directory name for the new project (required) |
 
 Project names must start with a letter or number and may include letters, numbers, `-`, or `_`.

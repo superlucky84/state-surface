@@ -1,7 +1,6 @@
 import { h, render, mount, componentUpdate } from 'lithent';
 import type { TagFunction, Props } from 'lithent';
 import { hydration } from 'lithent/ssr';
-import { getTemplate } from '../shared/templateRegistry.js';
 import type { StateSurfaceOptions } from './stateSurface.js';
 
 type MountInfo = {
@@ -9,16 +8,20 @@ type MountInfo = {
   compKey: Props;
 };
 
+/** componentId → client component, generated as `virtual:state-surface/islands`. */
+export type ComponentRegistry = Record<string, TagFunction | undefined>;
+
 export type LithentBridgeOptions = {
-  fallbackTemplate?: string;
+  components?: ComponentRegistry;
   onError?: (name: string, error: unknown) => void;
 };
 
 /**
  * Create StateSurface callbacks wired to Lithent's render/hydration/update pipeline.
  *
- * The bridge wraps each template in a DataProxy component so external data
- * updates are forwarded through Lithent's VDOM diff.
+ * Each slot host names its component with `data-component` (componentId). The bridge
+ * wraps the component in a DataProxy so external data updates are forwarded through
+ * Lithent's VDOM diff.
  */
 export function createLithentBridge(
   options?: LithentBridgeOptions
@@ -27,22 +30,26 @@ export function createLithentBridge(
   'renderTemplate' | 'hydrateTemplate' | 'updateTemplate' | 'unmountTemplate'
 > {
   const mounts = new Map<string, MountInfo>();
-  const fallbackName = options?.fallbackTemplate;
+  const components = options?.components ?? {};
   const onError = options?.onError;
 
-  function resolveComponent(name: string): TagFunction | undefined {
-    return getTemplate(name) ?? (fallbackName ? getTemplate(fallbackName) : undefined);
+  function resolveComponent(el: HTMLElement): TagFunction | undefined {
+    const id = el.getAttribute('data-component');
+    return id && Object.hasOwn(components, id) ? components[id] : undefined;
   }
 
   function renderFallback(el: HTMLElement, name: string, error?: unknown) {
-    const msg = error ? `Render error in "${name}": ${error}` : `Template "${name}" not found`;
+    const id = el.getAttribute('data-component');
+    const msg = error
+      ? `Render error in "${name}": ${error}`
+      : `Component for slot "${name}" not found${id ? ` (${id})` : ''}`;
     el.innerHTML = `<div data-error="template-fallback">${escapeHtml(msg)}</div>`;
     onError?.(name, error ?? new Error(msg));
   }
 
   return {
     renderTemplate(name: string, data: any, el: HTMLElement) {
-      const component = resolveComponent(name);
+      const component = resolveComponent(el);
       if (!component) {
         renderFallback(el, name);
         return;
@@ -50,7 +57,7 @@ export function createLithentBridge(
 
       try {
         const proxyProps = { __data: data, __component: component };
-        const wdom = h(DataProxy, proxyProps);
+        const wdom = h(DataProxy as TagFunction, proxyProps);
         const cleanup = render(wdom, el);
         mounts.set(name, { cleanup, compKey: proxyProps });
       } catch (err) {
@@ -59,7 +66,7 @@ export function createLithentBridge(
     },
 
     hydrateTemplate(name: string, data: any, el: HTMLElement): () => void {
-      const component = resolveComponent(name);
+      const component = resolveComponent(el);
       if (!component) {
         renderFallback(el, name);
         return () => {};
@@ -67,7 +74,7 @@ export function createLithentBridge(
 
       try {
         const proxyProps = { __data: data, __component: component };
-        const wdom = h(DataProxy, proxyProps);
+        const wdom = h(DataProxy as TagFunction, proxyProps);
         const cleanup = hydration(wdom, el);
         mounts.set(name, { cleanup, compKey: proxyProps });
         return cleanup;

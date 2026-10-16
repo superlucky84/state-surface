@@ -12,7 +12,7 @@ describe('demo SSR page', () => {
     const res = await request(app).get('/');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="page:hero"');
     expect(res.text).toContain('<h-state name="page:concepts"');

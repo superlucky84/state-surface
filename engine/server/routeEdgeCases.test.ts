@@ -12,7 +12,7 @@ describe('dynamic param validation', () => {
     const res = await request(app).get('/guide/surface');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
   });
 
   it('GET /guide/template works with valid slug', async () => {
@@ -82,10 +82,12 @@ describe('all routes render valid HTML', () => {
       const res = await request(app).get(route);
 
       expect(res.status).toBe(200);
-      expect(res.text).toContain('<!DOCTYPE html>');
+      expect(res.text).toContain('<!doctype html>');
       expect(res.text).toContain('<html');
       expect(res.text).toContain('</html>');
-      expect(res.text).toContain('<script type="module" src="/client/main.ts">');
+      expect(res.text).toMatch(
+        /<script type="module" src="\/client\/main.ts" nonce="[0-9a-f]+"><\/script>/
+      );
     });
   }
 });

@@ -2,14 +2,15 @@
 
 The server core accepts Web `Request` and returns `Response`. It imports no Node,
 Express, process environment, or filesystem scanning code. Application discovery
-runs in the Vite plugin: `virtual:state-surface/manifest` statically imports routes,
-transitions, templates and the client asset manifest. Production startup does not
+runs in the Vite plugin: `virtual:state-surface/manifest` statically imports `.tsx` pages,
+transitions and the client asset manifest. Production startup does not
 scan or dynamically import application files. Static assets are read by adapters.
 The generated module initializes application-wide build configuration (asset map
 and BASE_PATH) once; request data lives only in `SurfaceContext`.
 
-The existing string-layout route and v1 state-frame format remain in stage 1.
-Page/Slot JSX replaces that API in stage 2; projection changes in stage 4.
+Since stage 2 pages are `.tsx` page functions with `<Slot>` boundaries and the engine assembles
+the document (doctype, comment markers, managed head tags with the request nonce). The v1
+state-frame format stays until projection changes in stage 4.
 
 ```ts
 import { createHandler, sequence } from 'state-surface/server';

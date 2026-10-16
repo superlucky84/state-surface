@@ -2,9 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { registerTemplate } from '../shared/templateRegistry.js';
 import { createLithentBridge } from './lithentBridge.js';
-import chatMessagesTemplate from '../../routes/examples/chat/templates/chatMessages.js';
+import ChatMessages from '../../routes/examples/chat/_components/chatMessages.js';
+import type { TagFunction } from 'lithent';
+
+const CHAT_MESSAGES = 'routes/examples/chat/_components/chatMessages.tsx#default';
+const components = { [CHAT_MESSAGES]: ChatMessages as unknown as TagFunction };
 
 type Message = { id: string; role: 'user' | 'bot'; text: string };
 
@@ -75,15 +78,15 @@ async function captureMutations(
 describe('chat performance: 100+ messages with pure function template', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
-    registerTemplate(chatMessagesTemplate.name, chatMessagesTemplate.template);
   });
 
   it('renders 120 messages correctly', () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
+    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge();
+    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
     bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
 
@@ -95,9 +98,10 @@ describe('chat performance: 100+ messages with pure function template', () => {
   it('updating with one more message adds exactly one DOM node and keeps all previous intact', async () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
+    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge();
+    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
     bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
 
@@ -121,9 +125,10 @@ describe('chat performance: 100+ messages with pure function template', () => {
   it('no-op refresh with identical message contents causes zero DOM mutations', async () => {
     const anchor = document.createElement('h-state');
     anchor.setAttribute('name', 'chat:messages');
+    anchor.setAttribute('data-component', CHAT_MESSAGES);
     document.body.appendChild(anchor);
 
-    const bridge = createLithentBridge();
+    const bridge = createLithentBridge({ components });
     const initialMessages = buildMessages(120);
     bridge.renderTemplate('chat:messages', { messages: initialMessages }, anchor);
 

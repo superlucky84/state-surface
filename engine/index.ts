@@ -5,15 +5,12 @@
  * both server and client code.
  */
 
-// Template
-export { defineTemplate } from './shared/templateRegistry.js';
-export type { TemplateModule } from './shared/templateRegistry.js';
+// Page tree
+export { Slot, Boot } from './shared/surfaceTree.js';
+export type { SlotProps, BootProps, SlotMode, Capability } from './shared/surfaceTree.js';
 
 // Base path
 export { prefixPath, getBasePath } from './shared/basePath.js';
-
-// Route module
-export type { RouteModule, BootConfig } from './shared/routeModule.js';
 
 // Protocol
 export type { StateFrame, UiPatch } from './shared/protocol.js';

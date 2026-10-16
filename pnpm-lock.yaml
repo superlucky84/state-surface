@@ -11,6 +11,12 @@ importers:
       lithent:
         specifier: ^1.25.1
         version: 1.25.1
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      oxc-parser:
+        specifier: 0.94.0
+        version: 0.94.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
@@ -45,9 +51,6 @@ importers:
       idiomorph:
         specifier: 0.7.4
         version: 0.7.4
-      oxc-parser:
-        specifier: 0.94.0
-        version: 0.94.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       prettier:
         specifier: ^3.8.1
         version: 3.8.1

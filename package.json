@@ -11,7 +11,8 @@
     "./vite": "./engine/vite.ts",
     "./adapters/*": "./engine/adapters/*.ts",
     "./internal/assets": "./engine/server/assets.ts",
-    "./internal/basePath": "./engine/shared/basePath.ts"
+    "./internal/basePath": "./engine/shared/basePath.ts",
+    "./internal/island": "./engine/island.ts"
   },
   "files": [
     "engine/**/*.ts",
@@ -51,8 +52,8 @@
     "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false && node scripts/build-scaffold.mjs",
     "start": "NODE_ENV=production node dist/server.js",
     "test": "vitest run",
-    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
-    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.ts' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
+    "format": "prettier --write 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
+    "format:check": "prettier --check 'engine/**/*.ts' 'client/**/*.ts' 'shared/**/*.ts' 'routes/**/*.ts' 'routes/**/*.tsx' 'layouts/**/*.tsx' 'e2e/**/*.ts' 'perf/*.mjs' 'playwright.config.ts' 'conformance/**/*.ts' 'conformance/*.mjs' 'vite.config.ts' 'testing/**/*.ts'",
     "build:scaffold": "node scripts/build-scaffold.mjs",
     "test:e2e": "playwright test",
     "perf": "node perf/measure.mjs",
@@ -61,7 +62,7 @@
     "build:conformance": "node conformance/build.mjs",
     "test:conformance": "node conformance/run.mjs",
     "check:core": "node conformance/guard.mjs",
-    "test:legacy": "node conformance/legacy.mjs",
+    "test:parity": "node conformance/parity.mjs",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "build:adapter-app": "tsx conformance/app-build.ts"
   },
@@ -81,7 +82,6 @@
     "express": "^5.2.1",
     "happy-dom": "^20.5.0",
     "idiomorph": "0.7.4",
-    "oxc-parser": "0.94.0",
     "prettier": "^3.8.1",
     "supertest": "^7.2.2",
     "tailwindcss": "^4.1.18",
@@ -93,6 +93,8 @@
   },
   "dependencies": {
     "lithent": "^1.25.1",
+    "magic-string": "^0.30.21",
+    "oxc-parser": "0.94.0",
     "prismjs": "^1.30.0"
   },
   "peerDependencies": {

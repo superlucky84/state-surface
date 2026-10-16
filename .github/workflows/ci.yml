@@ -123,4 +123,4 @@ jobs:
       - run: pnpm check:core
       - run: pnpm test:conformance ${{ matrix.adapter }}
       - if: matrix.adapter == 'node'
-        run: pnpm build && pnpm test:legacy && pnpm build:adapter-app
+        run: pnpm build && pnpm test:parity && pnpm build:adapter-app

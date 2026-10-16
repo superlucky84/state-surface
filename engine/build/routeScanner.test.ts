@@ -1,84 +1,78 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { fileToUrlPattern, scanRoutes } from './routeScanner.js';
+import { fileToUrlPattern, isPageFile, scanRoutes } from './routeScanner.js';
 
 describe('fileToUrlPattern', () => {
-  it('converts index.ts to /', () => {
-    expect(fileToUrlPattern('index.ts')).toBe('/');
+  it('converts index.tsx to /', () => {
+    expect(fileToUrlPattern('index.tsx')).toBe('/');
   });
 
   it('converts static file to /name', () => {
-    expect(fileToUrlPattern('search.ts')).toBe('/search');
+    expect(fileToUrlPattern('search.tsx')).toBe('/search');
   });
 
-  it('converts [param].ts to /:param', () => {
-    expect(fileToUrlPattern('guide/[slug].ts')).toBe('/guide/:slug');
+  it('converts [param].tsx to /:param', () => {
+    expect(fileToUrlPattern('guide/[slug].tsx')).toBe('/guide/:slug');
   });
 
-  it('converts nested index.ts to /dir', () => {
-    expect(fileToUrlPattern('admin/index.ts')).toBe('/admin');
+  it('converts nested index.tsx to /dir', () => {
+    expect(fileToUrlPattern('admin/index.tsx')).toBe('/admin');
   });
 
   it('converts deeply nested dynamic segment', () => {
-    expect(fileToUrlPattern('admin/users/[userId].ts')).toBe('/admin/users/:userId');
+    expect(fileToUrlPattern('admin/users/[userId].tsx')).toBe('/admin/users/:userId');
+  });
+});
+
+describe('isPageFile', () => {
+  it('accepts .tsx files outside _ folders', () => {
+    expect(isPageFile('index.tsx')).toBe(true);
+    expect(isPageFile('examples/chat.tsx')).toBe(true);
   });
 
-  it('converts nested static route', () => {
-    expect(fileToUrlPattern('features/streaming.ts')).toBe('/features/streaming');
+  it('skips _-prefixed files and folders, plain .ts modules and tests', () => {
+    expect(isPageFile('guide/_components/Toc.tsx')).toBe(false);
+    expect(isPageFile('_shared/components/pageHeader.tsx')).toBe(false);
+    expect(isPageFile('_draft.tsx')).toBe(false);
+    expect(isPageFile('search/transitions/search.ts')).toBe(false);
+    expect(isPageFile('chat/chat.test.tsx')).toBe(false);
   });
 });
 
 describe('scanRoutes', () => {
   const routesDir = path.resolve(process.cwd(), 'routes');
 
-  it('discovers route modules from routes/ directory', async () => {
+  it('discovers demo pages from routes/', async () => {
     const routes = await scanRoutes(routesDir);
     const patterns = routes.map(r => r.urlPattern);
 
-    expect(patterns).toContain('/');
-    expect(patterns).toContain('/examples/search');
-    expect(patterns).toContain('/guide/:slug');
-    expect(patterns).toContain('/examples/streaming');
-    expect(patterns).toContain('/examples/actions');
+    expect(patterns).toEqual([
+      '/',
+      '/examples',
+      '/examples/actions',
+      '/examples/chat',
+      '/examples/search',
+      '/examples/streaming',
+      '/examples/ui-patch',
+      '/examples/view-transition',
+      '/guide/:slug',
+    ]);
+    for (const route of routes) expect(route.filePath).toMatch(/\.tsx$/);
   });
 
-  it('skips template files (.tsx)', async () => {
-    const routes = await scanRoutes(routesDir);
-    const files = routes.map(r => r.filePath);
-
-    for (const file of files) {
-      expect(file).not.toMatch(/\.tsx$/);
-    }
-  });
-
-  it('skips files inside templates/ and transitions/ directories', async () => {
-    const routes = await scanRoutes(routesDir);
-    const files = routes.map(r => r.filePath);
-
-    for (const file of files) {
-      expect(file).not.toMatch(/\/templates\//);
-      expect(file).not.toMatch(/\/transitions\//);
-    }
-  });
-
-  it('skips _shared/ directory', async () => {
-    const routes = await scanRoutes(routesDir);
-    const files = routes.map(r => r.filePath);
-
-    for (const file of files) {
-      expect(file).not.toMatch(/_shared/);
-    }
-  });
-
-  it('sorts static routes before dynamic routes', async () => {
-    const routes = await scanRoutes(routesDir);
-    const patterns = routes.map(r => r.urlPattern);
-
-    const firstDynamic = patterns.findIndex(p => p.includes(':'));
-    const lastStatic = patterns.findLastIndex(p => !p.includes(':'));
-
-    if (firstDynamic >= 0 && lastStatic >= 0) {
-      expect(lastStatic).toBeLessThan(firstDynamic);
+  it('reports two files that map to the same URL', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'surface-routes-'));
+    try {
+      await mkdir(path.join(dir, 'routes/about'), { recursive: true });
+      await writeFile(path.join(dir, 'routes/about.tsx'), 'export default () => null;');
+      await writeFile(path.join(dir, 'routes/about/index.tsx'), 'export default () => null;');
+      await expect(scanRoutes(path.join(dir, 'routes'))).rejects.toThrow(
+        /routes\/about\.tsx and routes\/about\/index\.tsx both map to "\/about"/
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 

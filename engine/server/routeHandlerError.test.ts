@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { h } from 'lithent';
 import { createHandler } from './core/handler.js';
+import { Island, Slot } from '../shared/surfaceTree.js';
 describe('SSR error responses', () => {
   it('hides internals in production and reports error with request context', async () => {
     const onError = vi.fn();
@@ -9,13 +11,12 @@ describe('SSR error responses', () => {
           {
             pattern: '/broken',
             module: {
-              layout() {
+              default() {
                 throw new Error('secret-internal-message');
               },
             },
           },
         ],
-        templates: {},
         transitions: {},
       },
       onError,
@@ -29,25 +30,37 @@ describe('SSR error responses', () => {
       expect.objectContaining({ url: new URL('https://surface.test/broken') })
     );
   });
-  it('routes template rendering failures through onError without leaking comments', async () => {
+  it('routes slot component failures through onError without leaking details', async () => {
     const onError = vi.fn();
+    const Broken = () => {
+      throw new Error('secret-template-detail');
+    };
     const handler = createHandler({
       manifest: {
         routes: [
           {
             pattern: '/',
             module: {
-              layout: () => '<h-state name="broken"></h-state>',
-              initial: () => ({ broken: {} }),
+              // Compiled form of <Slot name="broken"><Broken /></Slot>.
+              default: () =>
+                h(
+                  'html',
+                  {},
+                  h('head', {}),
+                  h(
+                    'body',
+                    {},
+                    h(
+                      Slot as never,
+                      { name: 'broken' },
+                      h(Island as never, { __ssComponent: Broken, __ssId: 'Broken.tsx#default' })
+                    )
+                  )
+                ),
             },
           },
         ],
         transitions: {},
-        templates: {
-          broken() {
-            throw new Error('secret-template-detail');
-          },
-        },
       },
       onError,
     });
@@ -55,5 +68,6 @@ describe('SSR error responses', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).toBe('Internal Server Error');
     expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0].message).toBe('secret-template-detail');
   });
 });

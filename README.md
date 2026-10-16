@@ -45,53 +45,71 @@ Open `http://localhost:3000` — full SSR, streaming transitions, and live actio
 
 StateSurface has exactly four concepts. That's the whole model.
 
-### 1. Surface — The page shell
+### 1. Surface — The page
 
-A surface is static HTML with `<h-state>` anchor slots. It never changes during a page visit — only the content inside each slot updates.
+A page is an async function in `routes/**/*.tsx` that returns the whole document as JSX. Its body
+runs on the server for every request. `<Slot>` marks a named update boundary that transitions target;
+everything outside slots is plain server markup that never changes during the visit.
 
-```typescript
-// routes/dashboard.ts
-import type { RouteModule } from 'state-surface';
-import { baseSurface, joinSurface, stateSlots } from '../layouts/surface.js';
+```tsx
+// routes/dashboard.tsx → GET /dashboard
+import type { SurfaceContext } from 'state-surface/server';
+import { Boot, Slot } from 'state-surface';
+import Layout from '../layouts/Layout';
+import StockPrice from './dashboard/_components/StockPrice';
+import StockNews from './dashboard/_components/StockNews';
 
-export default {
-  layout: stateScript =>
-    baseSurface(
-      joinSurface(
-        '<main class="max-w-6xl mx-auto p-6">',
-        '  <h1 class="text-2xl font-bold mb-6">Stock Dashboard</h1>',
-        '  <div class="grid grid-cols-3 gap-4">',
-        stateSlots('stock:price', 'stock:news', 'stock:chart'),
-        '  </div>',
-        stateSlots('stock:analysis'),
-        '</main>'
-      ),
-      stateScript
-    ),
-} satisfies RouteModule;
+export default async function Page(ctx: SurfaceContext) {
+  const symbol = ctx.url.searchParams.get('symbol') ?? 'AAPL';
+  return (
+    <Layout title="Stock Dashboard">
+      <main class="mx-auto max-w-6xl p-6">
+        <h1 class="mb-6 text-2xl font-bold">Stock Dashboard</h1>
+        <Slot name="stock:price">
+          <StockPrice symbol={symbol} price={0} change={0} loading />
+        </Slot>
+        {/* An empty slot declares its component and is filled by the first frame. */}
+        <Slot name="stock:news" component={StockNews} data-animate="fade" />
+        <Boot transition="dashboard-load" params={{ symbol }} />
+      </main>
+    </Layout>
+  );
+}
 ```
+
+- A `<Slot>` has exactly one child component element. **Its props are the slot state**: transitions
+  send the same shape in `states: { 'stock:price': { … } }`.
+- Layouts are ordinary synchronous components that render `<html>`, `<head>` and `<body>`. The engine
+  adds the doctype, comment markers, stylesheets, bootstrap JSON and the entry script.
+- Files and folders starting with `_` are not pages, so helpers live next to pages in `_components/`.
+- `<Boot>` starts a transition right after the page loads (here: streaming the real data).
 
 ### 2. Template — Pure projection
 
-A template receives server data and returns JSX. No `useState`, no `useEffect`, no fetch calls.
+A slot component receives server data as props and returns JSX. No `useState`, no `useEffect`, no
+fetch calls. Components render synchronously; await data in the page function.
 
 ```tsx
-// routes/dashboard/templates/stockPrice.tsx
-import { defineTemplate } from 'state-surface';
+// routes/dashboard/_components/StockPrice.tsx
+type Props = { symbol: string; price: number; change: number; loading?: boolean };
 
-const StockPrice = ({ symbol, price, change }: Props) => (
-  <div class="rounded-lg border p-4">
-    <h3 class="font-bold">{symbol}</h3>
-    <p class="text-2xl">${price}</p>
-    <span class={change >= 0 ? 'text-green-600' : 'text-red-600'}>
-      {change >= 0 ? '+' : ''}
-      {change}%
-    </span>
-  </div>
-);
-
-export default defineTemplate('stock:price', StockPrice);
+export default function StockPrice({ symbol, price, change }: Props) {
+  return (
+    <div class="rounded-lg border p-4">
+      <h3 class="font-bold">{symbol}</h3>
+      <p class="text-2xl">${price}</p>
+      <span class={change >= 0 ? 'text-green-600' : 'text-red-600'}>
+        {change >= 0 ? '+' : ''}
+        {change}%
+      </span>
+    </div>
+  );
+}
 ```
+
+Server-only data steps use `defineServerComponent({ load, render })` from `state-surface/server` as
+the child of `<Slot mode="server">`; the engine awaits every `load` of the page in parallel before
+rendering. Independent client islands use directives such as `<LikeButton client:idle />`.
 
 ### 3. Transition — Server-side state generator
 
@@ -101,7 +119,7 @@ An async generator that yields state frames. Each `yield` sends one NDJSON line 
 // routes/dashboard/transitions/loadDashboard.ts
 import { defineTransition } from 'state-surface/server';
 
-export default defineTransition('dashboard-load', async function* (_params, _req) {
+export default defineTransition('dashboard-load', async function* (params, ctx) {
   // First frame: full state — renders loading skeleton
   yield {
     type: 'state',
@@ -178,8 +196,8 @@ StateSurface streams three types of state frames:
 - **Full SSR** — Every page renders complete HTML on the server
 - **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames
 - **Abort previous** — Concurrent transitions auto-cancel earlier ones
-- **Per-anchor hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
-- **File-based routing** — Routes, templates, and transitions auto-discovered from `routes/`
+- **Per-slot hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
+- **File-based routing** — `.tsx` pages and transitions auto-discovered from `routes/`
 - **View Transition API** — MPA cross-fade + in-page element morphing
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
 - **i18n ready** — Bilingual content driven by cookie + transition
@@ -188,21 +206,22 @@ StateSurface streams three types of state frames:
 ## Project Structure
 
 ```
-routes/                  # Your route modules (auto-loaded)
-  index.ts               #   GET / — page layout + config
-  guide/[slug].ts        #   Dynamic params: GET /guide/:slug
-  <route>/templates/     #   TSX projection components
+routes/                  # Pages (routes/**/*.tsx, auto-loaded)
+  index.tsx              #   GET /
+  guide/[slug].tsx       #   Dynamic params: GET /guide/:slug
+  <route>/_components/   #   Slot components (not pages: `_` prefix)
   <route>/transitions/   #   Server-side state generators
-  _shared/               #   Cross-route templates & transitions
+  _shared/               #   Cross-route components & transitions
 
-layouts/                 # Page composition helpers
+layouts/                 # Layout components (Layout.tsx)
 shared/                  # Data helpers, i18n utilities
 client/                  # Assets (styles.css, plugins/)
 
 engine/                  # Framework core (do not edit)
-  server/                #   Web-standard core, SSR, transition handler
+  server/                #   Web-standard core, page renderer, transition handler
   client/                #   Browser bootstrap, hydration, frame queue
-  shared/                #   Protocol types, template registry
+  build/                 #   Vite plugin: page discovery, call-site transform, diagnostics
+  shared/                #   Protocol types, Slot/Boot markers
 ```
 
 ## Install & Update
@@ -247,11 +266,16 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ## API Reference
 
 ```typescript
-// Client + shared
-import { defineTemplate, prefixPath, getBasePath } from 'state-surface';
+// Pages and shared helpers
+import { Slot, Boot, prefixPath, getBasePath } from 'state-surface';
 
 // Server
-import { createHandler, defineTransition, sequence } from 'state-surface/server';
+import {
+  createHandler,
+  defineServerComponent,
+  defineTransition,
+  sequence,
+} from 'state-surface/server';
 import { serve } from 'state-surface/adapters/node';
 
 // Client runtime
@@ -260,8 +284,13 @@ import { createStateSurface } from 'state-surface/client';
 
 ```typescript
 // Types
-import type { RouteModule, StateFrame, BootConfig, TemplateModule } from 'state-surface';
-import type { TransitionHandler, SurfaceContext, Middleware } from 'state-surface/server';
+import type { SlotProps, BootProps, StateFrame } from 'state-surface';
+import type {
+  PageModule,
+  SurfaceContext,
+  TransitionHandler,
+  Middleware,
+} from 'state-surface/server';
 import type { StateSurfacePlugin } from 'state-surface/client';
 ```
 

@@ -1,7 +1,7 @@
 import { createContext, sequence, type Middleware, type SurfaceContext } from './context.js';
 import type { ServerManifest } from './manifest.js';
-import { renderTemplateToString } from '../ssrRenderer.js';
-import { renderRoute } from '../routeHandler.js';
+import { renderPage } from '../ssrRenderer.js';
+import { resolveAsset, resolveAssetCss } from '../assets.js';
 import { validateStateFrame, type StateFrame } from '../../shared/protocol.js';
 import { encodeFrame } from '../../shared/ndjson.js';
 import type { Logger } from '../logger.js';
@@ -51,10 +51,11 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
   const bodyLimit = options.bodyLimit ?? 100 * 1024;
   if (!Number.isSafeInteger(bodyLimit) || bodyLimit < 0)
     throw new Error('bodyLimit must be a nonnegative byte count');
-  // Rendering exceptions belong to onError; never embed them in production HTML comments.
-  const renderer = (name: string, data: any) =>
-    renderTemplateToString(name, data, key => options.manifest.templates[key]) ??
-    `<!-- template "${name}" not found -->`;
+  // Asset URLs are immutable build configuration; resolve them once per handler.
+  const documentTags = {
+    styles: (options.manifest.document?.styles ?? []).flatMap(resolveAssetCss),
+    entry: options.manifest.document?.entry && resolveAsset(options.manifest.document.entry),
+  };
   const routes = options.manifest.routes.map(route => ({
     ...route,
     segments: route.pattern.split('/').filter(Boolean),
@@ -125,13 +126,9 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         }
         const dispatch = async (): Promise<Response> => {
           if (ctx.route.kind === 'page' && selected)
-            return new Response(
-              await renderRoute(selected.module, ctx, {
-                renderer,
-                getTransition: name => options.manifest.transitions[name],
-              }),
-              { headers: { 'content-type': 'text/html; charset=utf-8' } }
-            );
+            return new Response(await renderPage(selected.module, ctx, documentTags), {
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            });
           if (ctx.route.kind !== 'transition') return new Response('Not Found', { status: 404 });
           const handler = Object.hasOwn(options.manifest.transitions, transitionName!)
             ? options.manifest.transitions[transitionName!]

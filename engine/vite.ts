@@ -1,24 +1,61 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Plugin, ResolvedConfig } from 'vite';
-import { scanRoutes } from './build/routeScanner.js';
+import { fileURLToPath } from 'node:url';
+import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 import { listFiles, hasSegment, isModuleFile } from './build/fsUtils.js';
+import { SurfaceAnalyzer, type FactsCache } from './build/app.js';
+import { transformSurface } from './build/transform.js';
 import { nodeListener } from './adapters/http.js';
 import type { Adapter } from './adapters/types.js';
 
 const VIRTUAL = 'virtual:state-surface/manifest';
-const INTERNAL = '\0' + VIRTUAL;
+const ISLANDS = 'virtual:state-surface/islands';
 const ENTRY = 'virtual:state-surface/entry';
-export function surface(options: { adapter?: Adapter } = {}): Plugin {
+const ENGINE_DIR = path.dirname(fileURLToPath(import.meta.url));
+type PluginContext = Pick<Rollup.PluginContext, 'resolve'>;
+
+export interface SurfacePluginOptions {
+  adapter?: Adapter;
+  /**
+   * Engine-managed document tags. Defaults to `client/main.ts` (engine entry) and
+   * `client/styles.css` when those files exist.
+   */
+  client?: { entry?: string; styles?: string[] };
+}
+
+async function exists(file: string) {
+  return access(file).then(
+    () => true,
+    () => false
+  );
+}
+
+export function surface(options: SurfacePluginOptions = {}): Plugin {
   let config: ResolvedConfig;
+  const facts: FactsCache = new Map();
+  let analyzed = new Set<string>();
+  // Each hook (and Vite environment) resolves with its own plugin context.
+  const analyzerFor = (context: PluginContext) =>
+    new SurfaceAnalyzer(
+      config.root,
+      ENGINE_DIR,
+      async (source, importer) => {
+        const resolved = await context.resolve(source, importer, { skipSelf: true });
+        if (!resolved || resolved.external || resolved.id.startsWith('\0')) return undefined;
+        return resolved.id.split('?')[0];
+      },
+      facts
+    );
   const adapter = options.adapter;
   return {
     name: 'state-surface',
+    enforce: 'pre',
     configResolved(resolved) {
       config = resolved;
     },
     resolveId(id) {
-      if (id === VIRTUAL) return INTERNAL;
+      if (id === VIRTUAL) return '\0' + VIRTUAL;
+      if (id === ISLANDS) return '\0' + ISLANDS;
       if (id === ENTRY || id === path.resolve(config.root, ENTRY)) return '\0' + ENTRY;
     },
     async load(id) {
@@ -30,16 +67,32 @@ export function surface(options: { adapter?: Adapter } = {}): Plugin {
           return `import manifest from '${VIRTUAL}';import express from 'express';import {surface} from 'state-surface/adapters/express';const app=express();app.use(surface({manifest}));app.listen(Number(process.env.PORT??3000));`;
         return `import manifest from '${VIRTUAL}';import {serve} from 'state-surface/adapters/${name}';serve({manifest});`;
       }
-      if (id !== INTERNAL) return;
+      if (id !== '\0' + VIRTUAL && id !== '\0' + ISLANDS) return;
       const root = config.root;
-      const routes = await scanRoutes(path.join(root, 'routes'));
+      const app = await analyzerFor(this).app();
+      analyzed = app.files;
+      for (const file of app.files) this.addWatchFile(file);
+
+      if (id === '\0' + ISLANDS) {
+        // Stage 2 keeps every client component eager; dynamic chunks replace this map.
+        const entries = [...app.client].sort(([a], [b]) => a.localeCompare(b));
+        return [
+          ...entries.map(([, c], i) => `import * as m${i} from ${JSON.stringify(c.file)};`),
+          `export default {${entries
+            .map(([cid, c], i) => `${JSON.stringify(cid)}: m${i}[${JSON.stringify(c.exportName)}]`)
+            .join(',')}};`,
+        ].join('\n');
+      }
+
       const files = (await listFiles(path.join(root, 'routes'))).filter(isModuleFile).sort();
       const transitions = files.filter(file => hasSegment(file, 'transitions'));
-      const templates = files.filter(
-        file => hasSegment(file, 'templates') && file.endsWith('.tsx')
-      );
-      for (const file of [...routes.map(r => r.filePath), ...transitions, ...templates])
-        this.addWatchFile(file);
+      for (const file of transitions) this.addWatchFile(file);
+      const entry =
+        options.client?.entry ??
+        ((await exists(path.join(root, 'client/main.ts'))) ? '/client/main.ts' : undefined);
+      const styles =
+        options.client?.styles ??
+        ((await exists(path.join(root, 'client/styles.css'))) ? ['/client/styles.css'] : []);
       let assets = {};
       if (config.command === 'build') {
         try {
@@ -55,14 +108,34 @@ export function surface(options: { adapter?: Adapter } = {}): Plugin {
         "import { defineManifest } from 'state-surface/server';",
         "import { configureAssets } from 'state-surface/internal/assets';",
         "import { setBasePath } from 'state-surface/internal/basePath';",
-        ...routes.map((r, i) => `import route${i} from ${JSON.stringify(r.filePath)};`),
+        ...app.pages.map((r, i) => `import * as route${i} from ${JSON.stringify(r.filePath)};`),
         ...transitions.map((file, i) => `import transition${i} from ${JSON.stringify(file)};`),
-        ...templates.map((file, i) => `import template${i} from ${JSON.stringify(file)};`),
         `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({basePath:${JSON.stringify(base)},assets:${JSON.stringify(assets)},routes:[${routes.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}],templates:[${templates.map((_, i) => `template${i}`).join(',')}]});`,
+        `export default defineManifest({basePath:${JSON.stringify(base)},assets:${JSON.stringify(assets)},document:${JSON.stringify({ entry, styles })},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
       ].join('\n');
     },
+    async transform(code, id) {
+      if (!/\.[jt]sx$/.test(id.split('?')[0]) || id.startsWith('\0')) return;
+      const file = id.split('?')[0];
+      const analyzer = analyzerFor(this);
+      if (!analyzer.isProjectFile(file)) return;
+      return transformSurface(code, file, analyzer);
+    },
     configureServer(server) {
+      const changed = (file: string) => {
+        facts.delete(file);
+        const graphChanged =
+          analyzed.has(file) || file.startsWith(path.join(config.root, 'routes'));
+        if (!graphChanged) return;
+        for (const id of ['\0' + VIRTUAL, '\0' + ISLANDS]) {
+          const mod = server.moduleGraph.getModuleById(id);
+          if (mod) server.moduleGraph.invalidateModule(mod);
+        }
+        server.ws.send({ type: 'full-reload' });
+      };
+      server.watcher.on('add', changed);
+      server.watcher.on('change', changed);
+      server.watcher.on('unlink', changed);
       return () => {
         server.middlewares.use(async (req, res, next) => {
           try {
@@ -75,13 +148,6 @@ export function surface(options: { adapter?: Adapter } = {}): Plugin {
             next(error);
           }
         });
-        server.watcher.on('add', invalidate);
-        server.watcher.on('unlink', invalidate);
-        function invalidate(file: string) {
-          if (!file.startsWith(path.join(config.root, 'routes'))) return;
-          const mod = server.moduleGraph.getModuleById(INTERNAL);
-          if (mod) server.moduleGraph.invalidateModule(mod);
-        }
       };
     },
     config() {

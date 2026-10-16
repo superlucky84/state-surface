@@ -23,13 +23,20 @@ export async function scenarios(origin, runtime) {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('x-middleware'), 'after');
     const html = await response.text();
-    assert.ok(html.startsWith('<!DOCTYPE html>'));
+    assert.ok(html.startsWith('<!doctype html><html><head><!--ss:head--><title>Fixture</title>'));
+    assert.ok(html.includes('<!--/ss:head--></head><body><!--ss:body-->'));
+    assert.ok(html.endsWith('<!--/ss:body--></body></html>'));
     assert.ok(html.includes('<p>Hello</p>'));
     assert.ok(!html.includes('data-ssr-hash'));
     const states = JSON.parse(html.match(/id="__STATE__"[^>]*>(.*?)<\/script>/s)[1]);
     assert.equal(states['fixture:state'].runtime, runtime);
     assert.equal(states['fixture:state'].cookie, 'ko');
     assert.match(states['fixture:state'].nonce, /^[a-f0-9]{36}$/);
+    const entry = html.match(
+      /<script type="module" src="([^"]+)" nonce="([^"]+)"><\/script><!--\/ss:head-->/
+    );
+    assert.ok(entry && entry[1].endsWith('/assets/probe-12345678.js'));
+    assert.equal(entry[2], states['fixture:state'].nonce);
   });
   await check('dynamic decoded params, HEAD, 404 and mount boundary', async () => {
     assert.ok((await (await fetch(url('/dynamic/hello%20world'))).text()).includes('hello world'));

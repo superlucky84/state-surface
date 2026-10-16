@@ -14,7 +14,7 @@ describe('multi-route SSR', () => {
     const res = await request(app).get('/');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="page:hero"');
     expect(res.text).toContain('<h-state name="page:concepts"');
@@ -28,7 +28,7 @@ describe('multi-route SSR', () => {
     const res = await request(app).get('/examples/search');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="search:input"');
     expect(res.text).toContain('<h-state name="search:results"');
@@ -40,7 +40,7 @@ describe('multi-route SSR', () => {
     const res = await request(app).get('/guide/surface');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="guide:content"');
     expect(res.text).toContain('<h-state name="guide:toc"');
@@ -51,7 +51,7 @@ describe('multi-route SSR', () => {
     const res = await request(app).get('/examples/streaming');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="demo:controls"');
     expect(res.text).toContain('<h-state name="demo:timeline"');
     expect(res.text).toContain('<h-state name="demo:output"');
@@ -62,14 +62,14 @@ describe('multi-route SSR', () => {
     const res = await request(app).get('/examples/actions');
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<!DOCTYPE html>');
+    expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="actions:playground"');
     expect(res.text).toContain('<h-state name="actions:log"');
     expect(res.text).toContain('id="__STATE__"');
   });
 });
 
-describe('boot config injection', () => {
+describe('<Boot> injection', () => {
   it('GET /guide/surface includes __BOOT__ script', async () => {
     const res = await request(app).get('/guide/surface');
 
@@ -79,8 +79,7 @@ describe('boot config injection', () => {
     );
     expect(bootMatch).not.toBeNull();
     const boot = JSON.parse(bootMatch![1]);
-    expect(boot.transition).toBe('guide-load');
-    expect(boot.params.slug).toBe('surface');
+    expect(boot).toEqual([{ transition: 'guide-load', params: { slug: 'surface', lang: 'en' } }]);
   });
 
   it('GET / does not include __BOOT__ script (no boot config)', async () => {

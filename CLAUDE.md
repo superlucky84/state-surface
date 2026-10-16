@@ -62,53 +62,50 @@ BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
 
 ```
 engine/              # Framework core — users should not edit these files
+  index.ts           # 'state-surface': Slot, Boot, prefixPath, getBasePath, protocol types
+  server.ts          # 'state-surface/server': createHandler, defineTransition, defineServerComponent, types
+  vite.ts            # 'state-surface/vite': surface() plugin (manifest/islands virtual modules, transform, dev SSR)
+  build/
+    analyze.ts       # oxc-parser module analysis (Slot/directive/Boot usage, imports, server components)
+    app.ts           # Page import-graph analysis, componentIds, cross-module diagnostics
+    transform.ts     # Call-site transform: islands and Slot children → Island descriptors
+    routeScanner.ts  # Page discovery: routes/**/*.tsx except `_` files/folders, URL collisions
+    diagnostics.ts   # SurfaceBuildError with file:line:column and code frame
   server/
-    index.ts         # Express app assembly, route registration, transition endpoint, dev middleware
-    bootstrap.ts     # Auto-register transitions & templates from routes/ at startup
-    routeScanner.ts  # File-based route discovery (routes/ → URL patterns)
-    routeHandler.ts  # Per-route Express GET handler (SSR pipeline)
-    initialStates.ts # SSR initial state resolution (initial > transition > empty)
-    ssr.ts           # SSR helpers (fillHState, buildStateScript, buildBootScript, sha256 hash)
-    ssrRenderer.ts   # Template rendering for SSR
+    core/            # Web Request→Response handler, SurfaceContext, middleware, manifest
+    ssrRenderer.ts   # Page pipeline: await page → collect slots → parallel server load → render → document assembly
+    serverComponent.ts # defineServerComponent({ load, render })
+    ssr.ts           # Bootstrap JSON builders (__STATE__, __BOOT__, __BASE_PATH__)
     transition.ts    # Transition registry & handler
-    fsUtils.ts       # Shared filesystem utilities (listFiles, isModuleFile)
   client/
-    main.ts          # Browser bootstrap (StateSurface init, action binding, Prism highlight)
+    main.ts          # Browser bootstrap (componentId registry, islands, <Boot> entries, action binding)
     stateSurface.ts  # Core: anchor discovery, hydration, transition streaming, frame queue
+    lithentBridge.ts # Lithent VDOM integration (resolves components by data-component)
+    islands.ts       # Direct directive islands (<h-island>) hydration
     actionDelegation.ts  # Declarative action binding (data-action click/submit delegation)
-    lithentBridge.ts # Lithent VDOM integration (render/hydrate/update)
     devOverlay.ts    # Debug overlay UI (?debug=1)
-    templates/
-      auto.ts        # Auto-register route templates via glob import
-      registry.ts    # Template registry re-export
   shared/
+    surfaceTree.ts   # Slot / Boot / Island markers, slot name rules, JSON checks, JSX types
     basePath.ts      # Central basePath management (setBasePath, getBasePath, prefixPath)
     protocol.ts      # StateFrame types, validation, applyFrame (full/partial merge)
     ndjson.ts        # NDJSON encode/decode with streaming chunk parser
-    routeModule.ts   # RouteModule type contract (layout, transition, params, initial, boot)
-    templateRegistry.ts
-    templateCheck.ts
+    routeModule.ts   # PageModule contract (default page function, prerender, getStaticPaths, plugins)
 client/              # User assets
-  styles.css         # Tailwind CSS entry point (imported by surface HTML)
+  main.ts            # Engine entry (createStateSurface with plugins)
+  styles.css         # Tailwind CSS entry point (linked by the engine)
 shared/              # User data helpers
   content.ts         # Bilingual content data (ko/en) for all pages
-  i18n.ts            # i18n helpers (getLang from cookie, lang cookie path)
-layouts/             # Shared surface composition helpers (string-based HTML builders)
-  surface.ts         # stateSlots, joinSurface, surfaceDocument, baseSurface
-routes/              # Route modules + page-specific templates/transitions (auto-loaded)
-  index.ts           # GET / — home page (hero, concepts, features)
-  guide/[slug].ts    # GET /guide/:slug — guides (quickstart + 5 concept guides)
-  examples/index.ts  # GET /examples — examples landing page
-  examples/streaming.ts        # GET /examples/streaming — frame flow visualization
-  examples/actions.ts          # GET /examples/actions — action playground
-  examples/view-transition.ts  # GET /examples/view-transition — View Transition API morphing
-  examples/search.ts           # GET /examples/search — feature/concept search
-  examples/chat.ts             # GET /examples/chat — chatbot (streaming + abort)
-  _shared/templates/ # Cross-route templates (pageHeader, systemError)
+  i18n.ts            # i18n helpers (getLang(ctx) from cookie)
+layouts/
+  Layout.tsx         # Document shell with page:header and system:error slots
+routes/              # Pages (routes/**/*.tsx) + page-specific components/transitions
+  index.tsx          # GET / — home page (hero, concepts, features)
+  guide/[slug].tsx   # GET /guide/:slug — guides (loading SSR + <Boot transition="guide-load">)
+  examples/*.tsx     # GET /examples/... — demos (streaming, actions, view-transition, search, chat, ui-patch)
+  _shared/components/    # Cross-route components (pageHeader, systemError)
   _shared/transitions/   # Cross-route transitions (switchLang)
-  <route>/templates/ # Per-route TSX projection components
+  <route>/_components/   # Per-route slot components (`_` folders are not pages)
   <route>/transitions/   # Per-route server-side state generators
-skills/              # (removed — previously held lithent/fp-pack reference docs)
 ```
 
 ## Architecture
@@ -131,12 +128,12 @@ User action → POST /transition/:name → server generator yields StateFrames
 
 ### Four User-Facing Concepts
 
-| Concept        | What                                              | Where                                      |
-| -------------- | ------------------------------------------------- | ------------------------------------------ |
-| **Surface**    | Page shell with `<h-state>` anchors (string HTML) | `routes/*.ts` layout, `layouts/`           |
-| **Template**   | Projection component inside each anchor (TSX)     | `routes/**/templates/*.tsx`                |
-| **Transition** | Server-side state generator (async generator)     | `routes/**/transitions/*.ts`               |
-| **Action**     | Declarative trigger binding (HTML attributes)     | `data-action` + `data-params` in templates |
+| Concept        | What                                          | Where                                      |
+| -------------- | --------------------------------------------- | ------------------------------------------ |
+| **Surface**    | `.tsx` page function with `<Slot>` boundaries | `routes/**/*.tsx`, `layouts/Layout.tsx`    |
+| **Template**   | Slot child component (TSX); its props = state | `routes/**/_components/*.tsx`              |
+| **Transition** | Server-side state generator (async generator) | `routes/**/transitions/*.ts`               |
+| **Action**     | Declarative trigger binding (HTML attributes) | `data-action` + `data-params` in templates |
 
 ### Action System (Declarative Binding)
 
@@ -171,9 +168,23 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 - `changed` keys must exist in `states`; `removed` keys must NOT exist in `states`
 - A key cannot appear in both `changed` and `removed`
 
-### Route Auto-Registration
+### Pages, Slots and the Build Plugin
 
-`engine/server/bootstrap.ts` scans `routes/**/transitions/*.ts` and `routes/**/templates/*.tsx` at startup, auto-registering all found handlers and templates. On the client, `client/templates/auto.ts` uses glob import to do the same. New routes just need the right file path to be discovered.
+- A page is `export default async function Page(ctx: SurfaceContext)` returning JSX with `<html>`, `<head>`, `<body>`
+  (usually through `layouts/Layout.tsx`). Named exports `prerender`, `getStaticPaths`, `plugins` are page options.
+- `<Slot name="ns:name">` wraps exactly one statically imported component element; that element's props are the
+  slot state that transitions update. `<Slot name component={X} />` declares an initially empty slot.
+  Host attributes (`class`, `style`, `id`, `data-*`, `aria-*`) are written on the `<h-state>` element.
+- `mode="server"` slots render on the server only; `defineServerComponent({ load, render })` children have their
+  `load` awaited in parallel. Until mode normalization (IMPLEMENT stage 3) a Slot without `mode` behaves as today:
+  SSR + hydration from `__STATE__` + client updates.
+- Direct islands `<C client:idle />` render as `<h-island>` with JSON `data-props`; children are a static fragment.
+- `<Boot transition params />` records an auto-run transition in `__BOOT__` (array, document order).
+- The Vite plugin (`enforce: 'pre'`) transforms Slot children/islands into `Island` descriptors so Lithent does not
+  run them at JSX time, and reports diagnostics with `file:line:column`. `engine/build/` discovers pages
+  (`routes/**/*.tsx` minus `_` files/folders) and transitions (`routes/**/transitions/*.ts`), and generates
+  `virtual:state-surface/manifest` (server) and `virtual:state-surface/islands` (componentId → client component).
+- componentId = project-relative module path + `#` + export name (e.g. `routes/examples/chat/_components/chatInput.tsx#default`).
 
 ### i18n (Korean / English)
 
@@ -181,7 +192,7 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 - Language switch is a transition (`data-action="switch-lang"`) — server yields full frame in target language
 - `shared/content.ts` holds `{ ko, en }` content; server sends only the selected language's data
 - `shared/i18n.ts` provides `getLang(req)` helper (reads cookie, defaults to `en`)
-- `initial(req)` reads the cookie at SSR time for correct initial language rendering
+- Page functions call `getLang(ctx)` at SSR time for correct initial language rendering
 
 ### Base Path (Sub-Path Mounting)
 
@@ -198,14 +209,14 @@ Pending state: engine adds `data-pending` attribute to target anchors during tra
 | --------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
 | `/`                         | `page:hero`, `page:concepts`, `page:features`                | `initial` SSR only, surface composition                        |
 | `/guide/:slug`              | `guide:content`, `guide:toc`                                 | Dynamic `[param]`, boot auto-run, full→partial, 10 block types |
-| `/examples`                   | `examples:list`                                                | Examples landing page with links to all demos                  |
-| `/examples/streaming`         | `demo:controls`, `demo:timeline`, `demo:output`              | Full/partial frames, `removed`, error frame                    |
-| `/examples/actions`           | `actions:playground`, `actions:log`                          | `data-action`, form submit, scoped pending                     |
-| `/examples/view-transition`   | `vt:description`, `vt:gallery`                               | View Transition API, `view-transition-name` morphing           |
-| `/examples/search`            | `search:input`, `search:results`                             | Form `data-action`, pending state                              |
-| `/examples/chat`              | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate             |
+| `/examples`                 | `examples:list`                                              | Examples landing page with links to all demos                  |
+| `/examples/streaming`       | `demo:controls`, `demo:timeline`, `demo:output`              | Full/partial frames, `removed`, error frame                    |
+| `/examples/actions`         | `actions:playground`, `actions:log`                          | `data-action`, form submit, scoped pending                     |
+| `/examples/view-transition` | `vt:description`, `vt:gallery`                               | View Transition API, `view-transition-name` morphing           |
+| `/examples/search`          | `search:input`, `search:results`                             | Form `data-action`, pending state                              |
+| `/examples/chat`            | `chat:messages`, `chat:input`, `chat:typing`, `chat:current` | Abort previous, progressive streaming, cacheUpdate             |
 
-All pages share `page:header` and `system:error` via `baseSurface`.
+All pages share `page:header` and `system:error` via `layouts/Layout.tsx`.
 
 ## Reference Projects
 
@@ -236,8 +247,8 @@ Used as a DOM diff/patch engine only — no component API exposed to users. Key 
 - 10 block types: `paragraph`, `bullets`, `code`, `checklist`, `warning`, `sequence`, `diagram`, `callout`, `analogy`, `debug`
 - Bilingual (ko/en) with i18n parity enforced by tests (same section IDs, block counts, block types)
 - Guide content in `shared/content.ts` → `GUIDE_DATA[lang][slug]`
-- Block renderers in `routes/guide/[slug]/templates/guideContent.tsx`
-- TOC with section anchor jump links in `routes/guide/[slug]/templates/guideToc.tsx`
+- Block renderers in `routes/guide/_components/guideContent.tsx`
+- TOC with section anchor jump links in `routes/guide/_components/guideToc.tsx`
 
 ### Animation Presets
 

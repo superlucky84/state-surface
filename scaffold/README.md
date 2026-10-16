@@ -21,9 +21,9 @@ cp .env.example .env
 
 Available variables:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | Server listen port |
+| Variable    | Default   | Description                               |
+| ----------- | --------- | ----------------------------------------- |
+| `PORT`      | `3000`    | Server listen port                        |
 | `BASE_PATH` | _(empty)_ | Mount app under a sub-path (e.g. `/demo`) |
 
 `.env` is loaded automatically by `pnpm dev` and `pnpm start` via Node.js `--env-file-if-exists`. No extra dependencies needed.
@@ -42,12 +42,12 @@ pnpm format         # Format with Prettier
 
 ```
 server.ts                # App entry point
-routes/                  # Route modules (auto-loaded)
-  index.ts               #   Page layout + config
-  <route>/templates/     #   TSX projection components
+routes/                  # Pages: routes/**/*.tsx (auto-loaded; `_` files/folders are not pages)
+  index.tsx              #   export default async function Page(ctx) → JSX with <Slot>
+  <route>/_components/   #   Slot components (props = slot state)
   <route>/transitions/   #   Server-side state generators
-  _shared/               #   Cross-route templates & transitions
-layouts/                 # Page composition helpers
+  _shared/               #   Cross-route components & transitions
+layouts/                 # Layout components (Layout.tsx)
 shared/                  # Data helpers, i18n utilities
 client/                  # Assets (styles.css, plugins/)
 ```
@@ -60,7 +60,6 @@ Do not re-run scaffolding to update an existing app. Upgrade the runtime package
 pnpm up state-surface
 pnpm test && pnpm build
 ```
-
 
 The default server imports the generated Vite manifest and uses
 `serve({ manifest })` from `state-surface/adapters/node`. User routes and transitions

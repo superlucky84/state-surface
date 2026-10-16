@@ -1,20 +1,21 @@
+/// <reference path="./virtual.d.ts" />
+import components from 'virtual:state-surface/islands';
 import { StateSurface } from './stateSurface.js';
 import { createLithentBridge } from './lithentBridge.js';
+import { hydrateIslands } from './islands.js';
 import { attachDevOverlay } from './devOverlay.js';
 import { bindDeclarativeActions } from './actionDelegation.js';
 import { setBasePath } from '../shared/basePath.js';
 import type { StateSurfacePlugin, TraceEvent } from './stateSurface.js';
-import './templates/auto.js';
 
 export interface CreateStateSurfaceOptions {
-  fallbackTemplate?: string;
   plugins?: StateSurfacePlugin[];
   debug?: boolean;
   trace?: (event: TraceEvent) => void;
   transitionTimeout?: number;
 }
 
-type BootConfig = {
+type BootEntry = {
   transition: string;
   params: Record<string, unknown>;
 };
@@ -25,10 +26,10 @@ function readBasePath(): string {
   return JSON.parse(el.textContent) as string;
 }
 
-function readBootConfig(): BootConfig | null {
+function readBootEntries(): BootEntry[] {
   const el = document.getElementById('__BOOT__');
-  if (!el?.textContent) return null;
-  return JSON.parse(el.textContent) as BootConfig;
+  if (!el?.textContent) return [];
+  return JSON.parse(el.textContent) as BootEntry[];
 }
 
 export function createStateSurface(options: CreateStateSurfaceOptions = {}): StateSurface {
@@ -43,9 +44,7 @@ export function createStateSurface(options: CreateStateSurfaceOptions = {}): Sta
         }
       : undefined);
 
-  const bridge = createLithentBridge({
-    fallbackTemplate: options.fallbackTemplate ?? 'system:error',
-  });
+  const bridge = createLithentBridge({ components });
   const surface = new StateSurface({
     ...bridge,
     basePath,
@@ -71,12 +70,19 @@ export function createStateSurface(options: CreateStateSurfaceOptions = {}): Sta
 
   surface.discoverAnchors();
   surface.bootstrap();
+  hydrateIslands(components, (id, error) =>
+    surface.trace?.({
+      kind: 'error',
+      detail: { island: id, message: error instanceof Error ? error.message : error },
+    })
+  );
   bindDeclarativeActions(surface);
 
-  const bootConfig = readBootConfig();
-  if (bootConfig) {
-    surface.transition(bootConfig.transition, bootConfig.params);
-  }
+  // <Boot> entries run in document order. Without targets each run aborts the previous one.
+  const boot = readBootEntries();
+  if (boot.length > 1 && (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV)
+    console.warn('[StateSurface] several <Boot> transitions abort each other until targets exist');
+  for (const entry of boot) surface.transition(entry.transition, entry.params);
 
   attachDevOverlay(surface);
 
