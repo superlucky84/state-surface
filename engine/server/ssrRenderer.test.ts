@@ -310,6 +310,49 @@ describe('slots', () => {
     });
   });
 
+  it('writes resetKey for client slots and islands and rejects it on server slots (DC-05)', async () => {
+    const html = await renderPage(
+      page(() =>
+        documentOf(
+          slot({ name: 'editor', resetKey: 'id' }, island(Title, { text: 'a', id: 1 })),
+          island(Counter, { count: 1, id: 'c', resetKey: ['id'], 'client:idle': true })
+        )
+      ),
+      context()
+    );
+    const entries = slotsOf(html);
+    expect(entries.editor.resetKey).toEqual(['id']);
+    expect(entries.$0).toMatchObject({ resetKey: ['id'], props: { count: 1, id: 'c' } });
+    await expect(
+      renderPage(
+        page(() =>
+          documentOf(
+            slot({ name: 'x', mode: 'server', resetKey: 'id' }, island(Title, { text: '' }))
+          )
+        ),
+        context()
+      )
+    ).rejects.toThrow('resetKey needs a client slot');
+  });
+
+  it('sends transition metadata only on engine pages', async () => {
+    const actions = { search: { targets: ['list'] } };
+    const engine = await renderPage(
+      page(() => documentOf(el('button', { 'data-action': 'search' }, 'go'))),
+      context(),
+      { actions }
+    );
+    expect(json(engine, '__SURFACE__').actions).toEqual(actions);
+    const plain = await renderPage(
+      page(() => documentOf(el('p', {}, 'x'))),
+      context(),
+      {
+        actions,
+      }
+    );
+    expect(json(plain, '__SURFACE__')).toBeUndefined();
+  });
+
   it('awaits server loads in parallel and renders their data without client state', async () => {
     const started: string[] = [];
     const finish: Array<() => void> = [];

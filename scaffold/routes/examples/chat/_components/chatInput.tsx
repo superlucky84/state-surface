@@ -5,7 +5,7 @@ type ChatInputProps = {
   hint?: string;
 };
 
-// The conversation history lives on the server (history.server.ts); the input is a server
+// The conversation history lives on the server (shared/chatHistory.server.ts); the input is a server
 // slot re-rendered empty after each message, and its id lets the engine restore focus.
 const ChatInput = ({ placeholder, submitLabel, lang, hint }: ChatInputProps) => (
   <form

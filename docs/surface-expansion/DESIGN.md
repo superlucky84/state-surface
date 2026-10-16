@@ -549,6 +549,10 @@ SSR 표시 / only fallback
 - **단계 0 확인(2026-10-15)**: Lithent 1.21.7 단독 hydration은 입력 `user edited`를 SSR `snapshot`으로
   되돌리고 선택 범위도 변경한다. 노드 재사용만으로 V-04가 충족되지 않는다. 단계 5에서 hydration 전 입력값·선택·포커스
   snapshot과 복원(또는 같은 계약의 업스트림 보강)을 구현하고 실제 브라우저 회귀 검증을 추가한다.
+- **단계 5 구현(2026-10-16)**: bridge가 hydration 전에 SSR 마크업과 다른 값(`defaultValue`·`defaultChecked`·
+  `defaultSelected` 기준)·포커스·선택 범위를 기록하고, hydration 뒤 되돌린 값에 `input`/`change` 이벤트를 보내 컴포넌트
+  상태와 맞춘다. Chromium 회귀(`e2e/modes` V-04)로 고정했다. Lithent hydration은 SSR에 없는 빈 텍스트 노드를 나중에
+  채우지 못하므로 빈 텍스트는 `''` 대신 `null`로 렌더하도록 가이드한다(업스트림 보강 대상).
 - **data-action 첫 조작**(DC-04·DC-11 결정): `data-action` 위임은 공통 로더에 있으므로 아일랜드 활성화와 무관하게
   첫 click/submit부터 동작하며 submit은 이벤트 시점에 폼 값을 snapshot한다(7장). 임의 이벤트·trusted user
   activation의 재현은 지원하지 않는다. clipboard/fullscreen 등은 `client:load`나 다음 명시적 조작을 사용한다.
@@ -774,7 +778,7 @@ const SearchBox = mount((renew, props) => {
 - **완료 Promise**: `run()`은 `done`을 받고 활성 슬롯 반영을 마치면 `{ ok: true }`, 실패하면 `{ ok: false, error }`,
   취소되면 `{ ok: false, aborted: true }`로 resolve한다. throw하지 않는다. 휴면 아일랜드의 활성화는 기다리지 않는다.
 - **오류 구분**: `error.kind`로 `timeout`·`http`·`protocol`(wire 위반)·`chunk`(아일랜드 로드)·`server`(error 프레임)를
-  구분한다. 첫 결과 이후의 실패도 관찰 가능하며 예상 밖 오류는 `reportError`로도 전달한다(8.3).
+  구분한다. 단계 5에서 `validation`(입력 스키마, `fieldErrors`)과 `network`(fetch 실패)를 더했다. 첫 결과 이후의 실패도 관찰 가능하며 예상 밖 오류는 `reportError`로도 전달한다(8.3).
 - **동시성**(DC-11 결정): 같은 이름의 액션이 다시 실행되거나 **대상 슬롯(targets)이 겹치는** 액션이 시작되면
   이전 요청을 abort한다. 대상이 겹치지 않는 액션은 동시에 진행한다(예: 검색 중 좋아요). 액션별로
   `mode: 'queue'`를 선언하면 같은 이름의 요청을 순서대로 실행한다. 기존 전역 abort-previous를 대체한다(AG-08).
@@ -1201,7 +1205,8 @@ export default defineTransition({
   허용 origin 목록을 설정할 수 있다. 토큰이 필요 없어 prerender·CDN 캐시 페이지의 폼과도 호환된다. 세션 쿠키는
   `SameSite=Lax`를 권고한다. 인증 확인은 미들웨어(11.2)·handler에서 한다.
 - **클라이언트 타입**: 빌드 플러그인이 `.state-surface/actions.d.ts`에 이름 → 입력·결과 타입 맵을 생성한다(dev에서는
-  파일 변경 시 갱신). `useAction(renew, 'comment/add')`의 params가 자동으로 타입 지정되고 없는 이름은 타입 오류다.
+  파일 변경 시 갱신). 단계 5 구현은 전역 `StateSurface.Actions` 인터페이스에 이름 → 입력 타입을 넣는다. 결과는 슬롯에
+  반영되므로 `run()`의 결과 타입은 공통 `ActionResult`다. `useAction(renew, 'comment/add')`의 params가 자동으로 타입 지정되고 없는 이름은 타입 오류다.
   타입만 참조하므로 handler 코드는 client 산출물에 포함되지 않는다(V-05).
 
 ### 10.6 scoped CSS (R-22, DC-23 결정)

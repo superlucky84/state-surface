@@ -3971,6 +3971,16 @@ export function actionsContent(lang: Lang) {
       entries: [],
       lang,
     },
+    // Server components read comments and likes from the demo store (shared/actionsStore.server.ts).
+    'actions:likes': { lang },
+    'actions:comments': { lang },
+    likes: {
+      title: lang === 'ko' ? '컴포넌트 액션과 동시성' : 'Component actions and concurrency',
+      description:
+        lang === 'ko'
+          ? '좋아요 버튼은 useAction(renew, "like")를 쓰는 client 아일랜드입니다. like의 targets는 플레이그라운드와 겹치지 않으므로 위의 느린 액션이 진행 중이어도 동시에 실행되고, mode: "queue"라서 연속 클릭은 순서대로 처리됩니다.'
+          : 'The like button is a client island using useAction(renew, "like"). Its targets do not overlap the playground, so it runs in parallel with a slow action above, and mode: "queue" processes rapid clicks in order.',
+    },
   };
 }
 

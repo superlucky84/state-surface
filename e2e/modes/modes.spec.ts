@@ -64,6 +64,42 @@ test('client:load hydrates at start; client:visible chunk waits until visible', 
   }).toPass();
 });
 
+test('V-04: typing into a dormant island activates it and hydration keeps the edit', async ({
+  page,
+}) => {
+  const urls = scripts(page);
+  // Hold the component chunk so the edit happens between activation start and hydration.
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  await page.route('**/Editor-*.js', async route => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto('/input');
+  await page.waitForLoadState('domcontentloaded');
+  expect(named(urls, 'Editor')).toHaveLength(0);
+  const input = page.locator('#editor-input');
+  await input.click();
+  await expect.poll(() => named(urls, 'Editor').length).toBe(1);
+  await input.fill('user edited');
+  await input.evaluate((el: HTMLInputElement) => el.setSelectionRange(2, 5));
+  release();
+  // The component received the restored value through an input event.
+  await expect(page.locator('#editor-count')).toHaveText('11');
+  expect(await input.inputValue()).toBe('user edited');
+  expect(
+    await input.evaluate((el: HTMLInputElement) => [
+      el.selectionStart,
+      el.selectionEnd,
+      document.activeElement === el,
+    ])
+  ).toEqual([2, 5, true]);
+  // Typing replaces the restored selection, as it would have without the engine.
+  await input.pressSequentially('!');
+  expect(await input.inputValue()).toBe('us!edited');
+  await expect(page.locator('#editor-count')).toHaveText('9');
+});
+
 test('plugins load only on pages that declare them and attach to their slots', async ({ page }) => {
   const islands = scripts(page);
   await page.goto('/islands');

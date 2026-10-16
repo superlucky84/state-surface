@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
-import { listFiles, hasSegment, isModuleFile } from './build/fsUtils.js';
+import { actionTypes, scanTransitions } from './build/transitionScanner.js';
 import { SurfaceAnalyzer, type ExportRef, type FactsCache } from './build/app.js';
 import { transformSurface } from './build/transform.js';
 import { SurfaceBuildError } from './build/diagnostics.js';
@@ -193,9 +193,10 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           .join(',\n')}};`;
       }
 
-      const files = (await listFiles(path.join(root, 'routes'))).filter(isModuleFile).sort();
-      const transitions = files.filter(file => hasSegment(file, 'transitions'));
-      for (const file of transitions) this.addWatchFile(file);
+      // DC-16 ③: transitions/**/*.ts, registered under their path.
+      const transitions = await scanTransitions(path.join(root, 'transitions')).catch(forRollup);
+      for (const transition of transitions) this.addWatchFile(transition.filePath);
+      await writeActionTypes(root, transitions);
       const entry = appEntryFile(root);
       const document = {
         styles: styleFiles(root).map(documentPath),
@@ -250,12 +251,14 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         "import { configureAssets } from 'state-surface/internal/assets';",
         "import { setBasePath } from 'state-surface/internal/basePath';",
         ...app.pages.map((r, i) => `import * as route${i} from ${JSON.stringify(r.filePath)};`),
-        ...transitions.map((file, i) => `import transition${i} from ${JSON.stringify(file)};`),
+        ...transitions.map(
+          (transition, i) => `import transition${i} from ${JSON.stringify(transition.filePath)};`
+        ),
         ...[...modules].map(
           ([file, local]) => `import * as ${local} from ${JSON.stringify(file)};`
         ),
         `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:[${transitions.map((_, i) => `transition${i}`).join(',')}]});`,
+        `export default defineManifest({basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:{${transitions.map((transition, i) => `${JSON.stringify(transition.name)}:transition${i}`).join(',')}}});`,
       ].join('\n');
     },
     async transform(code, id) {
@@ -265,12 +268,26 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       if (!analyzer.isProjectFile(file)) return;
       return transformSurface(code, file, analyzer).catch(forRollup);
     },
+    async buildStart() {
+      // Editors and tsc read the action type map before any manifest is generated.
+      await writeActionTypes(
+        config.root,
+        await scanTransitions(path.join(config.root, 'transitions')).catch(forRollup)
+      );
+    },
     configureServer(server) {
       const changed = (file: string) => {
         facts.delete(file);
+        const transitionsDir = path.join(config.root, 'transitions');
         const graphChanged =
-          analyzed.has(file) || file.startsWith(path.join(config.root, 'routes'));
+          analyzed.has(file) ||
+          file.startsWith(path.join(config.root, 'routes')) ||
+          file.startsWith(transitionsDir + path.sep);
         if (!graphChanged) return;
+        if (file.startsWith(transitionsDir + path.sep))
+          void scanTransitions(transitionsDir)
+            .then(list => writeActionTypes(config.root, list))
+            .catch(error => config.logger.error(String(error)));
         for (const id of ['\0' + VIRTUAL, '\0' + ISLANDS, '\0' + PLUGINS]) {
           const mod = server.moduleGraph.getModuleById(id);
           if (mod) server.moduleGraph.invalidateModule(mod);
@@ -295,6 +312,18 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       };
     },
   };
+}
+
+/** Write `.state-surface/actions.d.ts` when its content changes (DC-22 ⑤). */
+async function writeActionTypes(
+  root: string,
+  transitions: Awaited<ReturnType<typeof scanTransitions>>
+) {
+  const file = path.join(root, '.state-surface/actions.d.ts');
+  const content = actionTypes(root, transitions);
+  if ((await readFile(file, 'utf8').catch(() => undefined)) === content) return;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
 }
 
 /** Shortest importer path from an entry to `id`, as project-relative names. */

@@ -100,15 +100,12 @@ describe('request context and middleware', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).toContain('next() called more than once');
   });
-  it('rejects duplicate manifests before accepting requests', () => {
+  it('rejects invalid transition names and definitions before accepting requests', () => {
     expect(() =>
-      defineManifest({
-        routes: [],
-        transitions: [
-          { name: 'same', definition: { handler: async function* () {} } },
-          { name: 'same', definition: { handler: async function* () {} } },
-        ],
-      })
-    ).toThrow('Duplicate');
+      defineManifest({ routes: [], transitions: { 'Bad Name': async function* () {} } })
+    ).toThrow('kebab-case');
+    expect(() => defineManifest({ routes: [], transitions: { ok: { targets: ['a'] } } })).toThrow(
+      'needs a handler'
+    );
   });
 });

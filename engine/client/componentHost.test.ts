@@ -144,7 +144,7 @@ describe('ComponentHost', () => {
     expect(requested).toEqual(['later.tsx#default']);
   });
 
-  it('activates a dormant slot when a frame arrives and applies the latest data after the SSR snapshot', async () => {
+  it('keeps the latest data of a dormant slot and hydrates the SSR snapshot before it on activation', async () => {
     const slots = await serverRender(
       slot(
         'later',
@@ -157,12 +157,117 @@ describe('ComponentHost', () => {
     const { host: components, requested } = host({ 'later.tsx#default': Counter });
     components.scan(document, slots);
     const anchor = document.querySelector<HTMLElement>('h-state')!;
-    components.setProps('later', anchor, { start: 1, label: 'first' }, slots[0]);
+    expect(components.setProps('later', anchor, { start: 1, label: 'first' }, slots[0])).toBe(
+      'deferred'
+    );
     components.setProps('later', anchor, { start: 1, label: 'latest' }, slots[0]);
+    await flush();
+    // DESIGN 5.3 ③: a frame does not force the load of a dormant slot.
+    expect(requested).toEqual([]);
+    expect(document.querySelector('.label')!.textContent).toBe('ssr');
+    FakeIntersectionObserver.instances[0].reveal();
     await flush();
     expect(requested).toEqual(['later.tsx#default']);
     expect(document.querySelector('button')).toBe(ssrButton);
     expect(document.querySelector('.label')!.textContent).toBe('latest');
+  });
+
+  it('activates a dormant boundary on pointerdown, focusin or keydown without replaying it', async () => {
+    const slots = await serverRender(
+      slot('a', Counter, { start: 1 }, { 'client:load': undefined, 'client:visible': true }),
+      slot('b', Counter, { start: 5 }, { 'client:load': undefined, 'client:idle': true })
+    );
+    vi.stubGlobal('requestIdleCallback', () => 1);
+    const { host: components, requested } = host({
+      'a.tsx#default': Counter,
+      'b.tsx#default': Counter,
+    });
+    components.scan(document, slots);
+    const [first, second] = Array.from(document.querySelectorAll('button'));
+    first.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    second.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    await flush();
+    expect(requested).toEqual(['a.tsx#default', 'b.tsx#default']);
+    expect(first.textContent).toBe('1');
+    first.click();
+    await flush();
+    expect(first.textContent).toBe('2');
+  });
+
+  it('retries a failed chunk once, then reports it and calls onChunkError', async () => {
+    const slots = await serverRender(
+      slot('flaky', Title, { text: 'SSR' }),
+      slot('broken', Title, { text: 'kept' })
+    );
+    let attempts = 0;
+    const onChunkError = vi.fn();
+    const report = vi.fn();
+    const components = new ComponentHost({
+      loaders: {
+        'flaky.tsx#default': () =>
+          ++attempts === 1 ? Promise.reject(new Error('network')) : Promise.resolve(Title),
+        'broken.tsx#default': () => Promise.reject(new Error('chunk 404')),
+      },
+      report,
+      onChunkError,
+      retryDelay: 5,
+    });
+    components.scan(document, slots);
+    await flush();
+    expect(attempts).toBe(2);
+    const flaky = document.querySelector<HTMLElement>('h-state[name="flaky"]')!;
+    expect(components.setProps('flaky', flaky, { text: 'live' }, slots[0])).toBe('applied');
+    await flush();
+    expect(flaky.innerHTML).toBe('<h1>live</h1>');
+    expect(document.querySelector('h-state[name="broken"]')!.innerHTML).toBe('<h1>kept</h1>');
+    expect(report).toHaveBeenCalledOnce();
+    expect(onChunkError).toHaveBeenCalledOnce();
+    const broken = document.querySelector<HTMLElement>('h-state[name="broken"]')!;
+    expect(components.setProps('broken', broken, { text: 'x' }, slots[1])).toBe('failed');
+  });
+
+  it('remounts on reset and on a resetKey change, and keeps local state otherwise (DC-05)', async () => {
+    const slots = await serverRender(
+      slot('editor', Counter, { start: 1, label: 'a', id: 1 }, { resetKey: 'id' })
+    );
+    expect(slots[0].resetKey).toEqual(['id']);
+    const { host: components } = host({ 'editor.tsx#default': Counter });
+    components.scan(document, slots);
+    await flush();
+    const anchor = document.querySelector<HTMLElement>('h-state')!;
+    const button = () => document.querySelector('button')!;
+    button().click();
+    await flush();
+    expect(button().textContent).toBe('2');
+    components.setProps('editor', anchor, { start: 1, label: 'b', id: 1 }, slots[0]);
+    await flush();
+    expect(button().textContent).toBe('2');
+    expect(document.querySelector('.label')!.textContent).toBe('b');
+    components.setProps('editor', anchor, { start: 7, label: 'c', id: 2 }, slots[0]);
+    await flush();
+    expect(button().textContent).toBe('7');
+    button().click();
+    await flush();
+    components.setProps('editor', anchor, { start: 3, label: 'd', id: 2 }, slots[0], {
+      reset: true,
+    });
+    await flush();
+    expect(button().textContent).toBe('3');
+  });
+
+  it('mounts fresh instead of hydrating when a dormant slot was reset', async () => {
+    const slots = await serverRender(
+      slot('later', Counter, { start: 1 }, { 'client:load': undefined, 'client:visible': true })
+    );
+    const ssrButton = document.querySelector('button');
+    const { host: components } = host({ 'later.tsx#default': Counter });
+    components.scan(document, slots);
+    const anchor = document.querySelector<HTMLElement>('h-state')!;
+    components.setProps('later', anchor, { start: 9 }, slots[0], { reset: true });
+    FakeIntersectionObserver.instances[0].reveal();
+    await flush();
+    expect(document.querySelector('button')).not.toBe(ssrButton);
+    expect(document.querySelector('button')!.textContent).toBe('9');
   });
 
   it('renders empty slots on the first frame and never mounts a slot removed while loading', async () => {
@@ -194,6 +299,7 @@ describe('ComponentHost', () => {
     const components = new ComponentHost({
       loaders: { 'kept.tsx#default': () => Promise.reject(new Error('chunk 404')) },
       report,
+      retryDelay: 0,
     });
     const empty: SlotMeta = { id: 'empty', mode: 'client', component: 'missing.tsx#default' };
     components.scan(document, [...slots, empty]);
@@ -269,5 +375,29 @@ describe('ComponentHost', () => {
     expect(panel.querySelector('h-island')!.getAttribute('data-island')).toBe('panel$1');
     components.disposeWithin(panel);
     expect(components.has('panel$1')).toBe(false);
+  });
+
+  it('keeps a morphed island whose resetKey values are unchanged and updates its props', async () => {
+    document.body.innerHTML = '<h-state name="panel"></h-state>';
+    const panel = document.querySelector<HTMLElement>('h-state')!;
+    const { host: components } = host({ 'Counter.tsx#default': Counter });
+    panel.innerHTML =
+      '<h-island data-island="panel$0" style="display:contents"><div class="counter"><button type="button">1</button><span class="label">a</span></div></h-island>';
+    const meta = {
+      id: 'panel$0',
+      component: 'Counter.tsx#default',
+      props: { start: 1, label: 'a', id: 'x' },
+      resetKey: ['id'],
+    };
+    components.adopt(panel, [meta]);
+    await flush();
+    panel.querySelector('button')!.click();
+    await flush();
+    const next = { ...meta, id: 'panel$1', props: { start: 1, label: 'b', id: 'x' } };
+    expect(components.keepIsland('panel$0', next)).toBe(true);
+    await flush();
+    expect(panel.querySelector('button')!.textContent).toBe('2');
+    expect(panel.querySelector('.label')!.textContent).toBe('b');
+    expect(components.keepIsland('panel$1', { ...next, props: { start: 1, id: 'y' } })).toBe(false);
   });
 });

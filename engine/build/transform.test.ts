@@ -285,8 +285,9 @@ describe('app analysis', () => {
     expect(pluginsOf('index.tsx')).toEqual([]);
     expect(app.plugins.size).toBe(3);
     // Stage 4: transition-updated demo slots are server slots; only the chat bubble streams
-    // into a client slot.
-    expect([...app.client.keys()]).toEqual([
+    // into a client slot. Stage 5: the actions page has a useAction island.
+    expect([...app.client.keys()].sort()).toEqual([
+      'routes/examples/actions/_components/likeButton.tsx#default',
       'routes/examples/chat/_components/chatCurrent.tsx#default',
     ]);
     const slotsOf = (page: string) =>

@@ -8,8 +8,11 @@
 
 /* ── MPA View Transition (cross-fade on page navigation) ── */
 
-@view-transition {
-  navigation: auto;
+/* Cross-document fade, skipped for reduced motion like in-page View Transitions (DC-06). */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
 }
 
 /* ── Pending + reveal animation (opt-in via data-animate="preset") ── */

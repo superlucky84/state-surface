@@ -17,6 +17,9 @@ import {
 import { IdleTimeoutError, frameEncoder, produceFrames } from '../transitionResponse.js';
 import { assertSecret, seal, unseal, type SecretSource } from '../secrets.js';
 import { TransitionError } from '../transition.js';
+import { validateSchema } from '../../shared/schema.js';
+import { FLASH_COOKIE, openFlash, redirectTarget, sealFlash, type Flash } from '../flash.js';
+import type { ActionMeta } from '../../shared/protocol.js';
 import type { DeferredPayload } from '../ssrRenderer.js';
 
 export interface HandlerOptions {
@@ -33,6 +36,8 @@ export interface HandlerOptions {
   previousSecret?: string;
   /** Slot that shows transition errors (default `system:error`). */
   errorSlot?: string;
+  /** Flash cookie size limit in bytes (default 3KB, DESIGN 10.5). */
+  flashLimit?: number;
   development?: boolean;
   logger?: Logger;
   middleware?: Middleware[];
@@ -63,7 +68,7 @@ function normalizeBase(path: string) {
   return path === '/' ? '' : '/' + path.replace(/^\/+|\/+$/g, '');
 }
 
-async function readBody(request: Request, limit: number): Promise<Uint8Array> {
+async function readBody(request: Request, limit: number): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   let size = 0;
   const reader = request.body?.getReader();
@@ -90,6 +95,52 @@ async function readBody(request: Request, limit: number): Promise<Uint8Array> {
     offset += chunk.length;
   }
   return data;
+}
+
+/** Same name more than once → array (DESIGN 10.5). */
+function formToObject(form: FormData): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of form.entries()) {
+    const current = result[key];
+    if (current === undefined) result[key] = value;
+    else if (Array.isArray(current)) current.push(value);
+    else result[key] = [current, value];
+  }
+  return result;
+}
+
+/** Transition params: JSON object, form-urlencoded or multipart body. */
+async function readParams(request: Request, limit: number): Promise<Record<string, unknown>> {
+  const type = request.headers.get('content-type') ?? '';
+  const data = await readBody(request, limit);
+  if (/multipart\/form-data|application\/x-www-form-urlencoded/i.test(type)) {
+    try {
+      return formToObject(
+        await new Response(data, { headers: { 'content-type': type } }).formData()
+      );
+    } catch {
+      throw new HttpError(400, 'Malformed form body');
+    }
+  }
+  try {
+    const parsed = data.byteLength
+      ? JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
+      : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+    return parsed;
+  } catch {
+    throw new HttpError(400, 'Expected a JSON object');
+  }
+}
+
+/** Flash never carries uploaded files (DESIGN 10.5). */
+function withoutFiles(value: unknown): unknown {
+  const isFile = (item: unknown) => typeof Blob !== 'undefined' && item instanceof Blob;
+  if (Array.isArray(value)) {
+    const kept = value.filter(item => !isFile(item));
+    return kept.length ? kept : undefined;
+  }
+  return isFile(value) ? undefined : value;
 }
 
 const isPayload = (value: unknown): value is DeferredPayload => {
@@ -122,6 +173,15 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
   if (options.previousSecret !== undefined)
     assertSecret(options.previousSecret, 'SURFACE_SECRET_PREVIOUS');
   const errorSlot = options.errorSlot ?? 'system:error';
+  const flashLimit = options.flashLimit ?? 3 * 1024;
+  // DC-11: the browser needs targets and queue mode to decide which actions abort each other.
+  const actionMeta: Record<string, ActionMeta> = {};
+  for (const [name, definition] of Object.entries(manifest.transitions))
+    if (definition.targets || definition.mode === 'queue')
+      actionMeta[name] = {
+        ...(definition.targets ? { targets: [...definition.targets] } : {}),
+        ...(definition.mode === 'queue' ? { queue: true as const } : {}),
+      };
   const documentTags = createDocumentTags(manifest.document ?? {});
   const routes = manifest.routes.map(route => ({
     ...route,
@@ -162,6 +222,15 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         logger: options.logger,
       });
       const { ctx } = context;
+      ctx.flash = async name => {
+        const value = ctx.cookies.get(FLASH_COOKIE);
+        if (!value) return undefined;
+        const flash = await openFlash(secrets(ctx), value);
+        if (!flash || flash.n !== name) return undefined;
+        ctx.cookies.delete(FLASH_COOKIE);
+        const { n: _name, ...result } = flash;
+        return result;
+      };
       let streamOwnsCleanup = false;
       let cleanup = () => {};
       try {
@@ -169,10 +238,13 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         const mounted = !basePath || pathname === basePath || pathname.startsWith(basePath + '/');
         const path = mounted ? pathname.slice(basePath.length) || '/' : '';
         const segments = path.split('/').filter(Boolean);
-        const transitionName =
-          segments.length === 2 && segments[0] === 'transition'
-            ? decodeSegment(segments[1])
+        // Transition names are paths under transitions/ (DC-16 ③): `/transition/comment/add`.
+        const nameAfter = (...prefix: string[]) =>
+          segments.length > prefix.length && prefix.every((part, i) => segments[i] === part)
+            ? segments.slice(prefix.length).map(decodeSegment).join('/')
             : undefined;
+        const transitionName = nameAfter('transition');
+        const actionName = nameAfter('_surface', 'action');
         const islandId =
           segments.length === 3 && segments[0] === '_surface' && segments[1] === 'island'
             ? decodeSegment(segments[2])
@@ -195,6 +267,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         }
         if (mounted && request.method === 'POST' && transitionName)
           ctx.route = { kind: 'transition', name: transitionName, prerendered: false };
+        if (mounted && request.method === 'POST' && actionName)
+          ctx.route = { kind: 'action', name: actionName, prerendered: false };
         if (mounted && islandId && ['GET', 'HEAD', 'POST'].includes(request.method)) {
           selected = undefined;
           ctx.route = { kind: 'island', name: islandId, prerendered: false };
@@ -272,17 +346,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
               { error: `Transition "${transitionName}" not found` },
               { status: 404 }
             );
-          const data = await readBody(request, bodyLimit);
-          let params: Record<string, unknown>;
-          try {
-            const parsed = data.byteLength
-              ? JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
-              : {};
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-            params = parsed;
-          } catch {
-            throw new HttpError(400, 'Expected a JSON object');
-          }
+          const raw = await readParams(request, bodyLimit);
+          const { _redirect: _ignored, ...input } = raw;
 
           let timedOut = false;
           const timer = setTimeout(() => {
@@ -300,6 +365,20 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
             warn: message => warn(message),
           });
           ctx.external = externalFrames(projection, warn);
+          // DC-22 ②: invalid input never runs the handler; the error frame carries field errors.
+          let params: Record<string, unknown> = input;
+          if (definition.input) {
+            const checked = await validateSchema(definition.input, input);
+            if (!checked.ok) {
+              clearTimeout(timer);
+              const frame = await projection.error(checked.message, {
+                kind: 'validation',
+                fieldErrors: checked.fieldErrors,
+              });
+              return Response.json({ frames: [frame] }, { status: 422 });
+            }
+            params = checked.value as Record<string, unknown>;
+          }
           let frames: AsyncGenerator<WireFrame, void, unknown> | undefined;
           let released = false;
           const release = () => {
@@ -326,7 +405,10 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
                   : 'Transition failed';
             if (options.development && error instanceof FrameError)
               warn(`${error.message}\n${error.stack ?? ''}`);
-            return projection.error(message);
+            return projection.error(
+              message,
+              timedOut || error instanceof IdleTimeoutError ? { kind: 'timeout' } : {}
+            );
           };
 
           let streaming = false;
@@ -429,6 +511,89 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
           });
         };
 
+        // JS-less form submission (PRG, DC-22 ③): run the transition, drop its frames, store the
+        // result in a signed one-time cookie and answer 303 to a same-origin page.
+        const action = async (): Promise<Response> => {
+          const definition = Object.hasOwn(manifest.transitions, actionName!)
+            ? manifest.transitions[actionName!]
+            : undefined;
+          if (!definition) return new Response('Not Found', { status: 404 });
+          const raw = await readParams(request, bodyLimit);
+          const { _redirect: requested, ...input } = raw;
+          const location = redirectTarget(
+            requested,
+            request.headers.get('referer'),
+            ctx.url.origin,
+            basePath
+          );
+          let flash: Flash = { ok: true };
+          try {
+            let params: Record<string, unknown> = input;
+            if (definition.input) {
+              const checked = await validateSchema(definition.input, input);
+              if (!checked.ok)
+                throw Object.assign(new TransitionError(checked.message), {
+                  fieldErrors: checked.fieldErrors,
+                });
+              params = checked.value as Record<string, unknown>;
+            }
+            const timer = setTimeout(
+              () => controller.abort(new Error(`Transition timeout after ${limits.timeout}ms`)),
+              limits.timeout
+            );
+            try {
+              const result = definition.handler(params, ctx);
+              if (
+                result &&
+                typeof (result as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function'
+              ) {
+                for await (const _frame of result as AsyncIterable<unknown>)
+                  if (signal.aborted) break;
+              } else await result;
+              if (signal.aborted) throw signal.reason;
+            } finally {
+              clearTimeout(timer);
+            }
+          } catch (error) {
+            const fieldErrors = (error as { fieldErrors?: Record<string, string[]> }).fieldErrors;
+            if (!fieldErrors) report(error, ctx);
+            flash = {
+              ok: false,
+              error: {
+                message:
+                  error instanceof TransitionError || options.development
+                    ? error instanceof Error
+                      ? error.message
+                      : String(error)
+                    : 'Transition failed',
+                kind: fieldErrors ? 'validation' : 'server',
+                ...(fieldErrors ? { fieldErrors } : {}),
+              },
+            };
+          }
+          const echoed = Object.fromEntries(
+            (definition.flash?.input ?? [])
+              .filter(field => Object.hasOwn(input, field))
+              .map(field => [field, withoutFiles(input[field])])
+              .filter(([, value]) => value !== undefined)
+          );
+          if (Object.keys(echoed).length) flash.input = echoed;
+          const sealed = await sealFlash(secrets(ctx), actionName!, flash, flashLimit);
+          if (sealed.trimmed.length && options.development)
+            warn(
+              `[flash] "${actionName}" exceeded ${flashLimit} bytes; dropped ${sealed.trimmed.join(', ')}`
+            );
+          ctx.cookies.set(FLASH_COOKIE, sealed.value, {
+            httpOnly: true,
+            maxAge: 60,
+            secure: ctx.url.protocol === 'https:',
+          });
+          return new Response(null, {
+            status: 303,
+            headers: { location, 'cache-control': 'no-store' },
+          });
+        };
+
         const dispatch = async (): Promise<Response> => {
           if (ctx.route.kind === 'page' && selected)
             return new Response(
@@ -438,11 +603,13 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
                 buildId,
                 pageId: selected.page?.id,
                 seal: payload => seal(secrets(ctx), payload),
+                actions: actionMeta,
               }),
               { headers: { 'content-type': 'text/html; charset=utf-8' } }
             );
           if (ctx.route.kind === 'island') return island();
           if (ctx.route.kind === 'transition') return transition();
+          if (ctx.route.kind === 'action') return action();
           return new Response('Not Found', { status: 404 });
         };
         const response = await sequence(...(options.middleware ?? []))(ctx, dispatch);
@@ -453,6 +620,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
           headers.set('x-content-type-options', 'nosniff');
           headers.set('x-frame-options', 'SAMEORIGIN');
         }
+        // A page whose chunks failed compares this with its own build (DC-04 ③).
+        if (ctx.route.kind === 'page') headers.set('x-surface-build', buildId);
         options.logger?.info(
           `[HTTP] ${request.method} ${ctx.url.pathname} ${response.status} ${(performance.now() - started).toFixed(1)}ms`
         );

@@ -45,8 +45,8 @@ server.ts                # App entry point
 routes/                  # Pages: routes/**/*.tsx (auto-loaded; `_` files/folders are not pages)
   index.tsx              #   export default async function Page(ctx) → JSX with <Slot>
   <route>/_components/   #   Slot components (props = slot state)
-  <route>/transitions/   #   Server-side state generators
-  _shared/               #   Cross-route components & transitions
+  _shared/               #   Cross-route components
+transitions/             # Server-side state generators; path = name (comments/add.ts → "comments/add")
 layouts/                 # Layout components (Layout.tsx)
 shared/                  # Data helpers, i18n utilities
 client/                  # Assets (styles.css, plugins/)
@@ -65,6 +65,10 @@ The default server imports the generated Vite manifest and uses
 `serve({ manifest })` from `state-surface/adapters/node`. User routes and transitions
 receive `SurfaceContext` (Web Request, URL, params, cookies, locals, env, signal).
 Use ctx.cookies to read/write cookies; transition cookie writes must happen before
-the first yield. Vite's surface plugin generates the registry for development and
+the first yield. `defineTransition({ input, targets, handler })` validates params with a
+Standard Schema and declares the slots it changes (actions with disjoint targets run in
+parallel). `<form method="post" action={actionUrl(name)}>` works without JavaScript; the page
+reads the result with `ctx.flash(name)`. The build writes `.state-surface/actions.d.ts` so
+`useAction(renew, name)` from `state-surface/client` is typed. Vite's surface plugin generates the registry for development and
 production. To embed in Express, install the optional express peer and mount
 `surface({ manifest })` before body-parsing middleware.

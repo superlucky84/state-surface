@@ -2,7 +2,7 @@
 /**
  * Build scaffold/ from project root files + create-state-surface/overrides.
  *
- * Copies user-facing directories (client/, shared/, routes/, layouts/) and
+ * Copies user-facing directories (client/, shared/, routes/, transitions/, layouts/) and
  * root files (server.ts, .prettierrc) into scaffold/, then overlays
  * template-specific overrides (tsconfig.json, vite.config.ts, etc.).
  *
@@ -21,7 +21,7 @@ rmSync(scaffold, { recursive: true, force: true });
 mkdirSync(scaffold, { recursive: true });
 
 // 1. Copy directories
-const SYNC_DIRS = ['client', 'shared', 'routes', 'layouts', 'testing'];
+const SYNC_DIRS = ['client', 'shared', 'routes', 'transitions', 'layouts', 'testing'];
 for (const dir of SYNC_DIRS) {
   cpSync(resolve(root, dir), resolve(scaffold, dir), { recursive: true });
 }

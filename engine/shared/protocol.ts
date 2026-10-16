@@ -26,6 +26,8 @@ export type StateFrame = {
   changed?: string[];
   removed?: string[];
   uiChanged?: string[];
+  /** Client slots in `states` whose component instance is re-created (local state reset, DC-05). */
+  reset?: string[];
 };
 
 /** Return value of a non-streaming (async function) transition: one full frame. */
@@ -45,10 +47,12 @@ export interface IslandMeta {
   activation?: 'idle' | 'visible' | 'media';
   media?: string;
   only?: true;
+  /** DC-05: prop names whose values identify the instance across morph. */
+  resetKey?: string[];
 }
 
 export type HtmlOp = { slot: string; html: string; islands?: IslandMeta[] };
-export type PropsOp = { slot: string; props: Record<string, unknown> };
+export type PropsOp = { slot: string; props: Record<string, unknown>; reset?: true };
 export type MergeOp = { slot: string; merge: Record<string, unknown> };
 export type RemoveOp = { slot: string; remove: true };
 export type UiOp = { slot: string; ui: UiPatch | null };
@@ -67,6 +71,12 @@ export interface DoneFrame {
 export interface ErrorFrame {
   type: 'error';
   message: string;
+  /**
+   * `validation`: the input schema rejected the params (the handler did not run).
+   * `timeout`: the transition exceeded its total or idle timeout (DC-14).
+   */
+  kind?: 'validation' | 'timeout';
+  fieldErrors?: Record<string, string[]>;
   slot?: string;
   html?: string;
   islands?: IslandMeta[];
@@ -89,6 +99,8 @@ export interface SlotMeta {
   activation?: 'idle' | 'visible' | 'media';
   media?: string;
   only?: true;
+  /** Client slots and islands (DC-05): prop names whose values identify the instance. */
+  resetKey?: string[];
   /** Server slots: `morph` (default `replace`). */
   swap?: 'morph';
   viewTransition?: true;
@@ -102,6 +114,12 @@ export interface PluginMeta {
   slots?: string[];
 }
 
+/** Client concurrency metadata of transitions that declare targets or `mode: 'queue'` (DC-11). */
+export interface ActionMeta {
+  targets?: string[];
+  queue?: true;
+}
+
 export interface SurfaceBootstrap {
   buildId: string;
   pageId: string;
@@ -109,6 +127,8 @@ export interface SurfaceBootstrap {
   slots?: SlotMeta[];
   boot?: Array<{ transition: string; params: Record<string, unknown> }>;
   plugins?: PluginMeta[];
+  /** Transitions without an entry overlap every slot (DC-30). */
+  actions?: Record<string, ActionMeta>;
 }
 
 // ── Validation ──
@@ -163,6 +183,14 @@ export function validateStateFrame(frame: unknown): ValidationResult {
   if (frame.type !== 'state') return invalid(`Unknown frame type: "${String(frame.type)}"`);
   if (!isPlainObject(frame.states)) return invalid('"states" must be a non-null object');
   const states = frame.states;
+
+  if (frame.reset !== undefined) {
+    if (!Array.isArray(frame.reset) || frame.reset.some(key => typeof key !== 'string'))
+      return invalid('"reset" must be an array of slot names');
+    if (frame.accumulate === true) return invalid('Accumulate frame must not include "reset"');
+    for (const key of frame.reset)
+      if (!(key in states)) return invalid(`"reset" key "${key}" must exist in "states"`);
+  }
 
   if (frame.accumulate === true) {
     if (frame.removed !== undefined) return invalid('Accumulate frame must not include "removed"');
@@ -248,6 +276,17 @@ export function checkWireFrame(
       return { ok: false, reason: 'error frame props must be an object' };
     if (frame.islands !== undefined && islandsProblem(frame.islands))
       return { ok: false, reason: islandsProblem(frame.islands)! };
+    if (frame.kind !== undefined && frame.kind !== 'validation' && frame.kind !== 'timeout')
+      return { ok: false, reason: 'unknown error frame kind' };
+    if (
+      frame.fieldErrors !== undefined &&
+      (!isPlainObject(frame.fieldErrors) ||
+        Object.values(frame.fieldErrors).some(
+          messages =>
+            !Array.isArray(messages) || messages.some(message => typeof message !== 'string')
+        ))
+    )
+      return { ok: false, reason: 'error frame fieldErrors must map fields to messages' };
     return { ok: true, frame: frame as unknown as ErrorFrame, skipped: [] };
   }
   if (frame.type !== 'patch') return { ok: false, reason: `unknown frame type "${frame.type}"` };
@@ -259,7 +298,11 @@ export function checkWireFrame(
       return { ok: false, reason: 'op needs a slot name' };
     const kinds = ['html', 'props', 'merge', 'remove', 'ui'].filter(kind => kind in op);
     const extra = Object.keys(op).filter(
-      key => key !== 'slot' && !kinds.includes(key) && !(key === 'islands' && 'html' in op)
+      key =>
+        key !== 'slot' &&
+        !kinds.includes(key) &&
+        !(key === 'islands' && 'html' in op) &&
+        !(key === 'reset' && 'props' in op && op.reset === true)
     );
     if (kinds.length !== 1 || extra.length)
       return { ok: false, reason: `unknown op for slot "${op.slot}" (version mismatch)` };
@@ -301,6 +344,11 @@ function islandsProblem(islands: unknown): string | undefined {
       !isPlainObject(island.props)
     )
       return 'island metadata needs id, component and props';
+    else if (
+      island.resetKey !== undefined &&
+      (!Array.isArray(island.resetKey) || island.resetKey.some(key => typeof key !== 'string'))
+    )
+      return 'island resetKey must be an array of prop names';
   return undefined;
 }
 

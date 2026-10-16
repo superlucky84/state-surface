@@ -28,6 +28,19 @@ const state = (
     { name: 'fixture:state', ...directives },
     el(Island, { __ssComponent: Fixture, __ssId: 'conformance/Fixture.tsx#default', ...props })
   );
+// Hand-written Standard Schema (DC-22): `name` is required, `tag` is a string or an array.
+const formInput = {
+  '~standard': {
+    version: 1 as const,
+    vendor: 'conformance',
+    validate(value: unknown) {
+      const input = value as Record<string, unknown>;
+      return typeof input.name === 'string' && input.name
+        ? { value: { name: input.name, tags: ([] as unknown[]).concat(input.tag ?? []) } }
+        : { issues: [{ message: 'Required', path: ['name'] }] };
+    },
+  },
+};
 const documentOf = (...body: unknown[]) =>
   el('html', {}, el('head', {}, el('title', {}, 'Fixture')), el('body', {}, ...body));
 // The page manifest the build would generate for the index page (DESIGN 6.2).
@@ -133,6 +146,20 @@ export function fixture(basePath = '/demo'): HandlerOptions {
           module: { default: ctx => documentOf(state({ value: ctx.params.id })) },
         },
         {
+          // JS-less form result page (PRG): reads the one-time flash.
+          pattern: '/flash',
+          module: {
+            default: async ctx =>
+              documentOf(
+                el(
+                  'pre',
+                  { class: 'flash' },
+                  JSON.stringify((await ctx.flash('form/submit')) ?? null)
+                )
+              ),
+          },
+        },
+        {
           pattern: '/failure',
           module: {
             default() {
@@ -174,6 +201,21 @@ export function fixture(basePath = '/demo'): HandlerOptions {
                   input,
                   kind: ctx.route.kind,
                   env: ctx.env.RUNTIME ?? 'unknown',
+                }),
+              },
+            },
+          }),
+        },
+        // Typed transition: the same definition serves JSON, form bodies and the PRG endpoint.
+        'form/submit': {
+          input: formInput,
+          flash: { input: ['name', 'upload'] },
+          handler: async (input: { name: string; tags: unknown[] }) => ({
+            states: {
+              'fixture:html': {
+                text: JSON.stringify({
+                  name: input.name,
+                  tags: input.tags.map(tag => (typeof tag === 'string' ? tag : 'file')),
                 }),
               },
             },

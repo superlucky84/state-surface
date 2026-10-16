@@ -19,8 +19,16 @@ transition yields StateFrame ─▶ server: validate → request reducer → pro
 
 ## Requests
 
-- Endpoint: `POST {BASE_PATH}/transition/:name`, body = JSON object of params (100 KiB default
-  limit, 413 above; malformed or non-object JSON is 400).
+- Endpoint: `POST {BASE_PATH}/transition/<name>`. The name is the transition file's path under
+  `transitions/` without extension, kebab-case segments joined by `/` (`transitions/comment/add.ts`
+  → `/transition/comment/add`); each segment is URL-encoded.
+- Body (100 KiB default limit, 413 above): a JSON object, or `application/x-www-form-urlencoded` /
+  `multipart/form-data` turned into an object (a repeated name becomes an array, files stay `File`
+  values). Malformed or non-object bodies are 400. A `_redirect` field is removed.
+- Input: a transition with an `input` Standard Schema validates the params before the handler.
+  Invalid input never runs the handler: the response is **422** `application/json`
+  `{ "frames": [{ "type": "error", "kind": "validation", "message", "fieldErrors", … }] }`
+  (`fieldErrors`: field path → messages; the error slot is rendered as for other errors).
 - Required headers (sent by the engine runtime):
   - `X-Surface-Build: <buildId>` — must equal the server's build id, else **409** (the browser
     reopens the current URL as a document load).
@@ -63,7 +71,7 @@ sends an `error` frame and ends the request):
   Yielding `{ type: 'done' }` is invalid. Yielding `{ type: 'error' }` is invalid: **throw**.
   Throw `TransitionError` (from `state-surface/server`) for a message the user may see in
   production; other errors become `Transition failed` outside development.
-- **Targets**: `defineTransition(name, { targets, handler })` declares the slots the transition may
+- **Targets**: `defineTransition({ targets, handler })` declares the slots the transition may
   change. Without it, the slots of the first full frame become the targets. Any frame that touches
   a slot outside the targets, a slot that is not on the page, or a static slot is invalid.
 - `full` (default) replaces the **targets** — not the whole page. Target slots missing from a full
@@ -76,6 +84,9 @@ sends an `error` frame and ends the request):
   `cssVars` keys start with `--` and values must not contain `;`, `{`, `}`, `\`, `url(` or
   `expression(`. A full frame sets the UI of every target slot (missing → cleared).
 - An empty handler (no frame) is a successful request: the engine sends only `done`.
+- `reset: [slot]` (any frame except accumulate; keys must be in `states`) asks for a new instance
+  of a client slot (DC-05): its `props` op carries `reset: true` and the browser remounts it, local
+  state cleared. On a server or static slot it is invalid.
 
 The slot state exists for **one request**. Every request starts empty; read what you need from a
 server source again (DC-10). The server never trusts client snapshots.
@@ -120,6 +131,8 @@ type WireFrame =
   | {
       type: 'error';
       message: string;
+      kind?: 'validation' | 'timeout'; // input schema rejected the params · total/idle timeout
+      fieldErrors?: Record<string, string[]>;
       slot?: string;
       html?: string;
       islands?: IslandMeta[];
@@ -128,7 +141,7 @@ type WireFrame =
 
 type Op =
   | { slot: string; html: string; islands?: IslandMeta[] } // server slot
-  | { slot: string; props: object } // client slot: replace props
+  | { slot: string; props: object; reset?: true } // client slot: replace props (reset: remount)
   | { slot: string; merge: object } // client slot: accumulate delta
   | { slot: string; remove: true } // any slot: cleanup and clear
   | { slot: string; ui: UiPatch | null }; // any slot: the slot's whole UI patch
@@ -140,6 +153,7 @@ type IslandMeta = {
   activation?: 'idle' | 'visible' | 'media';
   media?: string;
   only?: true;
+  resetKey?: string[]; // prop names that identify the instance across morph
 };
 ```
 
@@ -174,10 +188,23 @@ Browser state table (per request):
   op is skipped and traced.
 - Queued ops are coalesced once per animation frame: per slot the last `html`/`props` wins,
   `merge` folds into the preceding `props`/`merge`, ops after `remove` are a new appearance.
-- Abort previous: a new transition invalidates the queue and DOM work of the previous one.
+- Concurrency (DC-11, DC-30): a new request aborts running requests of the same name and those
+  whose targets overlap its own; requests with disjoint targets run in parallel. A transition
+  without declared targets overlaps every slot (it aborts everything and anything aborts it;
+  development warns once). `mode: 'queue'` runs requests of one name in order. Targets and queue
+  mode come from the bootstrap `actions`. An aborted request's queued ops and DOM work are dropped.
+- Pending: each request marks its anchors (`data-pending-targets`, else its targets, else every
+  slot) with `data-pending` until it ends (done, error or abort) and with `data-has-result` once
+  its first patch is applied. Marks are counted per anchor, so one request's end does not clear
+  another's.
 - `error`: when `slot` names a slot on the page, its `html` (server slot) or `props` (client slot)
   is shown there regardless of targets; it is cleared by the next request's baseline. Without an
-  error slot nothing is shown; development warns. Both cases call `reportError`.
+  error slot nothing is shown; development warns. Both cases call `reportError` (validation errors
+  do not).
+- Result: `run()` / the runtime resolve `{ ok: true }`, `{ ok: false, aborted: true }` or
+  `{ ok: false, error }` with `error.kind` `server` (error frame), `validation` (with
+  `fieldErrors`), `timeout`, `http` (status without frames), `network`, `protocol` (wire
+  violation) or `chunk` (a slot's component could not load).
 
 Receive limits (browser and server, configurable with `createHandler({ limits })`): one NDJSON
 line 1 MB, one response 32 MB, 10,000 ops per request, one `html` op 512 KB, 30 s idle between
@@ -188,8 +215,9 @@ frames and 5 minutes per request. Development warns at 80%.
 - `swap="replace"` (default): plugin cleanup → dispose islands in the slot → `innerHTML` →
   restore focus, selection and scroll by element `id` → plugin `attach` → activate `islands`.
 - `swap="morph"`: idiomorph 0.7.4 (own chunk, loaded only on pages with a morph slot) patches the
-  DOM; an island with the same component and props keeps its instance, a changed one is disposed
-  and activated again (IC-06); plugins get `update`.
+  DOM; an island with the same component and props keeps its instance, one with changed props but
+  the same `resetKey` values keeps it and receives the new props, any other is disposed and
+  activated again (IC-06, DC-05); plugins get `update`.
 - Scripts inside applied HTML never run; development warns.
 
 ## Capability
@@ -224,7 +252,8 @@ One JSON script per page (written only when the page needs the engine or has an 
       }
     ],
     "boot": [{ "transition": "guide-load", "params": { "slug": "quickstart" } }],
-    "plugins": [{ "id": "client/plugins/prism.ts#prism", "load": "load" }]
+    "plugins": [{ "id": "client/plugins/prism.ts#prism", "load": "load" }],
+    "actions": { "guide-load": { "targets": ["page:header", "guide:toc", "guide:content"] } }
   }
 </script>
 ```
@@ -233,6 +262,10 @@ One JSON script per page (written only when the page needs the engine or has an 
 - Server slots carry no props; client slots and islands carry their SSR snapshot props.
 - Island ids: `$N` at page level, `<slot>$N` inside a slot. Hosts are `<h-island data-island="id">`.
 - `defer` holds the sealed token of a deferred server slot (below).
+- `resetKey` (client slots and islands): prop names; a new value remounts the instance.
+- `actions`: targets and `queue` of the transitions that declare them (others overlap everything).
+- Page responses carry `X-Surface-Build`; a page whose chunk failed twice compares it with its
+  `buildId` and reloads on the next interaction when they differ.
 
 ## Deferred Server Slots
 
@@ -248,3 +281,28 @@ rotation; secrets shorter than 32 bytes are rejected).
 - `Cache-Control` is `private, no-store` unless the slot declares `cache` (GET only).
 - The browser requests every deferred slot in parallel, drops a response when a transition already
   changed the slot, retries once after 1 s, then keeps the fallback and calls `reportError`.
+
+## JS-less Form Submissions (PRG)
+
+`<form method="post" action={actionUrl('comment/add')}>` posts to
+`POST {BASE_PATH}/_surface/action/<name>` and works without JavaScript (DC-22 ③). With JavaScript
+the engine intercepts the submit (`method="post"`, same origin, action under
+`{BASE_PATH}/_surface/action/`) and runs the same transition as a stream.
+
+- The request passes the middleware and the `Origin` / `Sec-Fetch-Site` check (403 otherwise);
+  an unknown name is 404. The body is parsed and validated like a transition request.
+- The handler runs to the end and its frames are dropped; the response is **303** with
+  `Cache-Control: no-store`. `Location`: the `_redirect` field when it is a path inside BASE_PATH on
+  this origin (starts with `/`, no `//`, `/\`, scheme or control characters), else a same-origin
+  `Referer` inside BASE_PATH, else the BASE_PATH root.
+- The result travels in the `surface_flash` cookie (HttpOnly, SameSite=Lax, Max-Age 60, Secure
+  on https): `base64url(JSON).base64url(HMAC-SHA256)` with the IC-09 flash key
+  (`state-surface/flash/v1`; the previous secret also verifies). Payload:
+  `{ n: name, ok, error?: { message, kind: 'validation' | 'server', fieldErrors? }, input? }`.
+  `input` holds only the fields listed in `defineTransition({ flash: { input: [...] } })` and never
+  files. A server error's message is the `TransitionError` message, else `Transition failed`
+  outside development.
+- Size limit 3 KB (`createHandler({ flashLimit })`): over it the input is dropped first, then the
+  field errors (development warns).
+- `ctx.flash(name)` reads the flash once on the next page request (the cookie is deleted); a
+  flash for another name is left alone. Prerendered pages cannot read it.

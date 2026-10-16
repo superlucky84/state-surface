@@ -88,6 +88,9 @@ export default async function Page(ctx: SurfaceContext) {
   (`swap="replace"` by default, `swap="morph"` keeps inputs and focus); `client:load`,
   `client:idle`, `client:visible`, `client:media` and `client:only` make it a client slot that
   Lithent hydrates when its chunk loads and that receives props (or `merge` deltas).
+- Client components activate at their timing or at once on the first `pointerdown`, `focusin` or
+  `keydown` inside them; text typed before activation survives hydration. Their local state
+  survives props updates; `resetKey="articleId"` (or a transition's `reset: ['slot']`) remounts them.
 - `<Slot mode="server" server:defer fallback={…}>` renders the fallback first and fetches the
   content after load with an encrypted props token (`SURFACE_SECRET`).
 - **Per-page JavaScript**: every client component is its own chunk. A page without client
@@ -152,33 +155,68 @@ server reduces each frame for this request and sends per-slot ops: HTML for serv
 `merge` deltas for client slots. The engine sends `done` when the handler returns; throw to fail
 (`TransitionError` messages are shown in the error slot).
 
+Transitions live in `transitions/**/*.ts`; the file path is the name (`transitions/dashboard-load.ts`
+→ `"dashboard-load"`, `transitions/comment/add.ts` → `"comment/add"`, kebab-case segments).
+
 ```typescript
-// routes/dashboard/transitions/loadDashboard.ts
+// transitions/dashboard-load.ts
 import { defineTransition } from 'state-surface/server';
 
-export default defineTransition('dashboard-load', async function* (params, ctx) {
-  // First frame: full state for the transition's targets — renders loading skeletons
-  yield {
-    type: 'state',
-    states: {
-      'stock:price': { symbol: 'AAPL', price: 0, change: 0, loading: true },
-      'stock:news': { items: [], loading: true },
-      'stock:chart': { data: [], loading: true },
-    },
-  };
+export default defineTransition({
+  // Slots this transition may change: actions with disjoint targets run in parallel.
+  targets: ['stock:price', 'stock:news', 'stock:chart'],
+  async *handler(params, ctx) {
+    // First frame: full state for the transition's targets — renders loading skeletons
+    yield {
+      type: 'state',
+      states: {
+        'stock:price': { symbol: 'AAPL', price: 0, change: 0, loading: true },
+        'stock:news': { items: [], loading: true },
+        'stock:chart': { data: [], loading: true },
+      },
+    };
 
-  // Partial frame: update only price slot
-  const price = await fetchPrice('AAPL');
-  yield {
-    type: 'state',
-    full: false,
-    changed: ['stock:price'],
-    states: { 'stock:price': price },
-  };
+    // Partial frame: update only price slot
+    const price = await fetchPrice('AAPL');
+    yield {
+      type: 'state',
+      full: false,
+      changed: ['stock:price'],
+      states: { 'stock:price': price },
+    };
 
-  // More partial frames as data arrives... no `done`: the engine sends it.
+    // More partial frames as data arrives... no `done`: the engine sends it.
+  },
 });
 ```
+
+**Typed input and JS-less forms** — declare a [Standard Schema](https://standardschema.dev) (zod,
+valibot, arktype, …) as `input`. Invalid input never runs the handler and ends with
+`{ kind: 'validation', fieldErrors }`. Form bodies (urlencoded or multipart) become objects first.
+
+```typescript
+// transitions/comment/add.ts
+export default defineTransition({
+  input: z.object({ postId: z.string(), body: z.string().min(1) }),
+  targets: ['comments:list'],
+  flash: { input: ['body'] }, // echo these fields back after a JS-less validation error
+  async *handler({ postId, body }, ctx) {
+    await db.addComment(postId, body);
+    yield { type: 'state', states: { 'comments:list': { items: await db.comments(postId) } } };
+  },
+});
+```
+
+```tsx
+// Works without JavaScript: 303 back to the page, the result in ctx.flash('comment/add').
+// With JavaScript the engine runs the same transition as a stream instead.
+<form method="post" action={actionUrl('comment/add')}>
+  <textarea name="body" />
+</form>
+```
+
+The build writes `.state-surface/actions.d.ts`, so `useAction(renew, 'comment/add')`, `<Boot>` and
+`actionUrl()` check names and params against the schema.
 
 ### 4. Action — Declarative trigger
 
@@ -200,6 +238,28 @@ Trigger transitions from HTML attributes — zero JS event handlers.
 | `data-action`          | Transition name to invoke                                 |
 | `data-params`          | JSON params (optional)                                    |
 | `data-pending-targets` | Anchor names to mark pending during transition (optional) |
+
+Anchors keep `data-pending` until their request ends and get `data-has-result` once its first
+result is shown. A component that calls `preventDefault()` keeps the event; one event runs one action.
+
+From a client component, `useAction` runs the same runtime and re-renders with its state:
+
+```tsx
+import { mount } from 'lithent';
+import { useAction } from 'state-surface/client';
+
+const LikeButton = mount(renew => {
+  const like = useAction(renew, 'like'); // { run, abort, pending, hasResult, error, aborted }
+  return () => (
+    <button disabled={like.pending} onClick={() => like.run({ delta: 1 })}>
+      {like.error ? like.error.kind : 'Like'}
+    </button>
+  );
+});
+```
+
+`run()` never throws: it resolves to `{ ok: true }`, `{ ok: false, error }` (`error.kind`: `server`,
+`validation`, `timeout`, `http`, `network`, `protocol`, `chunk`) or `{ ok: false, aborted: true }`.
 
 ## Frame Types
 
@@ -237,9 +297,11 @@ must be full.
 - **NDJSON streaming** — Progressive UI updates via full, partial, and accumulate frames, projected
   by the server into HTML (server slots) and props (client slots)
 - **Capabilities** — strict by default (no raw HTML, safe URLs), `rich` Markdown, opt-in `unsafe`
-- **Abort previous** — Concurrent transitions auto-cancel earlier ones
+- **Target-aware concurrency** — A new action aborts the same action and actions whose targets
+  overlap; disjoint targets run in parallel, `mode: 'queue'` runs one name in order
 - **Per-slot hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
-- **File-based routing** — `.tsx` pages and transitions auto-discovered from `routes/`
+- **File-based routing** — `.tsx` pages from `routes/`, transitions from `transitions/` (path = name)
+- **Progressive forms** — `actionUrl()` forms work without JavaScript (PRG + signed one-time flash)
 - **View Transition API** — MPA cross-fade; in-page transitions are opt-in per action
   (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
@@ -253,8 +315,9 @@ routes/                  # Pages (routes/**/*.tsx, auto-loaded)
   index.tsx              #   GET /
   guide/[slug].tsx       #   Dynamic params: GET /guide/:slug
   <route>/_components/   #   Slot components (not pages: `_` prefix)
-  <route>/transitions/   #   Server-side state generators
-  _shared/               #   Cross-route components & transitions
+  _shared/               #   Cross-route components
+
+transitions/             # Server-side state generators (path = name: comment/add.ts → "comment/add")
 
 layouts/                 # Layout components (Layout.tsx)
 shared/                  # Data helpers, i18n utilities
@@ -310,31 +373,33 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 
 ```typescript
 // Pages and shared helpers
-import { Slot, Boot, prefixPath, getBasePath } from 'state-surface';
+import { Slot, Boot, prefixPath, getBasePath, actionUrl } from 'state-surface';
 
 // Server
 import {
   createHandler,
   defineServerComponent,
   defineTransition,
+  TransitionError,
   sequence,
 } from 'state-surface/server';
 import { serve } from 'state-surface/adapters/node';
 
-// Client plugins (the engine entry itself is generated)
-import { definePlugin } from 'state-surface/client';
+// Client plugins and component actions (the engine entry itself is generated)
+import { definePlugin, useAction } from 'state-surface/client';
 ```
 
 ```typescript
 // Types
-import type { SlotProps, BootProps, StateFrame } from 'state-surface';
+import type { SlotProps, BootProps, StateFrame, ActionName, ActionParams } from 'state-surface';
 import type {
   PageModule,
   SurfaceContext,
   TransitionHandler,
+  Flash,
   Middleware,
 } from 'state-surface/server';
-import type { PluginDefinition } from 'state-surface/client';
+import type { PluginDefinition, ActionHandle, ActionResult } from 'state-surface/client';
 ```
 
 ## Tech Stack

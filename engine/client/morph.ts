@@ -8,8 +8,9 @@ import type { ComponentHost } from './componentHost.js';
  * idiomorph 0.7.4 patches the existing DOM so nodes, focus, the focused input's value and
  * media state survive.
  * Island roots are boundaries: an island whose component and props are unchanged keeps its
- * DOM and instance (renamed to the new id); otherwise the old instance is disposed first
- * and the new HTML is activated from `islands` like a replace.
+ * DOM and instance (renamed to the new id), as does one whose resetKey values are unchanged
+ * (it receives the new props); otherwise the old instance is disposed first and the new
+ * HTML is activated from `islands` like a replace.
  */
 export function morphSlot(
   el: HTMLElement,
@@ -28,10 +29,7 @@ export function morphSlot(
         const oldId = oldNode.getAttribute('data-island');
         const newId = newNode instanceof Element ? newNode.getAttribute('data-island') : null;
         const next = newId ? metas.get(newId) : undefined;
-        if (oldId && next && host.sameIsland(oldId, next)) {
-          host.rekey(oldId, next.id);
-          return false;
-        }
+        if (oldId && next && host.keepIsland(oldId, next)) return false;
         if (oldId) host.dispose(oldId);
         return true;
       },

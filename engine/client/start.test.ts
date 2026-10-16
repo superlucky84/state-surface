@@ -101,4 +101,39 @@ describe('startLoader', () => {
     await flush();
     expect(loader.runtime()).toBeUndefined();
   });
+
+  it('reloads on the next interaction when a chunk fails because a new build is deployed', async () => {
+    const requests: Array<[string, string | undefined]> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        requests.push([url, init.method]);
+        return new Response(null, { headers: { 'x-surface-build': 'b2' } });
+      })
+    );
+    const reload = vi.fn();
+    vi.spyOn(location, 'reload').mockImplementation(reload);
+    document.head.innerHTML = bootstrap({
+      slots: [{ id: 'gone', mode: 'client', component: 'deleted.tsx#default', props: {} }],
+    });
+    document.body.innerHTML = '<h-state name="gone"><p>ssr</p></h-state>';
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    startLoader();
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    expect(requests).toEqual([[location.href, 'HEAD']]);
+    expect(document.querySelector('h-state')!.innerHTML).toBe('<p>ssr</p>');
+    expect(reload).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledOnce();
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('starts the runtime for forms posting to actionUrl()', async () => {
+    document.body.innerHTML =
+      '<form method="post" action="/_surface/action/comment/add"><input name="body" /></form>';
+    const loader = startLoader();
+    expect(loader.runtime()).toBeInstanceOf(Promise);
+    await loader.runtime();
+  });
 });

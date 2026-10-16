@@ -28,6 +28,7 @@ export function startRuntime(options: {
   const surface = new StateSurface({
     bootstrap: options.bootstrap,
     slots,
+    actions: options.bootstrap.actions,
     host: options.host,
     dom,
     trace,
@@ -39,15 +40,24 @@ export function startRuntime(options: {
   bindDeclarativeActions(surface);
   void surface.loadDeferred();
 
-  // <Boot> entries run in document order. Without targets each run aborts the previous one.
+  // <Boot> entries run in document order through the same concurrency rules as actions:
+  // one without targets aborts the others (DC-30).
   const boot = options.bootstrap.boot ?? [];
-  if (boot.length > 1 && DEV)
-    console.warn('[StateSurface] several <Boot> transitions abort each other until targets exist');
+  const actions = options.bootstrap.actions ?? {};
+  if (
+    DEV &&
+    boot.length > 1 &&
+    boot.some(
+      entry => !Object.hasOwn(actions, entry.transition) || !actions[entry.transition].targets
+    )
+  )
+    console.warn(
+      '[StateSurface] several <Boot> transitions run on this page and at least one declares no ' +
+        'targets, so they abort each other. Declare targets to run them in parallel.'
+    );
   for (const entry of boot) void surface.transition(entry.transition, entry.params);
 
-  if (options.debug) {
+  if (options.debug)
     void import('./devOverlay.js').then(({ attachDevOverlay }) => attachDevOverlay(surface));
-    (window as unknown as { __surface?: StateSurface }).__surface = surface;
-  }
   return surface;
 }

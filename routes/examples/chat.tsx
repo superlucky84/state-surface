@@ -8,7 +8,7 @@ import ChatInput from './chat/_components/chatInput.js';
 import { getLang } from '../../shared/i18n.js';
 import { chatContent } from '../../shared/content.js';
 import { chatScroll } from '../../client/plugins/chatScroll.js';
-import { readHistory } from './chat/history.server.js';
+import { readHistory } from '../../shared/chatHistory.server.js';
 
 export const plugins = [chatScroll];
 

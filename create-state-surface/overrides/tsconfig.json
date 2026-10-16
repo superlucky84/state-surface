@@ -12,6 +12,15 @@
     "jsxImportSource": "lithent",
     "types": ["node"]
   },
-  "include": ["server.ts", "client", "shared", "routes", "layouts", "testing"],
+  "include": [
+    "server.ts",
+    "client",
+    "shared",
+    "routes",
+    "transitions",
+    "layouts",
+    "testing",
+    ".state-surface/*.d.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

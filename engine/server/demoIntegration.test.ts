@@ -60,9 +60,9 @@ describe('server stream → browser apply', () => {
   it('guide-load replaces the loading skeleton with the sections', async () => {
     const { surface, text } = await open('/guide/surface');
     expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).not.toBeNull();
-    expect(await surface.transition('guide-load', { slug: 'surface', lang: 'en' })).toBe(
-      'completed'
-    );
+    expect(await surface.transition('guide-load', { slug: 'surface', lang: 'en' })).toEqual({
+      ok: true,
+    });
     expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).toBeNull();
     expect(
       document.querySelectorAll('h-state[name="guide:content"] section').length
@@ -73,7 +73,7 @@ describe('server stream → browser apply', () => {
   it('search updates input and results; static header markup stays a server slot', async () => {
     const { surface, text } = await open('/examples/search');
     expect(text('search:results')).toBe('');
-    expect(await surface.transition('search', { query: 'streaming' })).toBe('completed');
+    expect(await surface.transition('search', { query: 'streaming' })).toEqual({ ok: true });
     expect(text('search:results')).toContain('Streaming Demo');
     expect(
       (document.querySelector('h-state[name="search:input"] input') as HTMLInputElement).value
@@ -82,13 +82,20 @@ describe('server stream → browser apply', () => {
 
   it('streaming demo removes and restores output and shows the error slot', async () => {
     const { surface, text } = await open('/examples/streaming');
-    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toBe('completed');
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toEqual({
+      ok: true,
+    });
     expect(text('demo:output')).toContain('restored');
     expect(text('demo:timeline')).toContain('Accumulate');
-    expect(await surface.transition('stream-demo', { mode: 'error-demo' })).toBe('failed');
+    expect(await surface.transition('stream-demo', { mode: 'error-demo' })).toMatchObject({
+      ok: false,
+      error: { kind: 'server' },
+    });
     expect(text('system:error')).toContain('demonstration error');
     // The next request's baseline clears the error slot.
-    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toBe('completed');
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toEqual({
+      ok: true,
+    });
     expect(text('system:error')).toBe('');
   }, 15000);
 

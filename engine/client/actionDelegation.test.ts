@@ -104,4 +104,87 @@ describe('action delegation', () => {
 
     detach();
   });
+
+  it('skips events a component already handled and runs one action per event', () => {
+    document.body.innerHTML = '<button id="b" data-action="like">Like</button>';
+    const { surface, transition } = createMockSurface();
+    const detachFirst = bindDeclarativeActions(surface);
+    const detachSecond = bindDeclarativeActions(surface);
+    const button = document.getElementById('b')!;
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(transition).toHaveBeenCalledTimes(1);
+    const handled = (event: Event) => event.preventDefault();
+    button.addEventListener('click', handled);
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(transition).toHaveBeenCalledTimes(1);
+    button.removeEventListener('click', handled);
+    detachFirst();
+    detachSecond();
+  });
+
+  it('runs forms posting to actionUrl() as transitions, with the submitter value (V-13)', () => {
+    document.body.innerHTML = `
+      <form id="f" method="post" action="/_surface/action/comment/add">
+        <input name="body" value="hello" />
+        <button id="publish" name="intent" value="publish">Publish</button>
+        <button id="other" formaction="/_surface/action/comment/draft" name="intent" value="draft">Draft</button>
+      </form>
+      <form id="get" method="get" action="/_surface/action/comment/add"><input name="q" value="x" /></form>
+      <form id="away" method="post" action="https://elsewhere.test/_surface/action/comment/add"></form>
+    `;
+    const { surface, transition } = createMockSurface();
+    const detach = bindDeclarativeActions(surface);
+    const form = document.getElementById('f') as HTMLFormElement;
+    const submit = (target: HTMLFormElement, submitter?: HTMLElement) =>
+      target.dispatchEvent(
+        new SubmitEvent('submit', { bubbles: true, cancelable: true, submitter })
+      );
+    submit(form, document.getElementById('publish')!);
+    submit(form, document.getElementById('other')!);
+    submit(document.getElementById('get') as HTMLFormElement);
+    submit(document.getElementById('away') as HTMLFormElement);
+    expect(transition.mock.calls).toEqual([
+      ['comment/add', { body: 'hello', intent: 'publish' }, {}],
+      ['comment/draft', { body: 'hello', intent: 'draft' }, {}],
+    ]);
+    detach();
+  });
+
+  it('sends a form with a chosen file as multipart', () => {
+    document.body.innerHTML = `
+      <form id="upload" data-action="upload" data-params='{"album":3}'>
+        <input name="title" value="cat" />
+        <input id="file" type="file" name="photo" />
+      </form>
+    `;
+    const input = document.getElementById('file') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [new File(['x'], 'cat.png', { type: 'image/png' })],
+    });
+    const { surface, transition } = createMockSurface();
+    const detach = bindDeclarativeActions(surface);
+    const original = FormData;
+    // happy-dom's FormData(form) does not read file inputs; emulate the browser.
+    vi.stubGlobal(
+      'FormData',
+      class extends original {
+        constructor(form?: HTMLFormElement) {
+          super(form);
+          if (form) this.set('photo', input.files![0]);
+        }
+      }
+    );
+    document
+      .getElementById('upload')!
+      .dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+    vi.unstubAllGlobals();
+    const [name, params, options] = transition.mock.calls[0];
+    expect(name).toBe('upload');
+    expect(params).toEqual({ album: 3 });
+    expect((options.form as FormData).get('title')).toBe('cat');
+    expect(((options.form as FormData).get('photo') as File).name).toBe('cat.png');
+    // data-params travel as form fields (non-strings as JSON).
+    expect((options.form as FormData).get('album')).toBe('3');
+    detach();
+  });
 });

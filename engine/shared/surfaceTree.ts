@@ -1,5 +1,6 @@
 import { Fragment } from 'lithent';
 import type { WDom } from 'lithent';
+import type { ActionName, ActionParams } from './actions.js';
 
 /**
  * Page tree markers.
@@ -365,20 +366,27 @@ export function Island(props: Record<string, unknown>, children: WDom[] = []): W
   return marker(descriptor);
 }
 
-export interface BootProps {
+export interface BootProps<Name extends string = ActionName> {
   /** Registered transition name started after the page loads. */
-  transition: string;
-  params?: Record<string, unknown>;
+  transition: Name;
+  params?: ActionParams<Name>;
 }
 
-/** Auto-run transition. Renders nothing; the engine records it in document order. */
-export function Boot(props: BootProps): WDom {
+/**
+ * Auto-run transition. Renders nothing; the engine records it in document order and runs it
+ * with the same concurrency rules as other actions (DC-31).
+ */
+export function Boot<Name extends ActionName>(props: BootProps<Name>): WDom {
   if (typeof props?.transition !== 'string' || !props.transition)
     throw new SurfaceError('<Boot> requires a `transition` name.');
-  const params = props.params ?? {};
-  if (typeof params !== 'object' || Array.isArray(params))
+  const params: unknown = props.params ?? {};
+  if (!params || typeof params !== 'object' || Array.isArray(params))
     throw new SurfaceError(`<Boot transition="${props.transition}">: params must be an object.`);
-  return marker({ kind: 'boot', transition: props.transition, params });
+  return marker({
+    kind: 'boot',
+    transition: props.transition,
+    params: params as Record<string, unknown>,
+  });
 }
 
 function describe(value: unknown) {

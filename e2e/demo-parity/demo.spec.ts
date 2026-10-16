@@ -70,7 +70,7 @@ test('button, form and scoped pending actions complete', async ({ page }) => {
   await ready(page, 'examples/actions');
   await page.getByRole('button', { name: 'Primary Button', exact: true }).click();
   await expect(slot(page, 'actions:playground')).toContainText('processed');
-  await page.getByRole('textbox').fill('browser parity');
+  await page.getByPlaceholder('Type a message...').fill('browser parity');
   await page.getByRole('button', { name: 'Submit Form', exact: true }).click();
   await expect(slot(page, 'actions:playground')).toContainText('Form received: "browser parity"');
   // Hold the request so the pre-response pending state is observable, without timing races.
@@ -91,6 +91,68 @@ test('button, form and scoped pending actions complete', async ({ page }) => {
   }
   await expect(slot(page, 'actions:playground')).toContainText('Only the log was marked pending');
   await expect(slot(page, 'actions:log')).toContainText('DONE');
+});
+
+test.describe('JS-less form (PRG, DC-22 ③)', () => {
+  test.use({ javaScriptEnabled: false, reducedMotion: 'reduce' });
+
+  test('posts, answers 303 with a one-time flash and does not resubmit on reload', async ({
+    page,
+  }) => {
+    await page.goto('examples/actions');
+    // Submit with the keyboard and wait for the redirected document (no script runs here).
+    const post = async () => {
+      const redirected = page.waitForResponse(response =>
+        response.url().includes('/_surface/action/comments/add')
+      );
+      await page.getByRole('button', { name: 'Post comment' }).press('Enter');
+      expect((await redirected).status()).toBe(303);
+      await page.waitForLoadState('load');
+    };
+    await post();
+    await expect(slot(page, 'actions:comments')).toContainText('Required');
+    await page.locator('#comment-body').fill('no script needed');
+    await post();
+    await expect(page.getByTestId('comments')).toContainText('no script needed');
+    await expect(slot(page, 'actions:comments')).toContainText('Posted (flash)');
+    expect(new URL(page.url()).pathname).toMatch(/\/examples\/actions$/);
+    await page.reload();
+    await expect(slot(page, 'actions:comments')).not.toContainText('Posted (flash)');
+    await expect(page.getByTestId('comments').locator('li')).toHaveCount(1);
+  });
+});
+
+test('the same form streams with JavaScript; a like runs in parallel with a slow action', async ({
+  page,
+}) => {
+  await ready(page, 'examples/actions');
+  const navigations: string[] = [];
+  page.on('framenavigated', frame => frame === page.mainFrame() && navigations.push(frame.url()));
+  await page.locator('#comment-body').fill('with script');
+  await page.getByRole('button', { name: 'Post comment' }).click();
+  await expect(page.getByTestId('comments')).toContainText('with script');
+  expect(navigations).toEqual([]);
+
+  // Hold the slow playground action; the like (disjoint targets) still completes.
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  await page.route('**/transition/action-demo', async route => {
+    await gate;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Primary Button', exact: true }).click();
+  await page.getByTestId('like').click();
+  try {
+    await expect(page.getByTestId('likes')).toContainText('1');
+    await expect(page.getByTestId('like-status')).toHaveText('Saved');
+    await expect(slot(page, 'actions:playground')).toHaveAttribute('data-pending', '');
+    await expect(slot(page, 'actions:likes')).not.toHaveAttribute('data-pending');
+  } finally {
+    release();
+  }
+  await expect(slot(page, 'actions:playground')).toContainText('processed');
+  await page.getByTestId('like-invalid').click();
+  await expect(page.getByTestId('like-status')).toHaveText('validation: Must be at most 5');
 });
 
 test('streaming displays partial, accumulated, removed and restored output', async ({ page }) => {

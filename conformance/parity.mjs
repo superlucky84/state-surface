@@ -12,9 +12,23 @@ import { startServer } from '../perf/server.mjs';
  * entry asset hash and nonce, the `data-component` slot attribute, `__BOOT__` as an array of
  * entries, (stage 3) modulepreload links and the per-page `__PLUGINS__` list, and (stage 4) the
  * single `__SURFACE__` bootstrap without server slot props plus transition streams projected
- * to per-slot ops. Element structure, attributes, text, base path, boot entries and rendered
- * slots must match; each transition must touch the same slots frame by frame.
+ * to per-slot ops, and (stage 5) the new actions demo sections (`actions:likes` with its
+ * `useAction` island and the JS-less `actions:comments` form). Element structure, attributes,
+ * text, base path, boot entries and rendered slots must match; each transition must touch the
+ * same slots frame by frame.
  */
+
+/** Stage 5 additions to the actions page, removed from the current tree before comparing. */
+const STAGE5_SLOTS = new Set(['actions:likes', 'actions:comments']);
+const slotName = node => node[0] === 'h-state' && node[1]?.find(([key]) => key === 'name')?.[1];
+const addedInStage5 = node =>
+  Array.isArray(node) &&
+  (STAGE5_SLOTS.has(slotName(node)) ||
+    (node[0] === 'section' && (node[2] ?? []).some(child => STAGE5_SLOTS.has(slotName(child)))));
+const withoutStage5 = node =>
+  Array.isArray(node) && Array.isArray(node[2])
+    ? [node[0], node[1], node[2].filter(child => !addedInStage5(child)).map(withoutStage5)]
+    : node;
 
 /** Stage 1 state frame → [kind, slots]; stage 4 patch → [kind, slots] (UI resets ignored). */
 const stage1Shape = frame =>
@@ -59,7 +73,11 @@ try {
       // Stage 1 listed slots that had state; stage 4 lists every rendered slot (empty ones too).
       for (const slot of baseline.json.slots ?? [])
         assert.ok(actual.json.slots?.includes(slot), `${variant} ${path}: slot ${slot}`);
-      assert.deepEqual(actual.tree, baseline.tree, `${variant} ${path}: document tree`);
+      assert.deepEqual(
+        withoutStage5(actual.tree),
+        baseline.tree,
+        `${variant} ${path}: document tree`
+      );
       assert.equal(actual.styles.length, baseline.styles.length, `${variant} ${path}: styles`);
       assert.equal(actual.entry, baseline.entry, `${variant} ${path}: entry script`);
       pages++;

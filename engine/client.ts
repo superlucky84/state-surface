@@ -5,3 +5,7 @@ export type {
   ActionEvent,
   SlotKind,
 } from './client/pluginHost.js';
+export { useAction } from './client/useAction.js';
+export type { ActionHandle, UseActionOptions } from './client/useAction.js';
+export { ActionError } from './client/actionError.js';
+export type { ActionErrorKind, ActionResult } from './client/actionError.js';

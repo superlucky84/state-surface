@@ -110,6 +110,29 @@ describe('RequestProjection (DESIGN 6.1/6.2, DC-10)', () => {
     });
   });
 
+  it('sends reset: [slot] as a props op flag and rejects it for server slots (DC-05)', async () => {
+    const { instance } = projection();
+    await instance.frame({ type: 'state', states: { chat: { text: 'draft' }, list: {} } });
+    expect(
+      await instance.frame({
+        type: 'state',
+        full: false,
+        states: { chat: { text: '' } },
+        changed: ['chat'],
+        reset: ['chat'],
+      })
+    ).toEqual({ type: 'patch', ops: [{ slot: 'chat', props: { text: '' }, reset: true }] });
+    await expect(
+      instance.frame({
+        type: 'state',
+        full: false,
+        states: { list: { items: [] } },
+        changed: ['list'],
+        reset: ['list'],
+      })
+    ).rejects.toThrow('reset applies to client slots');
+  });
+
   it('projects partial, accumulate and removed frames', async () => {
     const { instance, advance } = projection();
     await instance.frame({

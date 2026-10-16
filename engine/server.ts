@@ -14,7 +14,10 @@ export type {
   TransitionHandler,
   TransitionDefinition,
   TransitionOptions,
+  ParamsOf,
 } from './server/transition.js';
+export type { Flash } from './server/flash.js';
+export type { FieldErrors } from './shared/schema.js';
 export type { TransitionLimits } from './server/projection.js';
 export type { PageDefinition, PageSlotDefinition, StandardSchema } from './server/core/manifest.js';
 export type { LogLevel, Logger } from './server/logger.js';

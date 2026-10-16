@@ -24,6 +24,16 @@
       "state-surface/server-only": ["./engine/serverOnly.ts"]
     }
   },
-  "include": ["engine", "server.ts", "client", "shared", "routes", "layouts", "testing"],
+  "include": [
+    "engine",
+    "server.ts",
+    "client",
+    "shared",
+    "routes",
+    "transitions",
+    "layouts",
+    "testing",
+    ".state-surface/*.d.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

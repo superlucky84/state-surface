@@ -7,6 +7,7 @@ build/
 out/
 
 # Tooling caches
+.state-surface/
 .cache/
 .parcel-cache/
 .vite/

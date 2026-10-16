@@ -13,7 +13,7 @@ import {
   type IslandMarker,
   type SlotMarker,
 } from '../shared/surfaceTree.js';
-import type { IslandMeta, PluginMeta, SlotMeta } from '../shared/protocol.js';
+import type { ActionMeta, IslandMeta, PluginMeta, SlotMeta } from '../shared/protocol.js';
 import { RICH, URL_ATTRIBUTES, neutralizeScripts, safeUrl } from '../shared/capability.js';
 import { readServerComponent } from './serverComponent.js';
 import { buildSurfaceScript } from './ssr.js';
@@ -25,7 +25,10 @@ export type PagePlugin = PluginMeta;
 export interface PageUsage {
   /** Client components actually rendered, in document order, deduplicated. */
   components: Array<{ componentId: string; preload: boolean }>;
-  /** `data-action` elements, `<Boot>` or deferred slots: the action runtime starts with the page. */
+  /**
+   * `data-action` elements, forms posting to `actionUrl()`, `<Boot>` or deferred slots: the
+   * action runtime starts with the page.
+   */
   actions: boolean;
   plugins: PagePlugin[];
   /** A `swap="morph"` slot was rendered: preload the morph chunk. */
@@ -66,6 +69,8 @@ export interface PageRenderOptions {
   pageId?: string;
   /** Encrypts a deferred slot payload into a URL-safe token (DC-21, IC-09). */
   seal?: (payload: DeferredPayload) => Promise<string>;
+  /** Targets and queue mode of transitions, for browser concurrency (DC-11). */
+  actions?: Record<string, ActionMeta>;
 }
 
 /**
@@ -242,6 +247,10 @@ export async function renderPage(
           ...(usage.engine && state.entries.length ? { slots: state.entries } : {}),
           ...(usage.engine && boot.length ? { boot } : {}),
           ...(usage.engine && plugins.length ? { plugins } : {}),
+          // useAction in a client component needs these as well as data-action does.
+          ...(usage.engine && options.actions && Object.keys(options.actions).length
+            ? { actions: options.actions }
+            : {}),
         })
       : '';
   // Order (DESIGN 4.4): CSS → modulepreload → __SURFACE__ → app entry → engine entry.
@@ -342,6 +351,10 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
   let current = node;
   if (tag && node.props) {
     if (node.props['data-action'] !== undefined) state.actions = true;
+    // `<form action={actionUrl(name)}>` works without JS; with the engine it streams (DC-22 ③).
+    for (const key of ['action', 'formaction'])
+      if (typeof node.props[key] === 'string' && node.props[key].includes('/_surface/action/'))
+        state.actions = true;
     if (scope.capability && !(node as { [ENGINE_NODE]?: true })[ENGINE_NODE])
       current = applyCapability(node, scope);
   }
@@ -409,6 +422,17 @@ function useComponent(state: RenderState, componentId: string, activation: Activ
   state.components.set(componentId, (state.components.get(componentId) ?? false) || preload);
 }
 
+function resetKeyOf(value: unknown, where: string): string[] {
+  const names = typeof value === 'string' ? [value] : value;
+  if (
+    !Array.isArray(names) ||
+    !names.length ||
+    names.some(name => typeof name !== 'string' || !name)
+  )
+    throw new SurfaceError(`${where}: resetKey must be a prop name or an array of prop names.`);
+  return names;
+}
+
 function activationMeta(activation: Activation): Partial<SlotMeta> {
   return {
     ...(activation.timing !== 'load' ? { activation: activation.timing } : {}),
@@ -423,6 +447,12 @@ function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom
   const { child } = marker;
   const meta: SlotMeta = { id: marker.name, mode: marker.mode };
   if (marker.viewTransition) meta.viewTransition = true;
+  if (marker.resetKey !== undefined) {
+    // DC-05: only a client instance has local state to reset.
+    if (marker.mode !== 'client')
+      throw new SurfaceError(`${where}: resetKey needs a client slot (it resets local state).`);
+    meta.resetKey = resetKeyOf(marker.resetKey, where);
+  }
   state.entries.push(meta);
   const inner: Scope = { kind: 'ssr-slot', slot: marker.name, capability: marker.capability };
   let content: WDom | undefined;
@@ -491,6 +521,7 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
     component: marker.componentId,
     props: (marker.props ?? {}) as Record<string, unknown>,
     ...activationMeta(marker.activation),
+    ...(marker.resetKey !== undefined ? { resetKey: resetKeyOf(marker.resetKey, where) } : {}),
   });
 
   // IC-03: island children are server-rendered once and passed as a static fragment.

@@ -25,8 +25,8 @@
 - 단계 6과 7은 단계 5 종료 후 병렬로 진행할 수 있다. 둘 다 끝나야 단계 8에 들어간다.
 - 단계 사이의 내부 연결(예: 단계 2의 `<Boot>`를 단계 4 전까지 기존 boot 전달 경로로 잇는 것)은 사용자 API가 아니며
   표시한 단계에서 반드시 제거한다. 하위 호환 레이어는 두지 않는다(AG-08).
-- 남은 임시 연결: 단계 4의 `defineTransition(name, …)` 이름 인자(단계 5 DC-22·DC-16 ③에서 제거)와 첫 patch에서 pending을
-  해제하는 동작(단계 5). 단계 2·3의 호스트 속성(`data-component`·`data-props`·`data-activation`·`data-media`·`data-only`)과
+- 남은 임시 연결: 없음. 단계 4의 `defineTransition(name, …)` 이름 인자와 첫 patch에서 pending을 해제하던 동작은 단계 5에서
+  제거했다(DC-22·DC-16 ③·DC-11). 단계 2·3의 호스트 속성(`data-component`·`data-props`·`data-activation`·`data-media`·`data-only`)과
   `__STATE__`·`__BOOT__`·`__BASE_PATH__`·`__PLUGINS__` JSON은 단계 4에서 `__SURFACE__`로 교체했다.
 
 ### 1.2 모든 단계 공통 Exit
@@ -482,57 +482,95 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 
 #### 활성화·로컬 상태
 
-- [ ] scheduler(DC-04): `load` 즉시, `idle`은 `requestIdleCallback`(timeout 2초, 미지원은 load 후 200ms), `visible`은
+- [x] scheduler(DC-04): `load` 즉시, `idle`은 `requestIdleCallback`(timeout 2초, 미지원은 load 후 200ms), `visible`은
       IntersectionObserver(rootMargin 200px), `media`는 `matchMedia`, 관찰자 미지원은 idle 대체. 시점 지시자 중복은 빌드 오류.
-- [ ] 활성화 전 `pointerdown`·`focusin`·`keydown` 감지 시 즉시 활성화, SSR DOM 재사용으로 입력 보존(단계 0 spike 결과
+- [x] 활성화 전 `pointerdown`·`focusin`·`keydown` 감지 시 즉시 활성화, SSR DOM 재사용으로 입력 보존(단계 0 spike 결과
       반영), 클릭 재생 없음.
-- [ ] 청크 로드 실패: 1초 뒤 1회 재시도, 실패 시 SSR·fallback 유지와 `reportError`. buildId 불일치면 다음 조작 시 재로드.
-- [ ] 휴면 중 프레임: reducer로 최신 props 보관, 활성화 시 snapshot hydrate → 최신 props 갱신, reset·resetKey 변경 시
+- [x] 청크 로드 실패: 1초 뒤 1회 재시도, 실패 시 SSR·fallback 유지와 `reportError`. buildId 불일치면 다음 조작 시 재로드.
+- [x] 휴면 중 프레임: reducer로 최신 props 보관, 활성화 시 snapshot hydrate → 최신 props 갱신, reset·resetKey 변경 시
       새 mount. 모듈 로드 promise는 componentId로 공유, generation이 바뀌면 mount하지 않음.
-- [ ] 로컬 상태(DC-05): DataProxy 재사용, `resetKey`(prop 이름·배열), 작성 층 `reset: [slotId]` → `props` op
+- [x] 로컬 상태(DC-05): DataProxy 재사용, `resetKey`(prop 이름·배열), 작성 층 `reset: [slotId]` → `props` op
       `reset: true`, server 슬롯 reset 진단.
 
 #### 액션 런타임
 
-- [ ] `useAction(renew, name, options?)` → `{ run, abort, pending, hasResult, error, aborted }`, `run()`은 throw 없는
+- [x] `useAction(renew, name, options?)` → `{ run, abort, pending, hasResult, error, aborted }`, `run()`은 throw 없는
       결과 Promise, `error.kind`(timeout·http·protocol·chunk·server·validation). unmount 시 구독만 해제.
-- [ ] 동시성(DC-11·DC-30): 같은 이름 또는 targets가 겹치면 이전 요청 abort, 나머지 병렬, `mode: 'queue'`. targets 생략은
+- [x] 동시성(DC-11·DC-30): 같은 이름 또는 targets가 겹치면 이전 요청 abort, 나머지 병렬, `mode: 'queue'`. targets 생략은
       모든 슬롯과 겹침으로 보고 dev 경고 1회. targets는 빌드 manifest로 전달한다.
-- [ ] pending: 요청 ID별 `data-pending`(완료까지)과 `data-has-result`, `data-pending-targets`, targets 생략 시 전체 슬롯.
-- [ ] 이벤트: 컴포넌트가 `preventDefault()`한 이벤트는 위임하지 않음, 한 이벤트 한 액션, submit은 submitter·다중 값을
+- [x] pending: 요청 ID별 `data-pending`(완료까지)과 `data-has-result`, `data-pending-targets`, targets 생략 시 전체 슬롯.
+- [x] 이벤트: 컴포넌트가 `preventDefault()`한 이벤트는 위임하지 않음, 한 이벤트 한 액션, submit은 submitter·다중 값을
       이벤트 시점에 snapshot.
-- [ ] `<Boot>` 실행을 액션 런타임으로 옮긴다(일반 액션과 같은 규칙, targets 없는 boot 복수 시 dev 경고).
+- [x] `<Boot>` 실행을 액션 런타임으로 옮긴다(일반 액션과 같은 규칙, targets 없는 boot 복수 시 dev 경고).
 
 #### 타입 지정 transition·PRG (DC-22)
 
-- [ ] `defineTransition({ input, targets, mode, flash, handler })`, Standard Schema 검증(실패 시 handler 미실행·
+- [x] `defineTransition({ input, targets, mode, flash, handler })`, Standard Schema 검증(실패 시 handler 미실행·
       `fieldErrors`), form-urlencoded·multipart → 객체(같은 이름은 배열).
-- [ ] `.state-surface/actions.d.ts` 생성(dev는 파일 변경 시 갱신): 이름 → 입력·결과 타입. `useAction`·`<Boot>` 타입 연결.
-- [ ] DC-16 ③: transition을 루트 `transitions/**/*.ts`로 옮기고 디렉터리 기준 상대 경로를 이름으로 등록, 중복은 빌드 오류.
+- [x] `.state-surface/actions.d.ts` 생성(dev는 파일 변경 시 갱신): 이름 → 입력·결과 타입. `useAction`·`<Boot>` 타입 연결.
+- [x] DC-16 ③: transition을 루트 `transitions/**/*.ts`로 옮기고 디렉터리 기준 상대 경로를 이름으로 등록, 중복은 빌드 오류.
       `routes/**/transitions/` 탐색과 `defineTransition(name, …)`의 이름 인자를 제거한다(단계 2 계획 조정).
-- [ ] `POST {BASE_PATH}/_surface/action/:name` → 실행(프레임 버림) → 303. `_redirect`는 같은 origin·BASE_PATH 경로만,
+- [x] `POST {BASE_PATH}/_surface/action/:name` → 실행(프레임 버림) → 303. `_redirect`는 같은 origin·BASE_PATH 경로만,
       아니면 같은 origin `Referer`, 그것도 아니면 BASE_PATH 루트.
-- [ ] flash: IC-09 키로 서명한 일회성 쿠키, 기본은 검증 오류·결과만, 입력값은 `flash.input`에 명시한 필드만, file 값
+- [x] flash: IC-09 키로 서명한 일회성 쿠키, 기본은 검증 오류·결과만, 입력값은 `flash.input`에 명시한 필드만, file 값
       제외, 3KB 한도(초과 시 입력값 → 오류 요약 순으로 축소, dev 경고). `ctx.flash(name)`, `actionUrl()` 헬퍼.
 - [ ] prerender 페이지에 액션 폼이 있으면 JS 없는 결과 표시 한계를 빌드 경고로 알린다(단계 7에서 prerender 도입 후 활성).
+      → 단계 7로 이월(prerender가 아직 없어 판정 대상이 없다).
 
 #### 데모
 
-- [ ] actions 예제에 `useAction`·타입 지정 transition·JS 없는 폼 시연을 추가한다. 동시성(검색 중 좋아요 등) 시연 슬롯을
+- [x] actions 예제에 `useAction`·타입 지정 transition·JS 없는 폼 시연을 추가한다. 동시성(검색 중 좋아요 등) 시연 슬롯을
       둔다.
 
 #### Baseline 테스트
 
-- [ ] scheduler 시점별·미지원 대체·조작 시 즉시 활성화, 로드 실패 재시도.
-- [ ] 휴면 delta 후 활성화(snapshot → 최신), 제거 후 로드 완료 시 mount 안 함, resetKey·reset.
-- [ ] 단계 0 spike에서 확인한 입력값·커서 덮어쓰기를 보완하고 V-04 브라우저 회귀 테스트로 검증한다.
-- [ ] 동시성 매트릭스: 같은 이름, 겹치는 targets, 겹치지 않는 targets, targets 생략, queue.
-- [ ] PRG: 303·flash·리다이렉트 검증·크기 한도·file 제외, JS 있음과 없음의 결과 동일.
+- [x] scheduler 시점별·미지원 대체·조작 시 즉시 활성화, 로드 실패 재시도.
+- [x] 휴면 delta 후 활성화(snapshot → 최신), 제거 후 로드 완료 시 mount 안 함, resetKey·reset.
+- [x] 단계 0 spike에서 확인한 입력값·커서 덮어쓰기를 보완하고 V-04 브라우저 회귀 테스트로 검증한다.
+- [x] 동시성 매트릭스: 같은 이름, 겹치는 targets, 겹치지 않는 targets, targets 생략, queue.
+- [x] PRG: 303·flash·리다이렉트 검증·크기 한도·file 제외, JS 있음과 없음의 결과 동일.
 
 #### 제거 확인
 
 첫 프레임 pending 해제, 전역 abort-previous(targets 선언 액션 기준), debug용 `window.__surface` 의존,
 `routes/**/transitions/` 관례.
+
+#### 계획 조정 (2026-10-16)
+
+- transition 이름: 파일 경로가 이름이며 세그먼트는 kebab-case만 허용한다(URL·`data-action`에 쓰이므로, 위반은 빌드 오류와
+  힌트). 데모 transition은 `transitions/`의 평평한 이름(`switch-lang`·`action-demo`·`guide-load`…)으로 옮겼고, 새 데모는
+  다중 세그먼트 `comments/add`를 쓴다. `routes/examples/chat/history.server.ts`는 transition과 페이지가 함께 쓰므로
+  `shared/chatHistory.server.ts`로 옮겼다. 엔드포인트는 `/transition/<a>/<b>`·`/_surface/action/<a>/<b>`(세그먼트별 인코딩).
+- `defineTransition`: `defineTransition({ input, targets, mode: 'queue', flash: { input }, viewTransition, handler })` 또는
+  handler 함수 하나. 기본 export가 함수여도 된다. `defineManifest({ transitions })`는 이름 → 정의 객체다.
+- 검증 실패 응답: `/transition`은 **422** JSON `{ frames: [error] }`(`kind: 'validation'`, `fieldErrors`, 오류 슬롯 렌더 포함),
+  handler는 실행하지 않는다. 오류 프레임 `kind`에 `timeout`(전체·idle 타임아웃)도 더했다. 브라우저 `error.kind`는 DESIGN의
+  다섯 종류에 `validation`·`network`(fetch 실패)를 더한 일곱 종류다. validation은 `reportError`로 보내지 않는다.
+- PRG: handler에는 multipart의 `File`도 그대로 넘기고 flash에서만 제외한다. flash 쿠키는 `base64url(JSON).base64url(HMAC)`,
+  HttpOnly·SameSite=Lax·Max-Age 60·https면 Secure다. `ctx.flash(name)`은 이름이 다르면 쿠키를 지우지 않는다. 오류 메시지는
+  `TransitionError`이면 그대로, 그 밖은 production에서 `Transition failed`다.
+- JS가 있을 때 가로채는 폼: `data-action` 폼과 `method="post"` 이면서 같은 origin의 `{BASE_PATH}/_surface/action/` 아래로
+  보내는 폼(submitter `formaction`·`formmethod` 반영). 파일이 선택된 폼은 multipart로 보낸다(`data-params`는 문자열 필드).
+  SSR은 그런 폼의 `action`/`formaction`도 액션 사용으로 보고 엔진을 싣는다.
+- 타입: `.state-surface/actions.d.ts`는 전역 `StateSurface.Actions` 인터페이스(이름 → 스키마 입력 타입)를 확장한다. 결과는
+  슬롯에 반영되므로 공통 `ActionResult`다. tsconfig는 점으로 시작하는 폴더를 디렉터리 include로 찾지 않아
+  `.state-surface/*.d.ts`로 포함한다. 생성 파일이 없으면 이름은 `string`, params는 JSON 객체다.
+- bootstrap `actions`: targets 또는 `mode: 'queue'`를 선언한 transition만 싣는다(나머지는 모든 슬롯과 겹침). `useAction`
+  때문에 `data-action`이 없어도 엔진 페이지면 싣는다. 페이지 응답에 `X-Surface-Build`를 붙여 청크 실패 시 배포 교체를
+  판정한다(HEAD 요청, 다르면 다음 `pointerdown`·`keydown`에 재로드).
+- 휴면 슬롯: 단계 3의 "프레임이 오면 즉시 활성화"를 없앴다. 프레임은 최신 props로만 보관하고 예정 시점이나 조작으로
+  활성화된다(DESIGN 5.3 ③). 청크 재시도는 실패한 promise를 공유 캐시에서 지우고 1초 뒤 다시 import한다.
+- resetKey: Slot과 직접 지시자 아일랜드 모두 받는다. server·static 슬롯의 resetKey는 SSR 오류다. 아일랜드는 morph에서
+  같은 componentId·같은 resetKey 값이면 인스턴스를 유지하고 새 props만 받는다(IC-06 확장, 그 밖은 교체).
+- V-04: hydration 전 SSR 기본값과 다른 컨트롤 값·포커스·선택을 기록하고 복원한 뒤 `input`/`change`를 보낸다. Lithent는
+  SSR에 없는 빈 텍스트 노드를 hydration 뒤 채우지 못한다(재현: 빈 문자열 → 갱신 무시). 데모는 `null`로 피했고 업스트림 보강
+  후보로 남긴다(3장 외부 선행 작업과 같은 성격).
+- 데모: actions 예제에 `actions:likes`(server 컴포넌트) + `useAction` 아일랜드(`like`, 입력 스키마·targets·queue)와
+  `actions:comments`(JS 없는 폼, server 컴포넌트가 `ctx.flash`를 읽음)를 더했다. 저장소는 세션 쿠키별 메모리
+  (`shared/actionsStore.server.ts`), 스키마는 손으로 쓴 Standard Schema 빌더(`shared/schema.ts`)다. `action-demo`는
+  `page:header`를 더 이상 갱신하지 않고 targets를 선언해 like와 병렬로 실행된다. MPA 교차 문서 View Transition은
+  reduced motion에서 끈다(인페이지 규칙과 같게). 가이드 본문의 `defineTransition('name', fn)` 예시는 단계 7에서 다시 쓴다.
+- parity: 의미 비교의 허용 차이에 단계 5 actions 데모 섹션(`actions:likes`·`actions:comments`)을 더했다.
 
 **검증 ID**: V-04, V-12, V-13, V-24.
 
@@ -795,6 +833,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                           |
 | 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                    |
 | 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B   |
+| 5    | 2026-10-16 | 단계 종료 커밋(Git 기록), 기준 `8c83aa8` | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B      |
 
 ### 단계 0 실행 상세
 
@@ -947,12 +986,49 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   70% 게이트는 단계 10, 로더 2KB 목표는 단계 5에서 다시 본다.
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
 
+### 단계 5 실행 상세 (2026-10-16)
+
+- 서버: transition을 루트 `transitions/**/*.ts`로 옮기고 경로를 이름으로 등록했다(`transitionScanner.ts`, 중복·kebab-case 위반은
+  빌드 오류, `_` 파일·테스트·선언 제외). `defineTransition` 객체형과 Standard Schema 검증(`shared/schema.ts`, 필드 경로별 오류),
+  form-urlencoded·multipart → 객체(같은 이름은 배열), 422 검증 오류 프레임, `timeout` 오류 종류, `reset: [slot]` → `props` op
+  `reset: true`(server 슬롯은 작성 오류)를 넣었다. `/_surface/action/<name>`은 미들웨어·CSRF 검사 뒤 handler를 끝까지 실행하고
+  (프레임 버림) 303으로 답한다. `_redirect` → 같은 origin `Referer` → BASE_PATH 루트 순으로 검증하고, 결과는 IC-09 flash 키로
+  서명한 일회성 쿠키(3KB 한도, 입력값 → 필드 오류 순 축소)로 넘긴다. `ctx.flash(name)`·`actionUrl()`·`ParamsOf`·`Flash`를 공개했다.
+- 빌드: Vite 플러그인이 `transitions/`를 감시하고 `.state-surface/actions.d.ts`(type import만, V-05)를 build 시작·dev 변경 시
+  다시 쓴다. `useAction`·`<Boot>`·`actionUrl()`의 이름·params 타입 검사는 TypeScript 컴파일러로 실제 오류(`@ts-expect-error`)까지
+  확인하는 테스트로 고정했다.
+- 브라우저: `stateSurface.ts`가 요청을 동시에 관리한다(같은 이름·겹치는 targets abort, targets 생략은 전부와 겹침 + dev 경고 1회,
+  `mode: 'queue'` 순차, `AbortSignal`). pending은 요청별 카운트로 `data-pending`(완료까지)·`data-has-result`(첫 결과 반영 후)를
+  붙인다. `transition()`/`run()`은 throw 없이 `ActionResult`로 끝난다. `useAction`(`runtimeAccess.ts`로 런타임을 지연 로드,
+  `window.__surface` 제거)·이벤트 규칙(bubble 단계, `preventDefault()` 존중, 이벤트당 1회, submitter·다중 값 snapshot, 파일은
+  multipart, `actionUrl` 폼 가로채기)·`<Boot>` 경고를 넣었다. `componentHost.ts`는 휴면 경계의 `pointerdown`·`focusin`·`keydown`
+  즉시 활성화, 청크 1초 뒤 1회 재시도·`onChunkError`, 휴면 최신 props 보관, reset·resetKey 재마운트, morph resetKey 유지를 맡고,
+  `lithentBridge.ts`가 hydration 입력 보존(V-04)을 한다. 로더는 청크 최종 실패 시 `X-Surface-Build`를 비교해 다음 조작에 재로드한다.
+- 실브라우저에서 찾은 결함 2건: ① Lithent hydration이 빈 텍스트 노드를 이후 갱신하지 못해 `useAction` 상태 문구가 바뀌지 않음
+  (원인 재현 후 `null` 렌더로 해결, 가이드·계획 조정에 기록), ② V-04 픽스처가 상수 `value`를 렌더해 재렌더 때 값이 되돌아감
+  (제어 입력 `value={text}`로 수정, 엔진 결함 아님). JS 끔 E2E는 MPA 교차 문서 View Transition이 다음 클릭을 가로채
+  reduced motion에서 전환을 끄도록 CSS를 바꾸고 키보드 제출로 고정했다.
+- 검증: Vitest 39개 파일/610개(새 `action.test.ts` PRG·flash·리다이렉트·크기·위조·422·multipart, `transitionScanner.test.ts` 스캔·
+  타입 검사, 동시성 매트릭스·pending·결과 종류, `useAction`, 위임 이벤트 규칙·`actionUrl` 폼·multipart, 활성화·재시도·reset·resetKey·
+  morph resetKey, V-04 단위, 로더 배포 교체 재로드), format:check, build, typecheck:server, 전체 tsc 0. `pnpm test:parity` 20개 문서 +
+  transition 3개, 루트 E2E 11(JS 없는 PRG 303·flash 일회성·새로고침 재제출 없음, JS 스트림·like 병렬·검증 오류 표시 추가) + spike 5,
+  `/demo` 11, `pnpm test:modes` 5(V-04: 청크를 붙잡은 채 입력·선택 → hydration 후 값·선택·포커스·컴포넌트 상태 유지). Node·Express·
+  Bun 1.4.2·Deno 2.5.4·workerd 적합성 각 12개(폼 본문·422·multipart PRG·flash·리다이렉트 검증 추가)와 5개 어댑터 앱 빌드 통과.
+  portable core 번들 90,821 B. production 서버에서 Chromium으로 actions 데모(JS 켬·끔, 병렬·queue·검증 오류) 확인.
+- 크기(gzip level 9, 실제 로드된 JS 합): 홈 12,519 B(로더 5,505 + 런타임 6,858 + actionError 156)·가이드 22,067 B·검색 16,033 B·
+  채팅 19,331 B·스트리밍 12,519 B·actions 19,737 B(Lithent 4,729·bridge 1,324·likeButton 973 포함). 단계 4 대비 홈 +2,071 B는
+  조작 시 활성화·재시도·배포 확인·`actionUrl` 폼 처리(로더 +1,075 B)와 동시성·결과·pending 카운트(런타임 +840 B)다. 로더 2KB 목표
+  (DC-04 ⑥)는 미달이며 단계 8 패키징에서 다시 측정한다.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4. IC-01~IC-04·IC-06~IC-09 결정.
-- **다음**: 단계 5(활성화 scheduler 완성·로컬 상태 수명·`useAction`·targets 동시성·pending 완료 기준·타입 지정 transition·
-  JS 없는 폼 PRG·DC-16 ③ transition 루트 이동). IC-05·IC-10은 단계 8·10에서 결정한다.
-- **블로커**: 없음. hydration 입력 보존은 단계 5, persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 데모 가이드 본문의
-  구 API 설명(`__UI__`·`__STATE__` 포함)은 단계 7에서 다시 쓴다.
+- **완료**: 단계 0·1·2·3·4·5. IC-01~IC-04·IC-06~IC-09 결정.
+- **다음**: 단계 6(라우터·persist·prefetch)과 단계 7(콘텐츠·이미지·prerender)은 병렬 진행 가능. IC-05·IC-10은 단계 8·10에서
+  결정한다.
+- **블로커**: 없음. persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 데모 가이드 본문의 구 API 설명(`__UI__`·`__STATE__`·
+  `defineTransition('name', fn)` 포함)과 prerender 액션 폼 빌드 경고는 단계 7에서 처리한다. Lithent 빈 텍스트 hydration은
+  업스트림 보강 후보다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
-  단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`.
+  단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
+  단계 5 Entry `8c83aa8`.

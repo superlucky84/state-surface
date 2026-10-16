@@ -99,7 +99,7 @@ describe('request state table (DESIGN 6.3)', () => {
       ]);
     });
     const { surface, slot, actions } = setup();
-    expect(await surface.transition('go', { q: 1 })).toBe('completed');
+    expect(await surface.transition('go', { q: 1 })).toEqual({ ok: true });
     expect(slot('list').innerHTML).toBe('<ul><li>b</li></ul>');
     expect(calls[0][0]).toBe('/base/transition/go');
     expect(calls[0][1].headers).toMatchObject({
@@ -115,7 +115,7 @@ describe('request state table (DESIGN 6.3)', () => {
   it('treats done without a patch as an empty success', async () => {
     vi.stubGlobal('fetch', async () => ndjson([{ type: 'done' }]));
     const { surface, slot } = setup();
-    expect(await surface.transition('noop')).toBe('completed');
+    expect(await surface.transition('noop')).toEqual({ ok: true });
     expect(slot('list').innerHTML).toBe('<ul><li>ssr</li></ul>');
   });
 
@@ -144,7 +144,7 @@ describe('request state table (DESIGN 6.3)', () => {
   ])('fails on %s and applies nothing of it', async (_case, frames, reason) => {
     vi.stubGlobal('fetch', async () => ndjson(frames));
     const { surface, slot, report, actions } = setup();
-    expect(await surface.transition('bad')).toBe('failed');
+    expect(await surface.transition('bad')).toMatchObject({ ok: false, error: expect.any(Error) });
     expect(slot('list').innerHTML).toBe('<ul><li>ssr</li></ul>');
     expect(report.mock.calls[0][0].message).toContain(reason);
     expect(actions.at(-1)!.error!.message).toContain(reason);
@@ -166,7 +166,7 @@ describe('request state table (DESIGN 6.3)', () => {
       ])
     );
     const { surface, slot, traces } = setup();
-    expect(await surface.transition('ui')).toBe('completed');
+    expect(await surface.transition('ui')).toEqual({ ok: true });
     expect(slot('list').innerHTML).toBe('<p>ok</p>');
     expect(slot('list').className).toBe('');
     expect(traces.filter(event => event.kind === 'skipped')).toHaveLength(2);
@@ -178,7 +178,7 @@ describe('request state table (DESIGN 6.3)', () => {
     );
     const { surface } = setup();
     (surface as unknown as { options: { frameSize: number } }).options.frameSize = 100;
-    expect(await surface.transition('big')).toBe('failed');
+    expect(await surface.transition('big')).toMatchObject({ ok: false, error: expect.any(Error) });
   });
 
   it('reads a single JSON response with the same pipeline', async () => {
@@ -191,14 +191,14 @@ describe('request state table (DESIGN 6.3)', () => {
       })
     );
     const { surface, slot } = setup();
-    expect(await surface.transition('json')).toBe('completed');
+    expect(await surface.transition('json')).toEqual({ ok: true });
     expect(slot('list').innerHTML).toBe('<p>json</p>');
   });
 
   it('reloads the document on a build mismatch (409)', async () => {
     vi.stubGlobal('fetch', async () => new Response('{}', { status: 409 }));
     const { surface, reload } = setup();
-    expect(await surface.transition('old')).toBe('aborted');
+    expect(await surface.transition('old')).toEqual({ ok: false, aborted: true });
     expect(reload).toHaveBeenCalledOnce();
   });
 
@@ -213,7 +213,10 @@ describe('request state table (DESIGN 6.3)', () => {
   it('reports HTTP failures without frames', async () => {
     vi.stubGlobal('fetch', async () => new Response('Forbidden', { status: 403 }));
     const { surface, report } = setup();
-    expect(await surface.transition('denied')).toBe('failed');
+    expect(await surface.transition('denied')).toMatchObject({
+      ok: false,
+      error: expect.any(Error),
+    });
     expect(report.mock.calls[0][0]).toMatchObject({ kind: 'http', message: 'HTTP 403' });
   });
 });
@@ -227,7 +230,7 @@ describe('error frames', () => {
       ])
     );
     const { surface, slot, report } = setup();
-    expect(await surface.transition('fail')).toBe('failed');
+    expect(await surface.transition('fail')).toMatchObject({ ok: false, error: expect.any(Error) });
     expect(slot('list').innerHTML).toBe('<p>partial</p>');
     expect(slot('system:error').innerHTML).toBe('<strong>boom</strong>');
     expect(report.mock.calls[0][0]).toMatchObject({ kind: 'server', message: 'boom' });
@@ -238,7 +241,7 @@ describe('error frames', () => {
         { type: 'done' },
       ])
     );
-    expect(await surface.transition('ok')).toBe('completed');
+    expect(await surface.transition('ok')).toEqual({ ok: true });
     expect(slot('system:error').innerHTML).toBe('');
   });
 
@@ -246,50 +249,268 @@ describe('error frames', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.stubGlobal('fetch', async () => ndjson([{ type: 'error', message: 'no slot' }]));
     const { surface, report } = setup({ development: true });
-    expect(await surface.transition('fail')).toBe('failed');
+    expect(await surface.transition('fail')).toMatchObject({ ok: false, error: expect.any(Error) });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed without an error slot'));
     expect(report).toHaveBeenCalledOnce();
   });
 });
 
-describe('generation invalidation (abort previous)', () => {
-  it('ignores frames of a superseded request and keeps the latest result', async () => {
-    const first = controlledStream();
-    const second = controlledStream();
-    const responses = [first.response, second.response];
-    vi.stubGlobal('fetch', async () => responses.shift()!);
-    const { surface, slot, report } = setup();
-    const running = surface.transition('a');
+describe('action concurrency (DC-11, DC-30)', () => {
+  /** Requests answered by controlled streams, in call order; the URL tells them apart. */
+  function streams() {
+    const opened: Array<{ url: string; stream: ReturnType<typeof controlledStream> }> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const stream = controlledStream();
+      init.signal?.addEventListener('abort', () => stream.close());
+      opened.push({ url, stream });
+      return stream.response;
+    });
+    const of = (name: string) => opened.filter(entry => entry.url.endsWith('/' + name));
+    return { opened, of };
+  }
+  const ACTIONS = {
+    like: { targets: ['card'] },
+    search: { targets: ['list'] },
+    browse: { targets: ['list', 'card'] },
+    save: { targets: ['chat'], queue: true as const },
+  };
+  function concurrent(development = false) {
+    const context = setup({ development });
+    const surface = new StateSurface({
+      ...(context.surface as unknown as { options: ConstructorParameters<typeof StateSurface>[0] })
+        .options,
+      actions: ACTIONS,
+    });
+    surface.discoverAnchors();
+    return { ...context, surface };
+  }
+
+  it('aborts the previous request of the same name and keeps the latest result', async () => {
+    const { of } = streams();
+    const { surface, slot, report } = concurrent();
+    const running = surface.transition('search');
     await flush();
-    first.send({ type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>A1</p>' }] });
+    of('search')[0].stream.send({
+      type: 'patch',
+      reset: true,
+      ops: [{ slot: 'list', html: '<p>A1</p>' }],
+    });
     await flush();
     expect(slot('list').innerHTML).toBe('<p>A1</p>');
-    const latest = surface.transition('b');
-    first.send({ type: 'patch', ops: [{ slot: 'list', html: '<p>A2 stale</p>' }] });
+    const latest = surface.transition('search');
+    of('search')[0].stream.send({ type: 'patch', ops: [{ slot: 'list', html: '<p>stale</p>' }] });
     await flush();
+    const second = of('search')[1].stream;
     second.send({ type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>B</p>' }] });
     second.send({ type: 'done' });
-    second.close();
-    expect(await latest).toBe('completed');
-    expect(await running).toBe('aborted');
+    expect(await latest).toEqual({ ok: true });
+    expect(await running).toEqual({ ok: false, aborted: true });
     expect(slot('list').innerHTML).toBe('<p>B</p>');
     expect(report).not.toHaveBeenCalled();
   });
 
-  it('marks pending targets and clears them with the first patch (until stage 5)', async () => {
+  it('runs actions with disjoint targets in parallel', async () => {
+    const { of } = streams();
+    const { surface, slot } = concurrent();
+    const search = surface.transition('search');
+    const like = surface.transition('like');
+    await flush();
+    expect(surface.running).toEqual(['search', 'like']);
+    of('like')[0].stream.send({ type: 'patch', reset: true, ops: [{ slot: 'card', html: '♥' }] });
+    of('like')[0].stream.send({ type: 'done' });
+    expect(await like).toEqual({ ok: true });
+    of('search')[0].stream.send({
+      type: 'patch',
+      reset: true,
+      ops: [{ slot: 'list', html: '<p>found</p>' }],
+    });
+    of('search')[0].stream.send({ type: 'done' });
+    expect(await search).toEqual({ ok: true });
+    expect(slot('card').innerHTML).toBe('♥');
+    expect(slot('list').innerHTML).toBe('<p>found</p>');
+  });
+
+  it('aborts requests whose targets overlap', async () => {
+    const { of } = streams();
+    const { surface } = concurrent();
+    const search = surface.transition('search');
+    const like = surface.transition('like');
+    const browse = surface.transition('browse');
+    await flush();
+    of('browse')[0].stream.send({ type: 'patch', reset: true, ops: [] });
+    of('browse')[0].stream.send({ type: 'done' });
+    expect(await browse).toEqual({ ok: true });
+    expect(await search).toEqual({ ok: false, aborted: true });
+    expect(await like).toEqual({ ok: false, aborted: true });
+  });
+
+  it('treats undeclared targets as overlapping every slot and warns once in development', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { of } = streams();
+    const { surface } = concurrent(true);
+    const like = surface.transition('like');
+    const plain = surface.transition('plain');
+    await flush();
+    expect(await like).toEqual({ ok: false, aborted: true });
+    const search = surface.transition('search');
+    expect(await plain).toEqual({ ok: false, aborted: true });
+    await flush();
+    of('search')[0].stream.send({ type: 'done' });
+    expect(await search).toEqual({ ok: true });
+    void surface.transition('plain');
+    await flush();
+    expect(
+      warn.mock.calls.filter(call => String(call[0]).includes('declares no targets'))
+    ).toHaveLength(1);
+  });
+
+  it('runs queue-mode requests of one name in order', async () => {
+    const { of } = streams();
+    const { surface, slot } = concurrent();
+    const first = surface.transition('save', { n: 1 });
+    const second = surface.transition('save', { n: 2 });
+    await flush();
+    expect(of('save')).toHaveLength(1);
+    of('save')[0].stream.send({
+      type: 'patch',
+      reset: true,
+      ops: [{ slot: 'chat', props: { text: '1' } }],
+    });
+    of('save')[0].stream.send({ type: 'done' });
+    expect(await first).toEqual({ ok: true });
+    await flush();
+    expect(of('save')).toHaveLength(2);
+    of('save')[1].stream.send({
+      type: 'patch',
+      reset: true,
+      ops: [{ slot: 'chat', props: { text: '2' } }],
+    });
+    of('save')[1].stream.send({ type: 'done' });
+    expect(await second).toEqual({ ok: true });
+    await flush();
+    expect(slot('chat').textContent).toBe('2');
+  });
+
+  it('aborts on signal and resolves without throwing', async () => {
+    streams();
+    const { surface } = concurrent();
+    const controller = new AbortController();
+    const running = surface.transition('search', {}, { signal: controller.signal });
+    await flush();
+    controller.abort();
+    expect(await running).toEqual({ ok: false, aborted: true });
+  });
+});
+
+describe('pending (DESIGN 7장)', () => {
+  it('keeps data-pending until the request ends and marks data-has-result after the first result', async () => {
     const stream = controlledStream();
     vi.stubGlobal('fetch', async () => stream.response);
     const { surface, slot } = setup();
-    const running = surface.transition('p', {}, { pendingTargets: ['list'] });
+    const onResult = vi.fn();
+    const running = surface.transition('p', {}, { pendingTargets: ['list'], onResult });
     expect(slot('list').hasAttribute('data-pending')).toBe(true);
     expect(slot('card').hasAttribute('data-pending')).toBe(false);
     await flush();
-    stream.send({ type: 'patch', reset: true, ops: [] });
+    stream.send({ type: 'patch', reset: true, ops: [{ slot: 'list', html: '<p>1</p>' }] });
     await flush();
-    expect(slot('list').hasAttribute('data-pending')).toBe(false);
+    expect(slot('list').hasAttribute('data-pending')).toBe(true);
+    expect(slot('list').hasAttribute('data-has-result')).toBe(true);
+    expect(onResult).toHaveBeenCalledOnce();
     stream.send({ type: 'done' });
-    stream.close();
     await running;
+    expect(slot('list').hasAttribute('data-pending')).toBe(false);
+    expect(slot('list').hasAttribute('data-has-result')).toBe(false);
+  });
+
+  it('defaults to the declared targets, else every slot, and counts overlapping marks', async () => {
+    const opened: Array<ReturnType<typeof controlledStream>> = [];
+    vi.stubGlobal('fetch', async () => {
+      const stream = controlledStream();
+      opened.push(stream);
+      return stream.response;
+    });
+    const context = setup();
+    const surface = new StateSurface({
+      ...(context.surface as unknown as { options: ConstructorParameters<typeof StateSurface>[0] })
+        .options,
+      actions: { like: { targets: ['card'] }, search: { targets: ['list'] } },
+    });
+    surface.discoverAnchors();
+    const { slot } = context;
+    const like = surface.transition('like');
+    const search = surface.transition('search', {}, { pendingTargets: ['list', 'card'] });
+    expect(slot('card').hasAttribute('data-pending')).toBe(true);
+    expect(slot('chat').hasAttribute('data-pending')).toBe(false);
+    await flush();
+    // The search ends first; the like still marks the card (per-request marks).
+    opened[1].send({ type: 'done' });
+    await search;
+    expect(slot('list').hasAttribute('data-pending')).toBe(false);
+    expect(slot('card').hasAttribute('data-pending')).toBe(true);
+    opened[0].send({ type: 'done' });
+    await like;
+    expect(slot('card').hasAttribute('data-pending')).toBe(false);
+    const all = surface.transition('other');
+    for (const name of ['list', 'card', 'chat', 'system:error'])
+      expect(slot(name).hasAttribute('data-pending')).toBe(true);
+    await flush();
+    opened[2].send({ type: 'done' });
+    await all;
+  });
+});
+
+describe('action results', () => {
+  it('reports validation errors with field errors and shows them in the error slot', async () => {
+    vi.stubGlobal('fetch', async () =>
+      Response.json(
+        {
+          frames: [
+            {
+              type: 'error',
+              kind: 'validation',
+              message: 'Invalid input (body: Required)',
+              fieldErrors: { body: ['Required'] },
+              slot: 'system:error',
+              html: '<p>Required</p>',
+            },
+          ],
+        },
+        { status: 422 }
+      )
+    );
+    const { surface, slot, report } = setup();
+    const result = await surface.transition('comment/add', { body: '' });
+    expect(result.error).toMatchObject({ kind: 'validation', fieldErrors: { body: ['Required'] } });
+    expect(slot('system:error').innerHTML).toBe('<p>Required</p>');
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('encodes each segment of a multi-segment name and sends forms as multipart', async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return ndjson([{ type: 'done' }]);
+    });
+    const { surface } = setup();
+    const form = new FormData();
+    form.append('title', 'x');
+    await surface.transition('comment/add reply', {}, { form });
+    expect(calls[0][0]).toBe('/base/transition/comment/add%20reply');
+    expect(calls[0][1].body).toBe(form);
+    expect(calls[0][1].headers).not.toHaveProperty('Content-Type');
+  });
+
+  it('maps timeouts, network failures and chunk failures to error kinds', async () => {
+    vi.stubGlobal('fetch', async () =>
+      ndjson([{ type: 'error', kind: 'timeout', message: 'Transition timeout after 10ms' }])
+    );
+    const { surface } = setup();
+    expect((await surface.transition('slow')).error?.kind).toBe('timeout');
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    expect((await surface.transition('offline')).error?.kind).toBe('network');
   });
 });
 
@@ -358,7 +579,7 @@ describe('ops', () => {
       ])
     );
     const { surface, traces } = setup();
-    expect(await surface.transition('x')).toBe('completed');
+    expect(await surface.transition('x')).toEqual({ ok: true });
     expect(traces.some(event => event.kind === 'dropped')).toBe(true);
   });
 });

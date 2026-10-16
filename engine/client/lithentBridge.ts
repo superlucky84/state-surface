@@ -34,7 +34,12 @@ export function mountComponent(
         : [h('h-children', { style: 'display:contents', innerHTML: options.childrenHtml })],
   };
   const wdom = h(DataProxy as TagFunction, proxyProps);
-  const cleanup = options.hydrate ? hydration(wdom, el) : render(wdom, el);
+  let cleanup: () => void;
+  if (options.hydrate) {
+    const restore = keepUserInput(el);
+    cleanup = hydration(wdom, el);
+    restore();
+  } else cleanup = render(wdom, el);
   return {
     update(next) {
       proxyProps.__data = next;
@@ -47,3 +52,81 @@ export function mountComponent(
 const DataProxy = mount<{ __data: any; __component: TagFunction; __children: unknown[] }>(
   () => props => h(props.__component, props.__data ?? {}, ...(props.__children as never[]))
 );
+
+type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+/**
+ * V-04 (DESIGN 5.2): Lithent hydration writes the SSR `value`/`checked` back onto the reused
+ * nodes and moves the selection, so what the user typed before activation would be lost.
+ * Snapshot the controls the user changed (live state differs from the SSR markup), hydrate,
+ * then put those values back with an `input`/`change` event so the component's handlers see
+ * them, and restore the focus and selection.
+ */
+export function keepUserInput(root: HTMLElement): () => void {
+  const active = document.activeElement;
+  const edited: Array<{ control: Control; restore: () => void; event: 'input' | 'change' }> = [];
+  for (const control of Array.from(root.querySelectorAll<Control>('input, textarea, select'))) {
+    if (control instanceof HTMLSelectElement) {
+      const selected = Array.from(control.options, option => option.selected);
+      if (Array.from(control.options).some((option, i) => option.defaultSelected !== selected[i]))
+        edited.push({
+          control,
+          event: 'change',
+          restore: () =>
+            Array.from(control.options).forEach(
+              (option, i) => (option.selected = selected[i] ?? false)
+            ),
+        });
+    } else if (
+      control instanceof HTMLInputElement &&
+      (control.type === 'checkbox' || control.type === 'radio')
+    ) {
+      const checked = control.checked;
+      if (checked !== control.defaultChecked)
+        edited.push({ control, event: 'change', restore: () => (control.checked = checked) });
+    } else if (control.value !== control.defaultValue) {
+      const value = control.value;
+      edited.push({ control, event: 'input', restore: () => (control.value = value) });
+    }
+  }
+  const focused =
+    active instanceof HTMLElement && root.contains(active)
+      ? {
+          element: active,
+          selection:
+            active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
+              ? readSelection(active)
+              : undefined,
+        }
+      : undefined;
+  return () => {
+    for (const entry of edited) {
+      if (!entry.control.isConnected) continue;
+      entry.restore();
+      entry.control.dispatchEvent(new Event(entry.event, { bubbles: true }));
+    }
+    if (!focused?.element.isConnected) return;
+    if (document.activeElement !== focused.element) focused.element.focus({ preventScroll: true });
+    if (focused.selection)
+      try {
+        (focused.element as HTMLInputElement).setSelectionRange(...focused.selection);
+      } catch {
+        /* not a text control */
+      }
+  };
+}
+
+function readSelection(
+  control: HTMLInputElement | HTMLTextAreaElement
+): [number, number, 'forward' | 'backward' | 'none'] | undefined {
+  try {
+    if (control.selectionStart === null || control.selectionEnd === null) return undefined;
+    return [
+      control.selectionStart,
+      control.selectionEnd,
+      (control.selectionDirection as 'forward' | 'backward' | 'none' | null) ?? 'none',
+    ];
+  } catch {
+    return undefined;
+  }
+}

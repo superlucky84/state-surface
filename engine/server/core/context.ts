@@ -1,5 +1,6 @@
 import type { Logger } from '../logger.js';
 import type { StateFrame } from '../../shared/protocol.js';
+import type { Flash } from '../flash.js';
 
 declare global {
   namespace App {
@@ -32,7 +33,7 @@ export interface SurfaceContext {
   nonce: string;
   basePath: string;
   route: {
-    kind: 'page' | 'transition' | 'island' | 'not-found';
+    kind: 'page' | 'transition' | 'action' | 'island' | 'not-found';
     pattern?: string;
     name?: string;
     prerendered: boolean;
@@ -42,6 +43,11 @@ export interface SurfaceContext {
    * Frames may only touch `external` slots and must pass their schema; others are dropped.
    */
   external(source: AsyncIterable<unknown> | Iterable<unknown>): AsyncGenerator<StateFrame, void>;
+  /**
+   * The one-time result of the JS-less form submission of transition `name` (PRG, DC-22),
+   * read after the 303 redirect. Reading it clears the cookie.
+   */
+  flash(name: string): Promise<Flash | undefined>;
 }
 export type Middleware = (
   ctx: SurfaceContext,
@@ -128,6 +134,7 @@ export function createContext(
     external() {
       throw new Error('ctx.external() is only available inside a transition');
     },
+    flash: async () => undefined,
     cookies: {
       get: name => incoming.get(name),
       set: write,

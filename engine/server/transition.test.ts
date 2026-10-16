@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { h } from 'lithent';
 import { createHandler } from './core/handler.js';
 import { decodeFrames } from '../shared/ndjson.js';
-import { defineTransition, TransitionError, type TransitionHandler } from './transition.js';
+import {
+  defineTransition,
+  TransitionError,
+  type TransitionDefinition,
+  type TransitionHandler,
+} from './transition.js';
 import type { HandlerOptions } from './core/handler.js';
 import type { StateFrame, WireFrame } from '../shared/protocol.js';
 import { defineManifest } from './core/manifest.js';
@@ -11,7 +16,10 @@ const ErrorBox = (props: { message: string }) => h('p', { class: 'error' }, prop
 const Note = (props: { text?: string }) => h('p', {}, props.text ?? '');
 
 function fixture(
-  transitions: Record<string, TransitionHandler | Parameters<typeof defineTransition>[1]>,
+  transitions: Record<
+    string,
+    TransitionHandler | (Omit<TransitionDefinition, 'handler'> & { handler: TransitionHandler })
+  >,
   options: Partial<HandlerOptions> = {}
 ) {
   return createHandler({
@@ -35,9 +43,7 @@ function fixture(
           },
         },
       ],
-      transitions: Object.entries(transitions).map(([name, handler]) =>
-        defineTransition(name, handler)
-      ),
+      transitions,
     }),
   });
 }

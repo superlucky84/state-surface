@@ -9,6 +9,12 @@ export type ComponentLoaders = Record<string, (() => Promise<TagFunction>) | und
 type Report = (error: unknown, detail: Record<string, unknown>) => void;
 type Bridge = typeof import('./lithentBridge.js');
 
+/** Result of a props update for the request that carried it (DESIGN 7장 `chunk`). */
+export type PropsStatus = 'applied' | 'deferred' | 'failed';
+
+/** Interactions inside a dormant boundary that activate it right away (DC-04 ⑤). */
+const INTERACTIONS = ['pointerdown', 'focusin', 'keydown'] as const;
+
 interface Instance {
   key: string;
   kind: 'slot' | 'island';
@@ -21,6 +27,9 @@ interface Instance {
   snapshot?: unknown;
   /** Island props as rendered by the server (IC-06 morph comparison). */
   signature?: string;
+  /** DC-05: prop names whose values identify the instance; a change remounts it. */
+  resetKey?: string[];
+  keyValue?: string;
   childrenHtml?: string;
   status: 'dormant' | 'loading' | 'active' | 'failed';
   generation: number;
@@ -33,12 +42,20 @@ interface Instance {
 
 const signatureOf = (component: string, props: unknown) =>
   `${component}\u0000${JSON.stringify(props ?? {})}`;
+const keyOf = (resetKey: readonly string[] | undefined, props: unknown) =>
+  resetKey &&
+  JSON.stringify(
+    resetKey.map(name => (props as Record<string, unknown> | undefined)?.[name] ?? null)
+  );
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Owns client components of the page: schedules activation (load/idle/visible/media), loads
- * Lithent and the component chunk on demand, and mounts slots and islands. Metadata comes
- * from `__SURFACE__.slots` and `html` op `islands`. Data for a dormant slot activates it
- * first; the latest data is applied after hydrating the SSR snapshot (DC-05).
+ * Owns client components of the page: schedules activation (load/idle/visible/media, or at
+ * once on the first pointerdown/focusin/keydown inside a dormant boundary), loads Lithent
+ * and the component chunk on demand (one retry after 1s), and mounts slots and islands.
+ * Metadata comes from `__SURFACE__.slots` and `html` op `islands`. A dormant slot keeps the
+ * latest data without loading; on activation it hydrates the SSR snapshot and then applies
+ * that data, or mounts fresh after a reset or resetKey change (DC-04, DC-05).
  */
 export class ComponentHost {
   private instances = new Map<string, Instance>();
@@ -53,6 +70,10 @@ export class ComponentHost {
       plugins?: PluginHost;
       report?: Report;
       loadBridge?: () => Promise<Bridge>;
+      /** A chunk failed after its retry (the loader checks for a new deployment). */
+      onChunkError?: (error: unknown) => void;
+      /** Delay before the one retry of a failed chunk (default 1000ms). */
+      retryDelay?: number;
     }
   ) {}
 
@@ -86,12 +107,22 @@ export class ComponentHost {
   }
 
   private scheduleAll() {
-    for (const instance of this.instances.values())
-      if (instance.status === 'dormant' && !instance.cancel)
-        instance.cancel = schedule(instance.timing, () => this.activate(instance), {
-          element: instance.el,
-          media: instance.media,
-        });
+    for (const instance of this.instances.values()) {
+      if (instance.status !== 'dormant' || instance.cancel) continue;
+      const activate = () => this.activate(instance);
+      const cancel = schedule(instance.timing, activate, {
+        element: instance.el,
+        media: instance.media,
+      });
+      // The interaction itself is not replayed; hydration keeps what the user typed.
+      for (const type of INTERACTIONS)
+        instance.el.addEventListener(type, activate, { capture: true, passive: true });
+      instance.cancel = () => {
+        cancel();
+        for (const type of INTERACTIONS)
+          instance.el.removeEventListener(type, activate, { capture: true });
+      };
+    }
   }
 
   private register(
@@ -113,6 +144,9 @@ export class ComponentHost {
       snapshot: meta.props,
       status: 'dormant',
       generation: 0,
+      ...(meta.resetKey
+        ? { resetKey: meta.resetKey, keyValue: keyOf(meta.resetKey, meta.props) }
+        : {}),
     };
     if (kind === 'island') {
       instance.childrenHtml = takeChildrenHtml(el);
@@ -126,10 +160,16 @@ export class ComponentHost {
     this.options.report?.(error, detail);
   }
 
+  /** Load promises are shared; a rejected one is forgotten so the retry loads again. */
   private loadBridge() {
-    return (this.bridge ??= (
-      this.options.loadBridge ?? (() => import('./lithentBridge.js'))
-    )().then(bridge => (this.bridgeModule = bridge)));
+    if (this.bridge) return this.bridge;
+    const bridge = (this.options.loadBridge ?? (() => import('./lithentBridge.js')))().then(
+      module => (this.bridgeModule = module)
+    );
+    bridge.catch(() => {
+      if (this.bridge === bridge) this.bridge = undefined;
+    });
+    return (this.bridge = bridge);
   }
 
   private loadComponent(componentId: string) {
@@ -138,20 +178,39 @@ export class ComponentHost {
       const loader = Object.hasOwn(this.options.loaders, componentId)
         ? this.options.loaders[componentId]
         : undefined;
-      module = loader
+      const loading = loader
         ? loader()
         : Promise.reject(new Error(`Component "${componentId}" not found`));
-      this.modules.set(componentId, module);
+      loading.catch(() => {
+        if (this.modules.get(componentId) === loading) this.modules.delete(componentId);
+      });
+      this.modules.set(componentId, (module = loading));
     }
     return module;
+  }
+
+  /** Start activation now (scheduled timing, interaction, or an explicit request). */
+  activateNow(key: string) {
+    const instance = this.instances.get(key);
+    if (instance) this.activate(instance);
   }
 
   private activate(instance: Instance) {
     if (instance.status !== 'dormant') return;
     instance.cancel?.();
+    instance.cancel = undefined;
     instance.status = 'loading';
     const generation = instance.generation;
-    Promise.all([this.loadBridge(), this.loadComponent(instance.componentId)]).then(
+    const load = (retry: boolean): Promise<[Bridge, TagFunction]> =>
+      Promise.all([this.loadBridge(), this.loadComponent(instance.componentId)]).catch(error =>
+        retry
+          ? delay(this.options.retryDelay ?? 1000).then(() => {
+              if (instance.generation !== generation) throw error;
+              return load(false);
+            })
+          : Promise.reject(error)
+      );
+    load(true).then(
       ([bridge, component]) => {
         if (instance.generation !== generation) return;
         instance.status = 'active';
@@ -161,7 +220,8 @@ export class ComponentHost {
       error => {
         if (instance.generation !== generation) return;
         instance.status = 'failed';
-        this.report(error, { component: instance.componentId, slot: instance.key });
+        this.report(error, { component: instance.componentId, slot: instance.key, kind: 'chunk' });
+        this.options.onChunkError?.(error);
         // SSR HTML stays; only a slot that had nothing to show gets the error fallback.
         if (instance.pending?.op === 'render' || instance.snapshot === undefined || instance.only)
           renderMissing(instance, error);
@@ -200,17 +260,40 @@ export class ComponentHost {
     });
   }
 
-  /** `props` op (or merged props) for a client slot. */
-  setProps(name: string, el: HTMLElement, data: unknown, meta: SlotMeta) {
-    const instance =
-      this.instances.get(name) ??
-      this.register(name, 'slot', el, { ...meta, component: meta.component!, props: undefined });
+  /**
+   * `props` op (or merged props) for a client slot. An active instance updates in place
+   * (local state kept) unless `reset` or a resetKey change asks for a new mount (DC-05). A
+   * dormant one keeps the latest data until its activation (no forced load).
+   */
+  setProps(
+    name: string,
+    el: HTMLElement,
+    data: unknown,
+    meta: SlotMeta,
+    options: { reset?: boolean } = {}
+  ): PropsStatus {
+    let instance = this.instances.get(name);
+    if (!instance) {
+      instance = this.register(name, 'slot', el, {
+        ...meta,
+        component: meta.component!,
+        props: undefined,
+      });
+      this.scheduleAll();
+    }
+    const keyValue = keyOf(instance.resetKey, data);
+    const fresh = options.reset === true || keyValue !== instance.keyValue;
+    instance.keyValue = keyValue;
     if (instance.status === 'active') {
-      if (instance.mount) {
+      if (instance.mount && !fresh) {
         instance.mount.update(data);
         // Lithent applies the update in a microtask; notify plugins afterwards.
         queueMicrotask(() => this.options.plugins?.updatedSlot(name));
-        return;
+        return 'applied';
+      }
+      if (instance.mount) {
+        this.options.plugins?.removedSlot(name);
+        this.cleanupMount(instance);
       }
       el.innerHTML = '';
       try {
@@ -218,22 +301,32 @@ export class ComponentHost {
       } catch (error) {
         this.report(error, { component: instance.componentId, slot: name });
         renderMissing(instance, error);
-        return;
+        return 'failed';
       }
       this.options.plugins?.displayedSlot(name, el, 'client');
-      return;
+      return 'applied';
     }
     if (instance.status === 'failed') {
       if (instance.snapshot === undefined) renderMissing(instance, new Error('not loaded'));
-      return;
+      return 'failed';
     }
     instance.pending = {
       op:
-        instance.snapshot !== undefined && instance.pending?.op !== 'render' ? 'update' : 'render',
+        !fresh && instance.snapshot !== undefined && instance.pending?.op !== 'render'
+          ? 'update'
+          : 'render',
       data,
     };
-    this.activate(instance);
-    this.scheduleAll();
+    return 'deferred';
+  }
+
+  private cleanupMount(instance: Instance) {
+    try {
+      instance.mount?.cleanup();
+    } catch (error) {
+      this.report(error, { component: instance.componentId, slot: instance.key });
+    }
+    instance.mount = undefined;
   }
 
   /** `remove` op for a client slot: cleanup, forget the snapshot, clear the host. */
@@ -247,12 +340,7 @@ export class ComponentHost {
   private reset(instance: Instance) {
     instance.cancel?.();
     instance.cancel = undefined;
-    try {
-      instance.mount?.cleanup();
-    } catch (error) {
-      this.report(error, { component: instance.componentId, slot: instance.key });
-    }
-    instance.mount = undefined;
+    this.cleanupMount(instance);
     instance.pending = undefined;
     instance.snapshot = undefined;
     instance.generation++;
@@ -276,6 +364,33 @@ export class ComponentHost {
   /** IC-06: an island with the same component and props keeps its instance across morph. */
   sameIsland(key: string, meta: IslandMeta) {
     return this.instances.get(key)?.signature === signatureOf(meta.component, meta.props);
+  }
+
+  /**
+   * Morph boundary (IC-06, DC-05): keep the instance under the new id when component and
+   * props are unchanged, or when only props changed and the island's resetKey values are the
+   * same (the instance then receives the new props). Otherwise the caller replaces it.
+   */
+  keepIsland(key: string, meta: IslandMeta): boolean {
+    const instance = this.instances.get(key);
+    if (!instance || instance.componentId !== meta.component) return false;
+    const signature = signatureOf(meta.component, meta.props);
+    if (instance.signature !== signature) {
+      const sameKey =
+        instance.resetKey !== undefined &&
+        JSON.stringify(instance.resetKey) === JSON.stringify(meta.resetKey ?? null) &&
+        instance.keyValue === keyOf(instance.resetKey, meta.props);
+      if (!sameKey) return false;
+      instance.signature = signature;
+      if (instance.status === 'active' && instance.mount) instance.mount.update(meta.props);
+      else if (instance.status !== 'failed')
+        instance.pending = {
+          op: instance.pending?.op === 'render' ? 'render' : 'update',
+          data: meta.props,
+        };
+    }
+    this.rekey(key, meta.id);
+    return true;
   }
 
   rekey(from: string, to: string) {

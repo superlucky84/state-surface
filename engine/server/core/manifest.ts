@@ -1,6 +1,7 @@
 import type { PageModule } from '../../shared/routeModule.js';
 import type { SlotMode } from '../../shared/surfaceTree.js';
-import type { TransitionDefinition, TransitionModule } from '../transition.js';
+import { TRANSITION_NAME, toDefinition, type TransitionDefinition } from '../transition.js';
+import type { StandardSchema } from '../../shared/schema.js';
 import type { PagePlugin } from '../ssrRenderer.js';
 
 /** Vite build manifest entries (keys are project-relative source paths). */
@@ -19,20 +20,7 @@ export interface DocumentConfig {
   engine?: { loader: string; runtime: string; bridge: string; morph?: string };
 }
 
-/** Standard Schema v1 (https://standardschema.dev), the part the engine calls. */
-export interface StandardSchema {
-  readonly '~standard': {
-    readonly version: 1;
-    readonly validate: (
-      value: unknown
-    ) =>
-      | { value: unknown; issues?: undefined }
-      | { issues: ReadonlyArray<{ message: string }> }
-      | Promise<
-          { value: unknown; issues?: undefined } | { issues: ReadonlyArray<{ message: string }> }
-        >;
-  };
-}
+export type { StandardSchema };
 
 /** One Slot of a page, from build analysis (DESIGN 6.2 page manifest). */
 export interface PageSlotDefinition {
@@ -79,7 +67,8 @@ export interface ServerManifest {
 }
 export function defineManifest(input: {
   routes: ServerManifest['routes'];
-  transitions: TransitionModule[];
+  /** Name (path under `transitions/`) → default export: a definition or a bare handler. */
+  transitions: Record<string, unknown>;
   document?: DocumentConfig;
   assets?: AssetManifest;
   basePath?: string;
@@ -88,10 +77,10 @@ export function defineManifest(input: {
   components?: Record<string, unknown>;
 }): ServerManifest {
   const transitions: Record<string, TransitionDefinition> = Object.create(null);
-  for (const transition of input.transitions) {
-    if (Object.hasOwn(transitions, transition.name))
-      throw new Error(`Duplicate registry name: ${transition.name}`);
-    transitions[transition.name] = transition.definition;
+  for (const [name, value] of Object.entries(input.transitions)) {
+    if (!TRANSITION_NAME.test(name))
+      throw new Error(`Transition name "${name}" must be kebab-case path segments`);
+    transitions[name] = toDefinition(value, `transitions/${name}`);
   }
   const components: Record<string, unknown> = Object.create(null);
   Object.assign(components, input.components ?? {});

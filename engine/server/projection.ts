@@ -150,6 +150,11 @@ export class RequestProjection {
       if (!slot) fail(`slot "${name}" is not on page "${this.options.page.id}"`);
       if (slot!.mode === 'static') fail(`slot "${name}" is static and cannot be updated`);
     }
+    // DC-05: reset re-creates a client component; server slots have no local state.
+    for (const name of frame.reset ?? [])
+      if (this.slot(name)?.mode !== 'client')
+        fail(`reset applies to client slots; "${name}" is a ${this.slot(name)?.mode} slot`);
+    const reset = new Set(frame.reset ?? []);
 
     const next = applyFrame(this.state, frame);
     const nextUi = applyUi(this.ui, frame);
@@ -183,7 +188,11 @@ export class RequestProjection {
           ops.push({ slot: name, merge: frame.states[name] });
         } else {
           assertJsonValue(next[name], `slot "${name}"`);
-          ops.push({ slot: name, props: next[name] });
+          ops.push({
+            slot: name,
+            props: next[name],
+            ...(reset.has(name) ? { reset: true as const } : {}),
+          });
         }
         continue;
       }
@@ -265,12 +274,16 @@ export class RequestProjection {
   }
 
   /** `error` frame with the page's error slot content when the page has one. */
-  async error(message: string): Promise<ErrorFrame> {
+  async error(
+    message: string,
+    extra: { kind?: 'validation' | 'timeout'; fieldErrors?: Record<string, string[]> } = {}
+  ): Promise<ErrorFrame> {
     const name = this.options.errorSlot;
     const slot = this.slot(name);
-    if (!slot || slot.mode === 'static') return { type: 'error', message };
-    const props = { message };
-    if (slot.mode === 'client') return { type: 'error', message, slot: name, props };
+    const base: ErrorFrame = { type: 'error', message, ...extra };
+    if (!slot || slot.mode === 'static') return base;
+    const props = { message, ...(extra.fieldErrors ? { fieldErrors: extra.fieldErrors } : {}) };
+    if (slot.mode === 'client') return { ...base, slot: name, props };
     try {
       const result = await renderSlotHtml({
         slot: name,
@@ -281,14 +294,13 @@ export class RequestProjection {
         sandbox: slot.sandbox,
       });
       return {
-        type: 'error',
-        message,
+        ...base,
         slot: name,
         html: result.html,
         ...(result.islands.length ? { islands: result.islands } : {}),
       };
     } catch {
-      return { type: 'error', message };
+      return base;
     }
   }
 

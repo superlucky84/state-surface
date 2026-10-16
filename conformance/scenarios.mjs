@@ -160,6 +160,67 @@ export async function scenarios(origin, runtime) {
     assert.equal((await fetch(island.replace(/p=.{4}/, 'p=AAAA'))).status, 400);
     assert.equal((await fetch(island, { headers: { 'x-surface-build': 'old' } })).status, 409);
   });
+  await check(
+    'typed transition: form bodies, 422 validation, PRG 303 and one-time flash',
+    async () => {
+      const form = new URLSearchParams([
+        ['name', 'Ada'],
+        ['tag', 'a'],
+        ['tag', 'b'],
+      ]);
+      const ok = await fetch(url('/transition/form/submit'), {
+        method: 'POST',
+        headers: { ...surface, 'content-type': 'application/x-www-form-urlencoded' },
+        body: form,
+      });
+      assert.equal(ok.status, 200);
+      const [patch] = (await ok.json()).frames;
+      assert.equal(patch.ops[0].html, '<p class="html">{"name":"Ada","tags":["a","b"]}</p>');
+      const invalid = await fetch(url('/transition/form/submit'), {
+        method: 'POST',
+        headers: { ...surface, 'content-type': 'application/json' },
+        body: '{"name":""}',
+      });
+      assert.equal(invalid.status, 422);
+      const [frame] = (await invalid.json()).frames;
+      assert.equal(frame.kind, 'validation');
+      assert.deepEqual(frame.fieldErrors, { name: ['Required'] });
+
+      const multipart = new FormData();
+      multipart.append('name', 'Grace');
+      multipart.append('upload', new Blob(['data'], { type: 'text/plain' }), 'a.txt');
+      multipart.append('_redirect', '/demo/flash');
+      const redirect = await fetch(url('/_surface/action/form/submit'), {
+        method: 'POST',
+        headers: { origin },
+        body: multipart,
+        redirect: 'manual',
+      });
+      assert.equal(redirect.status, 303);
+      assert.equal(redirect.headers.get('location'), '/demo/flash');
+      const cookie = redirect.headers
+        .getSetCookie()
+        .find(value => value.startsWith('surface_flash='));
+      assert.match(cookie, /HttpOnly/);
+      const page = await fetch(url('/flash'), { headers: { cookie: cookie.split(';')[0] } });
+      const html = await page.text();
+      // Files never reach the flash; only the opted-in text field comes back.
+      assert.ok(
+        html.includes('<pre class="flash">{"ok":true,"input":{"name":"Grace"}}</pre>'),
+        html
+      );
+      assert.ok(
+        page.headers.getSetCookie().some(value => /^surface_flash=;.*Max-Age=0/.test(value))
+      );
+      const external = await fetch(url('/_surface/action/form/submit'), {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'name=x&_redirect=//evil.test/',
+        redirect: 'manual',
+      });
+      assert.equal(external.headers.get('location'), '/demo/');
+    }
+  );
   await check('SSR error hook and production masking', async () => {
     const response = await fetch(url('/failure'));
     assert.equal(response.status, 500);

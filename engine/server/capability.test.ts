@@ -191,7 +191,7 @@ describe('deferred slot tokens (DC-21, IC-09)', () => {
   it('rejects secrets shorter than 32 bytes', () => {
     expect(() => assertSecret('short')).toThrow('at least 32 bytes');
     expect(() =>
-      createHandler({ manifest: defineManifest({ routes: [], transitions: [] }), secret: 'short' })
+      createHandler({ manifest: defineManifest({ routes: [], transitions: {} }), secret: 'short' })
     ).toThrow('at least 32 bytes');
   });
 
@@ -230,7 +230,7 @@ describe('deferred slot tokens (DC-21, IC-09)', () => {
             },
           },
         ],
-        transitions: [],
+        transitions: {},
       }),
     });
 

@@ -68,4 +68,43 @@ describe('mountComponent', () => {
     expect(el.querySelector('section > h2')!.textContent).toBe('Card');
     expect(el.querySelector('section > h-children > p')!.textContent).toBe('server child');
   });
+
+  it('keeps what the user typed before hydration, with focus and selection (V-04)', async () => {
+    let seen = '';
+    let checked = false;
+    const Editor = mount((_renew, props: { title: string }) => {
+      return () =>
+        h(
+          'form',
+          {},
+          h('input', {
+            id: 'title',
+            value: props.title,
+            onInput: (event: Event) => (seen = (event.target as HTMLInputElement).value),
+          }),
+          h('input', {
+            id: 'flag',
+            type: 'checkbox',
+            onChange: (event: Event) => (checked = (event.target as HTMLInputElement).checked),
+          }),
+          h('textarea', { id: 'note', value: 'ssr note' })
+        );
+    }) as unknown as TagFunction;
+    const el = host(renderToString(h(Editor, { title: 'snapshot' })));
+    const input = el.querySelector<HTMLInputElement>('#title')!;
+    input.value = 'user edited';
+    input.focus();
+    input.setSelectionRange(2, 4);
+    el.querySelector<HTMLInputElement>('#flag')!.checked = true;
+    mountComponent(Editor, { title: 'snapshot' }, el, { hydrate: true });
+    await tick();
+    expect(el.querySelector('#title')).toBe(input);
+    expect(input.value).toBe('user edited');
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 4]);
+    expect(seen).toBe('user edited');
+    expect(el.querySelector<HTMLInputElement>('#flag')!.checked).toBe(true);
+    expect(checked).toBe(true);
+    expect(el.querySelector<HTMLTextAreaElement>('#note')!.value).toBe('ssr note');
+  });
 });
