@@ -404,6 +404,8 @@ JSON·속성 직렬화 규칙을 통일하고 초기 UI와 hydration의 중복 �
     비교해 변경분만 적용한다. 구현은 **idiomorph**(htmx·Turbo가 사용하는 DOM morph 라이브러리, id 기반 매칭)를
     사용하고 버전을 고정한다. morph 코드는 `swap="morph"` 슬롯이 있는 페이지에서만 로드하며 크기를 NFR-01
     예산에 포함해 측정한다. morph 중에도 내부 아일랜드 경계는 morph 대상에서 제외하고 DC-08 수명 규칙을 따른다.
+    새 HTML의 아일랜드가 componentId·props가 같으면 기존 인스턴스를 유지하고, 다르면 교체해 재활성화한다
+    (IMPLEMENT IC-06).
   - **script 미실행**: 적용하는 HTML 안의 `<script>`는 실행하지 않으며 dev에서 경고한다. 이벤트 핸들러
     속성 등 HTML 안전성은 capability 정책(8장)을 따른다.
   - 입력 보존이 필요하면서 상호작용 로직도 큰 UI는 client 아일랜드로 작성하도록 가이드한다.
@@ -1132,7 +1134,8 @@ trigger: 'link'|'form'|'popstate'|'api', signal }`다. 프로그래밍 이동용
   빌드에서의 재사용을 막는다. 클라이언트는 componentId·props를 바꿀 수 없다.
 - **키 관리**: 키는 빌드 시 자동 생성해 서버 번들에 포함한다. `SURFACE_SECRET` 환경 변수가 있으면 그것을 쓰며,
   다중 인스턴스·키 교체 시 설정한다(이전 키를 `SURFACE_SECRET_PREVIOUS`로 함께 두면 교체 기간에 두 키로 복호화).
-  같은 키로 DC-22 flash 쿠키도 서명한다. 모든 어댑터에서 Web Crypto로 동작한다.
+  같은 루트 키에서 HKDF로 용도별 키를 파생해 DC-22 flash 쿠키 서명(HMAC)과 분리한다(IMPLEMENT IC-09). 모든
+  어댑터에서 Web Crypto로 동작한다.
 - **캐시**: 기본 응답은 `Cache-Control: private, no-store`다. 개인화가 아닌 슬롯은 `cache="public, max-age=…"`로 CDN
   캐시를 허용한다. 토큰이 2KB를 넘으면 POST로 자동 전환하며 이때는 캐시되지 않는다.
 - **순서**: 지연 응답이 오기 전에 같은 슬롯을 대상으로 한 transition 프레임이 적용되었으면 늦게 온 지연 응답을 버린다
@@ -1631,9 +1634,9 @@ const response: Response = await handler.fetch(request, platform);
       ⑥ 다른 origin·POST·reload 링크 제외, `Sec-Purpose: prefetch` 헤더. 근거: 체감 속도 이득이 크면서 낭비가 적고, 로그인·
       언어 전환 뒤 오래된 화면을 보이지 않는다. 10.3. V-22.
 - [x] DC-21 (2026-10-14 결정): 지연 server 슬롯. ① props는 AES-GCM 암호화 토큰(componentId·slotId·buildId 포함)
-      ② 키는 빌드 자동 생성, `SURFACE_SECRET`(+`_PREVIOUS`)로 교체, flash 쿠키와 공유 ③ 기본 `private, no-store`, 슬롯별
-      `cache="public, …"` opt-in, 토큰 2KB 초과 시 POST ④ 선행 transition이 있으면 지연 응답 폐기 ⑤ 1회 재시도 후 fallback
-      유지·reportError ⑥ 병렬 요청, 라우터 이동 후 즉시 요청. 근거: 개인정보가 URL에 노출되지 않고, 개인화 응답이 공유
+      ② 키는 빌드 자동 생성, `SURFACE_SECRET`(+`_PREVIOUS`)로 교체, flash 쿠키와 같은 루트 키(용도별 키는 HKDF 파생,
+      IC-09) ③ 기본 `private, no-store`, 슬롯별 `cache="public, …"` opt-in, 토큰 2KB 초과 시 POST ④ 선행 transition이
+      있으면 지연 응답 폐기 ⑤ 1회 재시도 후 fallback 유지·reportError ⑥ 병렬 요청, 라우터 이동 후 즉시 요청. 근거: 개인정보가 URL에 노출되지 않고, 개인화 응답이 공유
       캐시에 남지 않으며, 공용 슬롯은 CDN 이득을 얻는다. 10.4. V-23.
 - [x] DC-22 (2026-10-14 결정): 타입 지정 액션. ① 별도 액션 개념 없이 `defineTransition({ input, targets, mode, handler })`로
       통합(`actions/` 디렉터리 없음) ② Standard Schema, 검증 실패는 handler 미실행·`validation` fieldErrors ③ JS 없는 폼은
