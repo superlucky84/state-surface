@@ -1,0 +1,12 @@
+{
+  "name": "state-surface-demo",
+  "main": "../../dist/adapter-app/cloudflare/server.mjs",
+  "compatibility_date": "2025-10-15",
+  "assets": {
+    "directory": "../../dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none"
+  },
+  "compatibility_flags": ["enable_request_signal"]
+}

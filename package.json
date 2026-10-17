@@ -136,6 +136,7 @@
     "test:parity": "node conformance/parity.mjs",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "build:adapter-app": "tsx conformance/app-build.ts",
+    "test:adapters": "node e2e/adapters/run.mjs",
     "test:modes": "node e2e/modes/build.mjs && playwright test -c e2e/modes/playwright.config.ts",
     "build:package": "node scripts/build-package.mjs",
     "prepack": "node scripts/build-package.mjs"

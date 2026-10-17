@@ -18,8 +18,10 @@ function relayWith(plugin = definePlugin({ name: 'probe' })) {
     },
   });
   const load = vi.fn(async () => ({
-    createPluginHost: (entries: PagePluginEntry[], report: () => void) =>
-      new PluginHost(entries, { probe: async () => definition }, report),
+    createPluginHost: (
+      entries: PagePluginEntry[],
+      report: ConstructorParameters<typeof PluginHost>[2]
+    ) => new PluginHost(entries, { probe: async () => definition }, report),
   }));
   return { relay: new PluginRelay(load, () => {}), load, attached, cleaned };
 }

@@ -240,8 +240,11 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           ? { resolve: { conditions: [SOURCE_CONDITION, ...defaultClientConditions] } }
           : {}),
         ssr: {
-          noExternal: ['lithent', 'state-surface'],
-          // Workers run the server bundle as a web worker module.
+          // Workers run the server bundle as a web worker module with every dependency
+          // bundled: an external CommonJS package (Prism and its language components)
+          // would be bundled later by wrangler, out of the module evaluation order.
+          noExternal:
+            adapter?.name === 'cloudflare' ? (true as const) : ['lithent', 'state-surface'],
           ...(adapter?.name === 'cloudflare' && user.ssr?.target === undefined
             ? { target: 'webworker' as const }
             : {}),

@@ -20,11 +20,14 @@ export default defineConfig({
     { name: 'demo-parity', testMatch: '**/demo-parity/**/*.spec.ts' },
     { name: 'spikes', testMatch: '**/spikes.spec.ts' },
   ],
-  webServer: {
-    command: 'node dist/server.js',
-    env: { NODE_ENV: 'production', PORT: String(port), BASE_PATH: basePath },
-    url: `http://127.0.0.1:${port}${basePath}/`,
-    reuseExistingServer: false,
-    timeout: 30_000,
-  },
+  // E2E_EXTERNAL: a server started by e2e/adapters/run.mjs (any adapter) is already listening.
+  webServer: process.env.E2E_EXTERNAL
+    ? undefined
+    : {
+        command: 'node dist/server.js',
+        env: { NODE_ENV: 'production', PORT: String(port), BASE_PATH: basePath },
+        url: `http://127.0.0.1:${port}${basePath}/`,
+        reuseExistingServer: false,
+        timeout: 30_000,
+      },
 });

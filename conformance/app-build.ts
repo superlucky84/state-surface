@@ -26,7 +26,7 @@ for (const adapter of [node(), express(), bun(), deno(), cloudflare()]) {
       rollupOptions: { output: { entryFileNames: 'server.mjs' } },
     },
     ssr: {
-      noExternal: ['lithent', 'state-surface'],
+      noExternal: adapter.name === 'cloudflare' ? (true as const) : ['lithent', 'state-surface'],
       target: adapter.name === 'cloudflare' ? 'webworker' : 'node',
     },
   });
