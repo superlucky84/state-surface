@@ -1,5 +1,5 @@
 import { createContext, sequence, type Middleware, type SurfaceContext } from './context.js';
-import type { PageDefinition, ServerManifest } from './manifest.js';
+import { isPrerendered, type PageDefinition, type ServerManifest } from './manifest.js';
 import { renderPage, renderSlotHtml, type DocumentTags, type PageUsage } from '../ssrRenderer.js';
 import { resolveAsset, resolveAssetCss, resolveChunk } from '../assets.js';
 import type { DocumentConfig } from './manifest.js';
@@ -21,6 +21,15 @@ import { validateSchema } from '../../shared/schema.js';
 import { FLASH_COOKIE, openFlash, redirectTarget, sealFlash, type Flash } from '../flash.js';
 import type { ActionMeta } from '../../shared/protocol.js';
 import type { DeferredPayload } from '../ssrRenderer.js';
+import { prerenderFile, prerenderView } from '../prerenderContext.js';
+import {
+  LANG_COOKIE,
+  alternates,
+  i18nContext,
+  isLangPattern,
+  isPrefetch,
+  negotiate,
+} from '../i18n.js';
 
 export interface HandlerOptions {
   manifest: ServerManifest;
@@ -42,6 +51,14 @@ export interface HandlerOptions {
   logger?: Logger;
   middleware?: Middleware[];
   onError?: (error: unknown, ctx: SurfaceContext) => void;
+  /**
+   * The adapter's static file reader (DC-32): prerendered pages answer with the built HTML
+   * (`dist/client/<path>/index.html`) after the middleware ran. Without it (tests, dev) they
+   * render on every request with the prerender context.
+   */
+  readStatic?: (file: string, platform: Record<string, unknown>) => Promise<Response | null>;
+  /** Build only: render prerendered pages, skip middleware and throw errors to the caller. */
+  prerendering?: boolean;
 }
 export interface SurfaceHandler {
   fetch(
@@ -183,10 +200,42 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         ...(definition.mode === 'queue' ? { queue: true as const } : {}),
       };
   const documentTags = createDocumentTags(manifest.document ?? {});
+  const i18n = manifest.i18n;
   const routes = manifest.routes.map(route => ({
     ...route,
     segments: route.pattern.split('/').filter(Boolean),
+    prerender: isPrerendered(route, manifest),
+    // DC-24 ⑤: `routes/[lang]/…` match only configured locales.
+    lang: !!i18n && isLangPattern(route.pattern),
   }));
+  const matches = (route: (typeof routes)[number], segments: string[]) =>
+    route.segments.length === segments.length &&
+    route.segments.every((s, i) => s.startsWith(':') || s === segments[i]) &&
+    (!route.lang || i18n!.locales.includes(segments[0]));
+  // Rendering prerendered dynamic routes on request (dev, no static reader): only listed params.
+  const staticPaths = new Map<(typeof routes)[number], Promise<Set<string>>>();
+  const paramKey = (params: Record<string, string>) =>
+    JSON.stringify(
+      Object.keys(params)
+        .sort()
+        .map(key => [key, params[key]])
+    );
+  const listed = (route: (typeof routes)[number], params: Record<string, string>) => {
+    if (!route.pattern.includes(':')) return Promise.resolve(true);
+    let paths = staticPaths.get(route);
+    if (!paths) {
+      paths = Promise.resolve(route.module.getStaticPaths?.() ?? []).then(
+        list => new Set(list.map(item => paramKey(item))),
+        error => {
+          staticPaths.delete(route);
+          throw error;
+        }
+      );
+      staticPaths.set(route, paths);
+    }
+    return paths.then(set => set.has(paramKey(params)));
+  };
+  const etag = `"${buildId}"`;
   const pages = new Map<string, PageDefinition>();
   for (const route of manifest.routes) if (route.page) pages.set(route.page.id, route.page);
   const report = (error: unknown, ctx: SurfaceContext) => {
@@ -205,7 +254,11 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
       typeof ctx.env[name] === 'string' ? (ctx.env[name] as string) : undefined;
     const current = options.secret ?? env('SURFACE_SECRET') ?? manifest.secret;
     if (!current) throw new Error('Deferred slots need SURFACE_SECRET or a build secret');
-    return { current, previous: options.previousSecret ?? env('SURFACE_SECRET_PREVIOUS') };
+    return {
+      current,
+      previous: options.previousSecret ?? env('SURFACE_SECRET_PREVIOUS'),
+      built: manifest.secret,
+    };
   };
 
   return {
@@ -251,18 +304,53 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
             : undefined;
         let selected: (typeof routes)[number] | undefined;
         if (mounted && ['GET', 'HEAD'].includes(request.method)) {
-          selected = routes.find(
-            route =>
-              route.segments.length === segments.length &&
-              route.segments.every((s, i) => s.startsWith(':') || s === segments[i])
-          );
+          selected = routes.find(route => matches(route, segments));
           if (selected) {
             ctx.params = Object.fromEntries(
               selected.segments.flatMap((s, i) =>
                 s.startsWith(':') ? [[s.slice(1), decodeSegment(segments[i])]] : []
               )
             );
-            ctx.route = { kind: 'page', pattern: selected.pattern, prerendered: false };
+            ctx.route = {
+              kind: 'page',
+              pattern: selected.pattern,
+              prerendered: selected.prerender,
+            };
+            if (selected.lang)
+              ctx.i18n = i18nContext(
+                i18n!,
+                segments[0],
+                segments.slice(1).map(decodeSegment),
+                basePath
+              );
+          }
+        }
+        // Language paths: a path without a language redirects to one, `?lang=xx` switches and
+        // remembers it. Prefetches never switch (the click asks again).
+        let redirect: { lang: string; path: string; remember: boolean } | undefined;
+        const requested = ctx.url.searchParams.get(LANG_COOKIE);
+        const switchTo = requested && i18n?.locales.includes(requested) ? requested : undefined;
+        if (i18n && mounted && ['GET', 'HEAD'].includes(request.method)) {
+          if (selected?.lang && switchTo)
+            redirect = { lang: switchTo, path: ctx.i18n!.path, remember: true };
+          else if (
+            !selected &&
+            routes.some(route => route.lang && matches(route, [i18n.defaultLocale, ...segments]))
+          ) {
+            const cookie = ctx.cookies.get(LANG_COOKIE);
+            redirect = {
+              lang:
+                switchTo ??
+                (cookie && i18n.locales.includes(cookie) ? cookie : undefined) ??
+                negotiate(request.headers.get('accept-language'), i18n.locales) ??
+                i18n.defaultLocale,
+              path: path,
+              remember: !!switchTo,
+            };
+          }
+          if (redirect) {
+            selected = undefined;
+            ctx.route = { kind: 'redirect', prerendered: false };
           }
         }
         if (mounted && request.method === 'POST' && transitionName)
@@ -594,25 +682,77 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
           });
         };
 
+        const notFound = () => new Response('Not Found', { status: 404 });
+        const languageRedirect = (target: NonNullable<typeof redirect>) => {
+          if (target.remember && isPrefetch(request))
+            return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+          if (target.remember) ctx.cookies.set(LANG_COOKIE, target.lang, { maxAge: 31536000 });
+          const query = new URLSearchParams(ctx.url.search);
+          query.delete(LANG_COOKIE);
+          const search = query.size ? `?${query}` : '';
+          const rest = target.path === '/' ? '' : target.path;
+          return new Response(null, {
+            status: 302,
+            headers: {
+              location: `${basePath}/${target.lang}${rest}${search}`,
+              'cache-control': 'private, no-store',
+              vary: 'cookie, accept-language',
+            },
+          });
+        };
         const dispatch = async (): Promise<Response> => {
+          if (ctx.route.kind === 'redirect' && redirect) return languageRedirect(redirect);
+          if (ctx.route.kind === 'page' && selected?.prerender) {
+            // DC-32: the built HTML, after the middleware; ETag is the build identity.
+            if (options.readStatic && !options.prerendering && !options.development) {
+              const file = prerenderFile(segments.map(decodeSegment));
+              const stored = file
+                ? await options.readStatic(file, { ...platform, origin: ctx.url.origin })
+                : null;
+              if (!stored) return notFound();
+              const headers = {
+                'content-type': 'text/html; charset=utf-8',
+                'cache-control': 'public, max-age=0, must-revalidate',
+                etag,
+              };
+              const match = request.headers.get('if-none-match');
+              if (match && match.split(',').some(tag => tag.trim().replace(/^W\//, '') === etag)) {
+                await stored.body?.cancel();
+                return new Response(null, { status: 304, headers });
+              }
+              return new Response(stored.body, { headers });
+            }
+            if (!(await listed(selected, ctx.params))) return notFound();
+          }
           if (ctx.route.kind === 'page' && selected)
             return new Response(
-              await renderPage(selected.module, ctx, {
+              await renderPage(selected.module, selected.prerender ? prerenderView(ctx) : ctx, {
                 plugins: selected.plugins,
                 tags: documentTags,
                 buildId,
                 pageId: selected.page?.id,
                 seal: payload => seal(secrets(ctx), payload),
                 actions: actionMeta,
+                ...(ctx.i18n
+                  ? {
+                      alternates: alternates(
+                        ctx.i18n,
+                        manifest.site ?? (selected.prerender ? '' : ctx.url.origin)
+                      ),
+                    }
+                  : {}),
               }),
               { headers: { 'content-type': 'text/html; charset=utf-8' } }
             );
           if (ctx.route.kind === 'island') return island();
           if (ctx.route.kind === 'transition') return transition();
           if (ctx.route.kind === 'action') return action();
-          return new Response('Not Found', { status: 404 });
+          return notFound();
         };
-        const response = await sequence(...(options.middleware ?? []))(ctx, dispatch);
+        // Build-time rendering runs no request middleware (it runs when the HTML is served).
+        const response = options.prerendering
+          ? await dispatch()
+          : await sequence(...(options.middleware ?? []))(ctx, dispatch);
         const headers = new Headers(response.headers);
         context.lock();
         for (const value of context.outgoing) headers.append('set-cookie', value);
@@ -636,6 +776,7 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
         });
       } catch (error) {
         context.discard();
+        if (options.prerendering) throw error;
         report(error, ctx);
         const status = error instanceof HttpError ? error.status : 500;
         return new Response(

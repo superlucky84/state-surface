@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
-import { assetPath, assetHeaders, type Adapter } from './types.js';
+import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
 
 declare const Bun: {
   env: Record<string, string | undefined>;
@@ -39,8 +39,9 @@ export function bun(options: { staticDir?: string } = {}): Adapter {
 export function serve(
   options: HandlerOptions & { port?: number; staticDir?: string; env?: Record<string, unknown> }
 ) {
-  const handler = createHandler(options);
+  checkBasePath(options.manifest.basePath, options.env ?? Bun.env);
   const adapter = bun(options);
+  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   const env = options.env ?? Bun.env;
   return Bun.serve({

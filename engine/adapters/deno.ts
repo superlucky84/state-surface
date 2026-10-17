@@ -1,5 +1,5 @@
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
-import { assetPath, assetHeaders, type Adapter } from './types.js';
+import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
 
 declare const Deno: {
   readFile(path: string): Promise<Uint8Array>;
@@ -38,10 +38,11 @@ export function deno(options: { staticDir?: string } = {}): Adapter {
 export function serve(
   options: HandlerOptions & { port?: number; staticDir?: string; env?: Record<string, unknown> }
 ) {
-  const handler = createHandler(options);
-  const adapter = deno(options);
-  const base = options.basePath ?? options.manifest.basePath ?? '';
   const env = options.env ?? Deno.env.toObject();
+  checkBasePath(options.manifest.basePath, env);
+  const adapter = deno(options);
+  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
+  const base = options.basePath ?? options.manifest.basePath ?? '';
   return Deno.serve({ port: options.port ?? Number(env.PORT ?? 3000) }, async request => {
     const file = assetPath(request, base);
     return (file ? await adapter.readStatic(file) : null) ?? handler.fetch(request, { env });

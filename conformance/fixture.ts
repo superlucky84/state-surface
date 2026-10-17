@@ -76,10 +76,14 @@ export function fixture(basePath = '/demo'): HandlerOptions {
           return new Response('early', { status: 202, headers: { 'x-early': 'yes' } });
         if (ctx.url.pathname === basePath + '/aborts') return Response.json({ aborted });
         if (ctx.url.pathname === basePath + '/errors') return Response.json({ errors });
+        // DC-32: prerendered HTML passes the middleware, which may answer early.
+        if (ctx.url.pathname === basePath + '/locked' && ctx.cookies.get('pass') !== '1')
+          return new Response('locked', { status: 401 });
         const response = await next();
         const headers = new Headers(response.headers);
         headers.set('x-middleware', 'after');
         headers.set('x-route-kind', ctx.route.kind);
+        headers.set('x-prerendered', String(ctx.route.prerendered));
         return new Response(response.body, { status: response.status, headers });
       },
     ],
@@ -158,6 +162,23 @@ export function fixture(basePath = '/demo'): HandlerOptions {
                 )
               ),
           },
+        },
+        // Prerendered pages: the adapter's static reader serves conformance/public/<path>/index.html.
+        {
+          pattern: '/built',
+          module: { prerender: true, default: () => documentOf(el('p', {}, 'not rendered')) },
+        },
+        {
+          pattern: '/built-docs/:slug',
+          module: {
+            prerender: true,
+            getStaticPaths: () => [{ slug: 'one' }],
+            default: () => documentOf(el('p', {}, 'not rendered')),
+          },
+        },
+        {
+          pattern: '/locked',
+          module: { prerender: true, default: () => documentOf(el('p', {}, 'not rendered')) },
         },
         {
           pattern: '/failure',

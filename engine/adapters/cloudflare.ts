@@ -12,7 +12,11 @@ export function cloudflare(): Adapter {
       const { env, origin } = platform as { env: Bindings; origin: string };
       if (!env.ASSETS) return null;
       const response = await env.ASSETS.fetch(new Request(new URL(path, origin)));
-      if (response.status === 404) return null;
+      // 404, or a redirect of the assets' html_handling: not a stored file.
+      if (!response.ok) {
+        await response.body?.cancel();
+        return null;
+      }
       const headers = new Headers(response.headers);
       for (const [name, value] of Object.entries(assetHeaders(path))) headers.set(name, value);
       return new Response(response.body, { status: response.status, headers });
@@ -20,8 +24,12 @@ export function cloudflare(): Adapter {
   };
 }
 export function worker(options: HandlerOptions & { streamHeartbeatMs?: number }) {
-  const handler = createHandler(options);
   const adapter = cloudflare();
+  // Prerendered HTML comes from the ASSETS binding (`html_handling: "none"`, DC-32 ④).
+  const handler = createHandler({
+    readStatic: (file, platform) => adapter.readStatic(file, platform),
+    ...options,
+  });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   const interval = options.streamHeartbeatMs ?? 250;
   if (!Number.isFinite(interval) || interval <= 0)

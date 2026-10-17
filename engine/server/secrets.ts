@@ -66,6 +66,8 @@ function fromBase64Url(text: string) {
 export interface SecretSource {
   current: string;
   previous?: string;
+  /** The build secret: prerendered pages sealed their deferred slots at build time (DC-24). */
+  built?: string;
 }
 
 /** Encrypt a JSON value into a URL-safe token (AES-GCM, random 96-bit IV). */
@@ -81,11 +83,11 @@ export async function seal(secrets: SecretSource, value: unknown): Promise<strin
   return toBase64Url(token);
 }
 
-/** Decrypt a token with the current secret, then the previous one. Throws when neither works. */
+/** Decrypt with the current secret, the previous one, then the build secret. Throws otherwise. */
 export async function unseal(secrets: SecretSource, token: string): Promise<unknown> {
   const bytes = fromBase64Url(token);
   if (bytes.length < 13) throw new Error('Invalid token');
-  for (const secret of [secrets.current, secrets.previous]) {
+  for (const secret of new Set([secrets.current, secrets.previous, secrets.built])) {
     if (!secret) continue;
     try {
       const plain = await crypto.subtle.decrypt(

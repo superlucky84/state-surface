@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
 import { nodeListener } from './http.js';
 import { installGracefulShutdown } from './gracefulShutdown.js';
-import { assetPath, assetHeaders, type Adapter } from './types.js';
+import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
 import { createLogger } from '../server/logger.js';
 export { installGracefulShutdown } from './gracefulShutdown.js';
 export { nodeListener } from './http.js';
@@ -36,8 +36,9 @@ export function node(options: { staticDir?: string } = {}): Adapter {
 export function createNodeServer(
   options: HandlerOptions & { staticDir?: string; env?: Record<string, unknown>; origin?: string }
 ) {
-  const handler = createHandler(options);
+  checkBasePath(options.manifest.basePath, options.env ?? process.env);
   const adapter = node(options);
+  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   return createServer(
     nodeListener(handler, {

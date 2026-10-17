@@ -4,6 +4,20 @@ export interface Adapter {
   supports: { fs: boolean; imageTransform: boolean; longStream: boolean };
   readStatic(path: string, platform?: unknown): Promise<Response | null>;
 }
+/**
+ * DC-24 ④: BASE_PATH is fixed at build time (asset URLs, prerendered HTML). A different value
+ * in the runtime environment is a deployment mistake reported at startup.
+ */
+export function checkBasePath(built: string | undefined, env: Record<string, unknown>) {
+  const value = env.BASE_PATH;
+  if (typeof value !== 'string') return;
+  const runtime = value === '' || value === '/' ? '' : '/' + value.replace(/^\/+|\/+$/g, '');
+  if (runtime !== (built ?? ''))
+    throw new Error(
+      `BASE_PATH is "${runtime}" at runtime but the app was built with "${built ?? ''}": asset ` +
+        'URLs and prerendered HTML are fixed at build time. Rebuild with the same BASE_PATH.'
+    );
+}
 export const contentType = (path: string) =>
   ({
     js: 'application/javascript; charset=utf-8',

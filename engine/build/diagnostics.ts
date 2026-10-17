@@ -10,11 +10,24 @@ export class SurfaceBuildError extends Error {
 
   constructor(
     message: string,
-    where: { file?: string; code?: string; offset?: number; hint?: string } = {}
+    where: {
+      file?: string;
+      code?: string;
+      offset?: number;
+      /** 1-based line and column, e.g. from a stack frame (needs `code` for the frame). */
+      line?: number;
+      column?: number;
+      hint?: string;
+    } = {}
   ) {
+    const offset =
+      where.offset ??
+      (where.code !== undefined && where.line !== undefined
+        ? offsetOf(where.code, where.line, where.column ?? 1)
+        : undefined);
     const position =
-      where.file && where.code !== undefined && where.offset !== undefined
-        ? locate(where.code, where.offset)
+      where.file && where.code !== undefined && offset !== undefined
+        ? locate(where.code, offset)
         : undefined;
     const prefix = where.file
       ? `${where.file}${position ? `:${position.line}:${position.column + 1}` : ''}: `
@@ -27,6 +40,16 @@ export class SurfaceBuildError extends Error {
       this.frame = codeFrame(where.code!, position.line);
     }
   }
+}
+
+function offsetOf(code: string, line: number, column: number) {
+  let offset = 0;
+  for (let current = 1; current < line; current++) {
+    const next = code.indexOf('\n', offset);
+    if (next < 0) break;
+    offset = next + 1;
+  }
+  return offset + Math.max(0, column - 1);
 }
 
 export function locate(code: string, offset: number) {

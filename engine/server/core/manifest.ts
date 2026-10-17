@@ -3,6 +3,7 @@ import type { SlotMode } from '../../shared/surfaceTree.js';
 import { TRANSITION_NAME, toDefinition, type TransitionDefinition } from '../transition.js';
 import type { StandardSchema } from '../../shared/schema.js';
 import type { PagePlugin } from '../ssrRenderer.js';
+import { checkI18n, type I18nConfig } from '../i18n.js';
 
 /** Vite build manifest entries (keys are project-relative source paths). */
 export type AssetManifest = Record<
@@ -64,7 +65,19 @@ export interface ServerManifest {
   secret?: string;
   /** componentId → server component for server slots and deferred responses. */
   components?: Record<string, unknown>;
+  /** `surface({ prerender: true })`: pages prerender unless they export `prerender = false`. */
+  prerender?: boolean;
+  /** Language paths for `routes/[lang]/…` (DC-24 ⑤). */
+  i18n?: I18nConfig;
+  /** Public origin (`https://example.com`) for hreflang/canonical links of prerendered pages. */
+  site?: string;
 }
+
+/** DC-24 ①: the page option wins over the build default. */
+export function isPrerendered(route: ServerRoute, manifest: Pick<ServerManifest, 'prerender'>) {
+  return route.module.prerender ?? manifest.prerender ?? false;
+}
+
 export function defineManifest(input: {
   routes: ServerManifest['routes'];
   /** Name (path under `transitions/`) → default export: a definition or a bare handler. */
@@ -75,7 +88,13 @@ export function defineManifest(input: {
   buildId?: string;
   secret?: string;
   components?: Record<string, unknown>;
+  prerender?: boolean;
+  i18n?: I18nConfig;
+  site?: string;
 }): ServerManifest {
+  if (input.i18n) checkI18n(input.i18n);
+  if (input.site !== undefined && !/^https?:\/\/[^/]+$/.test(input.site))
+    throw new Error(`site must be an origin like "https://example.com" (got "${input.site}")`);
   const transitions: Record<string, TransitionDefinition> = Object.create(null);
   for (const [name, value] of Object.entries(input.transitions)) {
     if (!TRANSITION_NAME.test(name))
@@ -91,6 +110,16 @@ export function defineManifest(input: {
     if (typeof route.module?.default !== 'function')
       throw new Error(`Page ${route.pattern} must default-export a page function`);
     patterns.add(route.pattern);
+    // DC-24 ②: a prerendered dynamic route lists its params.
+    if (
+      route.pattern.includes(':') &&
+      isPrerendered(route, input) &&
+      typeof route.module.getStaticPaths !== 'function'
+    )
+      throw new Error(
+        `Page ${route.page?.id ?? route.pattern} is prerendered and has dynamic params: ` +
+          'export getStaticPaths() returning the params to build'
+      );
     if (!route.page) continue;
     if (pages.has(route.page.id)) throw new Error(`Duplicate page id: ${route.page.id}`);
     pages.add(route.page.id);

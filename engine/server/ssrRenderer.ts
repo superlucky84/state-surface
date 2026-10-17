@@ -20,6 +20,7 @@ import type { ActionMeta, IslandMeta, PluginMeta, SlotMeta } from '../shared/pro
 import { RICH, URL_ATTRIBUTES, neutralizeScripts, safeUrl } from '../shared/capability.js';
 import { readServerComponent } from './serverComponent.js';
 import { buildSurfaceScript } from './ssr.js';
+import { nonceOf } from './prerenderContext.js';
 
 /** A client plugin declared by the page or a module it imports (build-time analysis). */
 export type PagePlugin = PluginMeta;
@@ -76,6 +77,8 @@ export interface PageRenderOptions {
   seal?: (payload: DeferredPayload) => Promise<string>;
   /** Targets and queue mode of transitions, for browser concurrency (DC-11). */
   actions?: Record<string, ActionMeta>;
+  /** `<link rel="alternate" hreflang>` (language paths, DC-24 ⑤). */
+  alternates?: Array<{ hreflang: string; href: string }>;
 }
 
 /**
@@ -249,8 +252,11 @@ export async function renderPage(
   };
   usage.engine = usage.components.length > 0 || usage.actions || plugins.length > 0 || usage.router;
   const tags = options.tags?.(usage) ?? { styles: [], preload: [] };
+  // A prerendered page has no per-request nonce (DESIGN 10.7: `script-src 'self'` CSPs).
+  const nonce = nonceOf(ctx);
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : '';
   const script = (src: string) =>
-    `<script type="module" src="${escapeAttr(src)}" nonce="${ctx.nonce}" data-ss></script>`;
+    `<script type="module" src="${escapeAttr(src)}"${nonceAttr} data-ss></script>`;
   // An app entry on an engine-less page still learns the build, page and base path.
   const bootstrap =
     usage.engine || tags.appEntry
@@ -271,16 +277,20 @@ export async function renderPage(
   // DC-20 ③: without the router, links opt into browser prefetch through Speculation Rules.
   const speculation =
     !state.router && state.prefetch.size
-      ? `<script type="speculationrules" nonce="${ctx.nonce}" data-ss>${speculationRules(state.prefetch)}</script>`
+      ? `<script type="speculationrules"${nonceAttr} data-ss>${speculationRules(state.prefetch)}</script>`
       : '';
   // Order (DESIGN 4.4): CSS → modulepreload → __SURFACE__ → app entry → engine entry.
   const managed =
+    (options.alternates ?? [])
+      .map(
+        link =>
+          `<link rel="alternate" hreflang="${escapeAttr(link.hreflang)}" href="${escapeAttr(link.href)}" data-ss>`
+      )
+      .join('') +
     tags.styles.map(href => `<link rel="stylesheet" href="${escapeAttr(href)}" data-ss>`).join('') +
     // Preloads fetch scripts: a nonce-based CSP checks them like the scripts (DESIGN 8.2).
     tags.preload
-      .map(
-        href => `<link rel="modulepreload" href="${escapeAttr(href)}" nonce="${ctx.nonce}" data-ss>`
-      )
+      .map(href => `<link rel="modulepreload" href="${escapeAttr(href)}"${nonceAttr} data-ss>`)
       .join('') +
     speculation +
     bootstrap +

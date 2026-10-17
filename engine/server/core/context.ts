@@ -1,6 +1,7 @@
 import type { Logger } from '../logger.js';
 import type { StateFrame } from '../../shared/protocol.js';
 import type { Flash } from '../flash.js';
+import type { I18nContext } from '../i18n.js';
 
 declare global {
   namespace App {
@@ -32,8 +33,10 @@ export interface SurfaceContext {
   platform: unknown;
   nonce: string;
   basePath: string;
+  /** Pages under `routes/[lang]/` (DC-24 ⑤): the language and links to this page in others. */
+  i18n?: I18nContext;
   route: {
-    kind: 'page' | 'transition' | 'action' | 'island' | 'not-found';
+    kind: 'page' | 'transition' | 'action' | 'island' | 'redirect' | 'not-found';
     pattern?: string;
     name?: string;
     prerendered: boolean;

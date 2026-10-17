@@ -261,6 +261,38 @@ export async function scenarios(origin, runtime) {
     }
     assert.equal(after.aborted, before.aborted + 1);
   });
+  await check(
+    'prerendered HTML through the middleware: headers, ETag/304, early response',
+    async () => {
+      const response = await fetch(url('/built'));
+      assert.equal(response.status, 200);
+      assert.equal((await response.text()).trim(), '<!doctype html><p>built-marker /built</p>');
+      assert.equal(response.headers.get('x-middleware'), 'after');
+      assert.equal(response.headers.get('x-route-kind'), 'page');
+      assert.equal(response.headers.get('x-prerendered'), 'true');
+      assert.match(response.headers.get('content-type'), /text\/html/);
+      assert.equal(response.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
+      // Deno.serve compresses the body and weakens the ETag; the core ignores W/ when matching.
+      const etag = response.headers.get('etag');
+      assert.equal(etag.replace(/^W\//, ''), '"conformance-build"');
+      const cached = await fetch(url('/built'), { headers: { 'if-none-match': etag } });
+      assert.equal(cached.status, 304);
+      assert.equal(await cached.text(), '');
+      const head = await fetch(url('/built'), { method: 'HEAD' });
+      assert.equal(head.status, 200);
+      assert.equal(await head.text(), '');
+      const doc = await fetch(url('/built-docs/one'));
+      assert.equal((await doc.text()).trim(), '<!doctype html><p>built-marker /built-docs/one</p>');
+      const missing = await fetch(url('/built-docs/two'));
+      assert.equal(missing.status, 404);
+      await missing.body?.cancel();
+      const locked = await fetch(url('/locked'));
+      assert.equal(locked.status, 401);
+      assert.equal(await locked.text(), 'locked');
+      const unlocked = await fetch(url('/locked'), { headers: { cookie: 'pass=1' } });
+      assert.equal((await unlocked.text()).trim(), '<!doctype html><p>built-marker /locked</p>');
+    }
+  );
   await check('static asset MIME, cache, HEAD and traversal boundary', async () => {
     const response = await fetch(url('/assets/probe-12345678.js'));
     assert.equal(response.status, 200);

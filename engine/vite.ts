@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
@@ -9,12 +9,18 @@ import { SurfaceAnalyzer, type ExportRef, type FactsCache } from './build/app.js
 import { transformSurface } from './build/transform.js';
 import { SurfaceBuildError } from './build/diagnostics.js';
 import { nodeListener } from './adapters/http.js';
+import { scanRoutes } from './build/routeScanner.js';
+import { prerender } from './build/prerender.js';
 import type { Adapter } from './adapters/types.js';
 
 const VIRTUAL = 'virtual:state-surface/manifest';
 const ISLANDS = 'virtual:state-surface/islands';
 const PLUGINS = 'virtual:state-surface/plugins';
 const ENTRY = 'virtual:state-surface/entry';
+const PRERENDER = 'virtual:state-surface/prerender';
+// Set while the plugin builds the prerender bundle (no nested prerendering, same secret).
+const PRERENDER_BUILD = 'STATE_SURFACE_PRERENDER_BUILD';
+const BUILD_SECRET = 'STATE_SURFACE_BUILD_SECRET';
 const ENGINE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ENGINE_CLIENT = {
   loader: path.join(ENGINE_DIR, 'client/loader.ts'),
@@ -35,6 +41,30 @@ export interface SurfacePluginOptions {
   clientEntry?: string;
   /** Global stylesheets linked on every page. Default `client/styles.css` when present. */
   styles?: string[];
+  /**
+   * Prerender every page by default (DC-24 ①); pages opt out with
+   * `export const prerender = false`. Default: pages opt in with `prerender = true`.
+   */
+  prerender?: boolean;
+  /**
+   * Language paths (DC-24 ⑤): pages under `routes/[lang]/` answer `/en/…`, `/ko/…`; paths
+   * without a language redirect (cookie → Accept-Language → `defaultLocale`).
+   */
+  i18n?: { locales: string[]; defaultLocale: string };
+  /** Public origin for hreflang/canonical links in prerendered HTML (`https://example.com`). */
+  site?: string;
+}
+
+/** Pages that may prerender: the option, or a `prerender` export (its value decides later). */
+async function mayPrerender(root: string, all: boolean) {
+  if (all) return true;
+  const routes = await scanRoutes(path.join(root, 'routes')).catch(() => []);
+  for (const route of routes) {
+    const code = await readFile(route.filePath, 'utf8');
+    if (/export\s+(?:const|let|var)\s+prerender\b|export\s*\{[^}]*\bprerender\b/.test(code))
+      return true;
+  }
+  return false;
 }
 
 /** Server-only modules (DC-02): marker import, `*.server.*` files and Node builtins. */
@@ -53,7 +83,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
   const facts: FactsCache = new Map();
   // Root secret for deferred-slot tokens and flash (IC-09) when SURFACE_SECRET is unset:
   // one per build (shared by every instance of that build) or per dev server.
-  const secret = randomBytes(32).toString('base64url');
+  const secret = process.env[BUILD_SECRET] ?? randomBytes(32).toString('base64url');
   let analyzed = new Set<string>();
   // Each hook (and Vite environment) resolves with its own plugin context.
   const analyzerFor = (context: PluginContext) =>
@@ -126,6 +156,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       if (id === ISLANDS) return '\0' + ISLANDS;
       if (id === PLUGINS) return '\0' + PLUGINS;
       if (id === ENTRY || id === path.resolve(config.root, ENTRY)) return '\0' + ENTRY;
+      if (id === PRERENDER || id === path.resolve(config.root, PRERENDER)) return '\0' + PRERENDER;
       // Dev reports server-only imports immediately; builds report the full chain in buildEnd.
       // Vitest's DOM environments are "client" too but mix server and browser code on purpose.
       if (
@@ -166,6 +197,8 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         );
     },
     async load(id) {
+      if (id === '\0' + PRERENDER)
+        return `export { default as manifest } from '${VIRTUAL}';export { createHandler, isPrerendered } from 'state-surface/internal/prerender';`;
       if (id === '\0' + ENTRY) {
         const name = adapter?.name ?? 'node';
         if (name === 'cloudflare')
@@ -260,7 +293,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           ([file, local]) => `import * as ${local} from ${JSON.stringify(file)};`
         ),
         `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:{${transitions.map((transition, i) => `${JSON.stringify(transition.name)}:transition${i}`).join(',')}}});`,
+        `export default defineManifest({${options.prerender ? 'prerender:true,' : ''}${options.i18n ? `i18n:${JSON.stringify(options.i18n)},` : ''}${options.site ? `site:${JSON.stringify(options.site)},` : ''}basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:{${transitions.map((transition, i) => `${JSON.stringify(transition.name)}:transition${i}`).join(',')}}});`,
       ].join('\n');
     },
     async transform(code, id) {
@@ -269,6 +302,72 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       const analyzer = analyzerFor(this);
       if (!analyzer.isProjectFile(file)) return;
       return transformSurface(code, file, analyzer).catch(forRollup);
+    },
+    /**
+     * DC-24 ④: after the server build, build a prerender bundle with the same configuration
+     * (the server bundle stays as configured) and render the prerendered pages with it into
+     * `dist/client/<path>/index.html`.
+     */
+    async closeBundle(error?: Error) {
+      if (
+        error ||
+        config.command !== 'build' ||
+        !config.build.ssr ||
+        isClient(this) ||
+        process.env.VITEST ||
+        process.env[PRERENDER_BUILD]
+      )
+        return;
+      if (!(await mayPrerender(config.root, !!options.prerender))) return;
+      const outDir = path.join(config.cacheDir, '..', '.state-surface', 'prerender');
+      const inline = config.inlineConfig;
+      const { build } = await import('vite');
+      const previous = { build: process.env[PRERENDER_BUILD], secret: process.env[BUILD_SECRET] };
+      process.env[PRERENDER_BUILD] = '1';
+      process.env[BUILD_SECRET] = secret;
+      try {
+        await build({
+          ...inline,
+          logLevel: 'warn',
+          build: {
+            ...inline.build,
+            ssr: PRERENDER,
+            outDir,
+            emptyOutDir: true,
+            sourcemap: true,
+            minify: false,
+            copyPublicDir: false,
+            rollupOptions: {
+              ...inline.build?.rollupOptions,
+              output: { entryFileNames: 'prerender.mjs', format: 'es' },
+            },
+          },
+          ssr: { ...inline.ssr, target: 'node' },
+        });
+      } finally {
+        for (const [key, value] of [
+          [PRERENDER_BUILD, previous.build],
+          [BUILD_SECRET, previous.secret],
+        ] as const)
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+      }
+      try {
+        const pages = await prerender(path.join(outDir, 'prerender.mjs'), {
+          root: config.root,
+          engineDir: ENGINE_DIR,
+          clientDir: path.join(config.root, 'dist/client'),
+          env: process.env,
+        });
+        if (pages.length)
+          config.logger.info(
+            `[state-surface] prerendered ${pages.length} page${pages.length === 1 ? '' : 's'}`
+          );
+      } catch (failure) {
+        forRollup(failure);
+      } finally {
+        await rm(outDir, { recursive: true, force: true });
+      }
     },
     async buildStart() {
       // Editors and tsc read the action type map before any manifest is generated.
