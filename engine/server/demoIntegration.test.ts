@@ -62,8 +62,8 @@ describe('server stream → browser apply', () => {
     expect(readBootstrap(document).boot).toBeUndefined();
     expect(document.querySelector('h-state[name="guide:content"]')).toBeNull();
     expect(document.querySelector('.animate-pulse')).toBeNull();
-    expect(document.querySelectorAll('article.guide-article section').length).toBeGreaterThan(1);
-    expect(document.querySelector('article.guide-article .token.keyword')).not.toBeNull();
+    expect(document.querySelectorAll('article section').length).toBeGreaterThan(1);
+    expect(document.querySelector('article .token.keyword')).not.toBeNull();
     expect(text('guide:toc')).toContain('Surface');
     // Nothing runs on load: the HTML is the guide.
     expect(requests).toEqual([]);

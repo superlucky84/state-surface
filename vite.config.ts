@@ -1,11 +1,8 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { surface } from './engine/vite.js';
 import { DEFAULT_LOCALE, LOCALES } from './shared/locales.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rawBase = process.env.BASE_PATH;
 const base = rawBase ? `${rawBase.replace(/\/$/, '')}/` : '/';
 
@@ -23,21 +20,5 @@ export default defineConfig({
   },
   ssr: {
     noExternal: ['lithent', 'state-surface'],
-  },
-  resolve: {
-    alias: [
-      {
-        find: /^state-surface\/server$/,
-        replacement: path.resolve(__dirname, 'engine/server.ts'),
-      },
-      {
-        find: /^state-surface\/client$/,
-        replacement: path.resolve(__dirname, 'engine/client.ts'),
-      },
-      {
-        find: /^state-surface$/,
-        replacement: path.resolve(__dirname, 'engine/index.ts'),
-      },
-    ],
   },
 });

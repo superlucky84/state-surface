@@ -1,4 +1,7 @@
 import { schedule } from './scheduler.js';
+import { warning } from './trace.js';
+
+const DEV = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 export type SlotKind = 'client' | 'static' | 'server';
 
@@ -78,10 +81,13 @@ export class PluginHost {
   private cancels: Array<() => void> = [];
   private generation = 0;
 
+  private warnedOwnership = new Set<string>();
+
   constructor(
     private entries: PagePluginEntry[],
     private loaders: Record<string, (() => Promise<PluginDefinition>) | undefined>,
-    private report: Report = () => {}
+    private report: Report = () => {},
+    private development = DEV
   ) {}
 
   start(root: ParentNode = document) {
@@ -165,12 +171,48 @@ export class PluginHost {
     return !entry.slots?.length || entry.slots.includes(name);
   }
 
-  private call(plugin: PluginDefinition, hook: string, run: () => void) {
+  private call(plugin: PluginDefinition, hook: string, run: () => void, slot?: string) {
+    const observed = slot !== undefined && this.development ? this.displayed.get(slot) : undefined;
+    const observer = observed && typeof MutationObserver !== 'undefined' && watchOwned(observed);
     try {
       run();
     } catch (error) {
       this.report(error, { plugin: plugin.name, hook });
+    } finally {
+      if (observer) this.checkOwnership(plugin, hook, slot!, observed!, observer);
     }
+  }
+
+  /**
+   * Dev (DESIGN 3.1): a plugin enhances slot DOM but never changes what Lithent renders, the
+   * inside of client slots and islands; such changes are lost on the next render or break
+   * hydration.
+   */
+  private checkOwnership(
+    plugin: PluginDefinition,
+    hook: string,
+    slot: string,
+    { el, mode }: DisplayedSlot,
+    observer: MutationObserver
+  ) {
+    const records = observer.takeRecords();
+    observer.disconnect();
+    const owned = records.find(record => {
+      const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      if (!target || !el.contains(target)) return false;
+      if (mode === 'client') return target !== el;
+      return !!target.closest('h-island') && el.contains(target.closest('h-island'));
+    });
+    const key = `${plugin.name}\0${slot}`;
+    if (!owned || this.warnedOwnership.has(key)) return;
+    this.warnedOwnership.add(key);
+    warning(
+      `plugin "${plugin.name}" changed DOM inside ${mode === 'client' ? `client slot "${slot}"` : `an island of slot "${slot}"`} during ${hook}. ` +
+        'Lithent owns that DOM: the change is lost on the next render. Change the component, or ' +
+        'enhance the slot element outside its islands.',
+      true,
+      { plugin: plugin.name, slot, hook }
+    );
   }
 
   private attach(
@@ -184,19 +226,29 @@ export class PluginHost {
     // A persisted slot is already attached: the plugin sees the same DOM again (DC-12/DC-19).
     if (plugins?.has(plugin)) {
       if (plugin.update)
-        this.call(plugin, 'update', () => plugin.update!(slot.el, { slot: name, mode: slot.mode }));
+        this.call(
+          plugin,
+          'update',
+          () => plugin.update!(slot.el, { slot: name, mode: slot.mode }),
+          name
+        );
       return;
     }
     if (!plugin.attach) return;
     if (!plugins) this.attached.set(name, (plugins = new Set()));
     plugins.add(plugin);
-    this.call(plugin, 'attach', () => {
-      const cleanup = plugin.attach!(slot.el, { slot: name, mode: slot.mode });
-      if (typeof cleanup !== 'function') return;
-      let slotCleanups = this.cleanups.get(name);
-      if (!slotCleanups) this.cleanups.set(name, (slotCleanups = new Map()));
-      slotCleanups.set(plugin, cleanup);
-    });
+    this.call(
+      plugin,
+      'attach',
+      () => {
+        const cleanup = plugin.attach!(slot.el, { slot: name, mode: slot.mode });
+        if (typeof cleanup !== 'function') return;
+        let slotCleanups = this.cleanups.get(name);
+        if (!slotCleanups) this.cleanups.set(name, (slotCleanups = new Map()));
+        slotCleanups.set(plugin, cleanup);
+      },
+      name
+    );
   }
 
   /** Slot DOM is ready (SSR content of static/server slots, client activation or render). */
@@ -212,7 +264,12 @@ export class PluginHost {
     if (!slot) return;
     for (const { entry, plugin } of this.loaded)
       if (this.matches(entry, name) && plugin.update)
-        this.call(plugin, 'update', () => plugin.update!(slot.el, { slot: name, mode: slot.mode }));
+        this.call(
+          plugin,
+          'update',
+          () => plugin.update!(slot.el, { slot: name, mode: slot.mode }),
+          name
+        );
   }
 
   /** Called before the slot DOM is cleared. */
@@ -233,4 +290,11 @@ export class PluginHost {
     for (const { plugin } of this.loaded)
       if (plugin.onAction) this.call(plugin, 'onAction', () => plugin.onAction!(event));
   }
+}
+
+/** Records the mutations a plugin hook makes synchronously in its slot. */
+function watchOwned({ el }: DisplayedSlot) {
+  const observer = new MutationObserver(() => {});
+  observer.observe(el, { subtree: true, childList: true, attributes: true, characterData: true });
+  return observer;
 }

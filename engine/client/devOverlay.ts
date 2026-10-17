@@ -1,4 +1,4 @@
-import type { TraceEvent } from './stateSurface.js';
+import { onTrace, type TraceEvent } from './trace.js';
 import type { StateSurface } from './stateSurface.js';
 
 const OVERLAY_ID = 'state-surface-dev-overlay';
@@ -9,6 +9,7 @@ const OVERLAY_ID = 'state-surface-dev-overlay';
  *
  * Shows:
  *  - Current activeStates (live-updated)
+ *  - Runtime warnings (frame violations, unknown slots, plugin DOM ownership)
  *  - Recent trace event log (last 50)
  *
  * Returns a detach function, or undefined if debug mode is not active.
@@ -20,18 +21,22 @@ export function attachDevOverlay(surface: StateSurface): (() => void) | undefine
   document.body.appendChild(overlay);
 
   const statesPanel = overlay.querySelector<HTMLElement>('[data-panel="states"]')!;
+  const warningsPanel = overlay.querySelector<HTMLElement>('[data-panel="warnings"]')!;
   const logPanel = overlay.querySelector<HTMLElement>('[data-panel="log"]')!;
   const logEntries: string[] = [];
+  const warnings: string[] = [];
   const MAX_LOG = 50;
 
-  // Wire trace hook — chain with existing trace if present
-  const prevTrace = surface.trace;
-  surface.trace = (event: TraceEvent) => {
-    prevTrace?.(event);
-    onTrace(event);
-  };
+  // Every trace event of the page, whoever emits it (runtime, plugin host, router).
+  const unsubscribe = onTrace(show);
 
-  function onTrace(event: TraceEvent) {
+  function show(event: TraceEvent) {
+    if (event.kind === 'warning') {
+      const { message } = (event.detail ?? {}) as { message?: string };
+      if (message && !warnings.includes(message)) warnings.push(message);
+      warningsPanel.textContent = warnings.join('\n');
+      warningsPanel.parentElement!.style.display = '';
+    }
     // Update states panel (include activeUi when non-empty)
     const uiKeys = Object.keys(surface.activeUi);
     const stateDisplay =
@@ -58,7 +63,7 @@ export function attachDevOverlay(surface: StateSurface): (() => void) | undefine
   statesPanel.textContent = JSON.stringify(initDisplay, null, 2);
 
   function detach() {
-    surface.trace = prevTrace;
+    unsubscribe();
     overlay.remove();
   }
 
@@ -111,6 +116,10 @@ function createOverlayElement(): HTMLElement {
       <div style="padding:6px 10px;border-bottom:1px solid #333;">
         <div style="margin-bottom:4px;color:#0f3460;font-weight:bold;color:#a0c4ff;">activeStates</div>
         <pre data-panel="states" style="margin:0;max-height:120px;overflow:auto;white-space:pre-wrap;word-break:break-all;"></pre>
+      </div>
+      <div style="display:none;padding:6px 10px;border-bottom:1px solid #333;">
+        <div style="margin-bottom:4px;font-weight:bold;color:#ffd166;">Warnings</div>
+        <pre data-panel="warnings" style="margin:0;max-height:120px;overflow:auto;white-space:pre-wrap;word-break:break-all;color:#ffd166;"></pre>
       </div>
       <div style="padding:6px 10px;">
         <div style="margin-bottom:4px;font-weight:bold;color:#a0c4ff;">Trace Log</div>

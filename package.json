@@ -3,28 +3,88 @@
   "version": "0.1.0",
   "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
-  "types": "./engine/index.ts",
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "state-surface": "./lib/cli.js"
+  },
   "exports": {
-    ".": "./engine/index.ts",
-    "./server": "./engine/server.ts",
-    "./client": "./engine/client.ts",
-    "./vite": "./engine/vite.ts",
-    "./rich": "./engine/rich.ts",
-    "./content": "./engine/content.ts",
-    "./adapters/*": "./engine/adapters/*.ts",
-    "./internal/assets": "./engine/server/assets.ts",
-    "./internal/basePath": "./engine/shared/basePath.ts",
-    "./internal/images": "./engine/shared/image.ts",
-    "./internal/island": "./engine/island.ts",
-    "./internal/prerender": "./engine/server/prerenderEntry.ts",
+    ".": {
+      "state-surface-source": "./engine/index.ts",
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./server": {
+      "state-surface-source": "./engine/server.ts",
+      "types": "./lib/server.d.ts",
+      "default": "./lib/server.js"
+    },
+    "./client": {
+      "state-surface-source": "./engine/client.ts",
+      "types": "./lib/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./vite": {
+      "state-surface-source": "./engine/vite.ts",
+      "types": "./lib/vite.d.ts",
+      "default": "./lib/vite.js"
+    },
+    "./rich": {
+      "state-surface-source": "./engine/rich.ts",
+      "types": "./lib/rich.d.ts",
+      "default": "./lib/rich.js"
+    },
+    "./content": {
+      "state-surface-source": "./engine/content.ts",
+      "types": "./lib/content.d.ts",
+      "default": "./lib/content.js"
+    },
+    "./adapters/*": {
+      "state-surface-source": "./engine/adapters/*.ts",
+      "types": "./lib/adapters/*.d.ts",
+      "default": "./lib/adapters/*.js"
+    },
+    "./internal/assets": {
+      "state-surface-source": "./engine/server/assets.ts",
+      "types": "./lib/server/assets.d.ts",
+      "default": "./lib/server/assets.js"
+    },
+    "./internal/basePath": {
+      "state-surface-source": "./engine/shared/basePath.ts",
+      "types": "./lib/shared/basePath.d.ts",
+      "default": "./lib/shared/basePath.js"
+    },
+    "./internal/images": {
+      "state-surface-source": "./engine/shared/image.ts",
+      "types": "./lib/shared/image.d.ts",
+      "default": "./lib/shared/image.js"
+    },
+    "./internal/island": {
+      "state-surface-source": "./engine/island.ts",
+      "types": "./lib/island.d.ts",
+      "default": "./lib/island.js"
+    },
+    "./internal/prerender": {
+      "state-surface-source": "./engine/server/prerenderEntry.ts",
+      "types": "./lib/server/prerenderEntry.d.ts",
+      "default": "./lib/server/prerenderEntry.js"
+    },
     "./server-only": {
-      "browser": "./engine/serverOnly.browser.ts",
-      "default": "./engine/serverOnly.ts"
+      "state-surface-source": {
+        "browser": "./engine/serverOnly.browser.ts",
+        "default": "./engine/serverOnly.ts"
+      },
+      "browser": {
+        "types": "./lib/serverOnly.browser.d.ts",
+        "default": "./lib/serverOnly.browser.js"
+      },
+      "default": {
+        "types": "./lib/serverOnly.d.ts",
+        "default": "./lib/serverOnly.js"
+      }
     }
   },
   "files": [
-    "engine/**/*.ts",
-    "!engine/**/*.test.ts",
+    "lib",
     "README.md",
     "LICENSE"
   ],
@@ -70,10 +130,13 @@
     "build:conformance": "node conformance/build.mjs",
     "test:conformance": "node conformance/run.mjs",
     "check:core": "node conformance/guard.mjs",
+    "check": "tsx engine/cli.ts check",
     "test:parity": "node conformance/parity.mjs",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "build:adapter-app": "tsx conformance/app-build.ts",
-    "test:modes": "node e2e/modes/build.mjs && playwright test -c e2e/modes/playwright.config.ts"
+    "test:modes": "node e2e/modes/build.mjs && playwright test -c e2e/modes/playwright.config.ts",
+    "build:package": "node scripts/build-package.mjs",
+    "prepack": "node scripts/build-package.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -115,6 +178,7 @@
     "oxc-parser": "0.94.0",
     "prismjs": "^1.30.0",
     "sharp": "0.35.5",
+    "source-map": "0.7.6",
     "yaml": "2.8.1"
   },
   "peerDependencies": {

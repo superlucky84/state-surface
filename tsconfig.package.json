@@ -1,0 +1,24 @@
+{
+  "//": "IC-05: the published package is engine/ compiled to lib/ (ESM JS, .d.ts, source maps).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "lithent",
+    "types": ["node"],
+    "rootDir": "engine",
+    "outDir": "lib",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "inlineSources": true,
+    "noEmitOnError": true,
+    "stripInternal": false
+  },
+  "include": ["engine/**/*.ts"],
+  "exclude": ["engine/**/*.test.ts", "engine/**/*.test.tsx", "engine/**/__fixtures__/**", "engine/**/__snapshots__/**"]
+}

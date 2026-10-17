@@ -9,7 +9,7 @@ const engine = (file: string) => path.resolve(root, '../../../engine', file);
 
 export default defineConfig({
   root,
-  plugins: [surface()],
+  plugins: [surface({ sourcemap: 'hidden' })],
   logLevel: 'warn',
   build: { outDir: 'dist/client', manifest: true, emptyOutDir: true },
   ssr: { noExternal: ['lithent', 'state-surface'] },

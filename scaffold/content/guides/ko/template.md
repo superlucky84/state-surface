@@ -228,6 +228,37 @@ mount 시점에 구조 분해하지 말고 반환한 렌더 함수 안에서 `pr
 `<Slot mode="server">`의 자식(또는 `component`)만 server 컴포넌트가 될 수 있습니다. 브라우저용이라면 일반 컴포넌트를 작성하고 데이터를 props로 보내세요.
 :::
 
+## 범위 CSS {#styles}
+
+일반 스타일은 마크업의 유틸리티로 쓰고, 유틸리티로 표현하기 어려운 것(container query, 복잡한 선택자, keyframes)은 컴포넌트 옆 `*.module.css` 파일에 씁니다. 클래스 이름이 파일마다 해시되므로 컴포넌트가 쓴 곳에만 적용되고, 전역은 `:global()`로 명시합니다. 페이지에 필요한 CSS는 빌드가 연결합니다. static·server 컴포넌트의 CSS Modules는 `<head>`의 페이지 스타일시트로, 아일랜드의 CSS는 청크와 함께 활성화 전에 연결되며, 클라이언트 이동은 다음 페이지의 스타일시트를 교체 전에 불러옵니다. SSR·server HTML 교체·client 렌더가 같은 모듈을 import하므로 클래스 이름이 항상 일치합니다.
+
+```tsx label="✓ Card.tsx — 유틸리티와 CSS Module"
+import s from './Card.module.css';
+
+export default function Card({ title }: { title: string }) {
+  return <section class={`${s.card} rounded-lg p-4`}>{title}</section>;
+}
+```
+
+```css label="Card.module.css — @apply는 앱 CSS를 @reference로 참조"
+@reference "../../client/styles.css";
+
+.card {
+  container-type: inline-size;
+  @apply shadow-sm;
+}
+
+@container (min-width: 32rem) {
+  .card {
+    @apply grid grid-cols-2 gap-4;
+  }
+}
+```
+
+:::callout{kind="tip"}
+`@apply`는 모듈에 함께 있어야 할 스타일에만 쓰고, 단순한 스타일은 마크업 유틸리티로 둡니다. 가이드 페이지의 Markdown 본문도 이 방식으로 꾸밉니다(`routes/[lang]/guide/_components/guideProse.module.css`).
+:::
+
 ## 플러그인 패턴 {#plugins}
 
 플러그인은 슬롯이 렌더링된 뒤 브라우저에서만 할 수 있는 DOM 작업을 담당합니다 — 스크롤 위치, 관찰자, 포커스, 서드파티 위젯처럼 템플릿으로 표현할 수 없는 것들입니다. `state-surface/client`의 `definePlugin`으로 정의하고 페이지(또는 레이아웃)에서 `export const plugins = [...]`로 선언하면, 선언한 페이지만 그 청크를 로드합니다. `attach(el, info)`는 슬롯 DOM이 준비될 때(SSR 표시, client 활성화, 매 `swap="replace"`) 호출되고 cleanup을 반환할 수 있습니다. `update(el, info)`는 같은 DOM이 바뀌었을 때(`swap="morph"`, client props) 호출됩니다. `onPage`와 `onAction`은 페이지 수준 이벤트를 받습니다.

@@ -1,3 +1,4 @@
+import { emitTrace, warning, type TraceEvent } from './trace.js';
 import {
   checkWireFrame,
   mergeAccumulate,
@@ -16,10 +17,7 @@ import type { SlotDom } from './slotDom.js';
 
 export { ActionError, type ActionErrorKind, type ActionResult } from './actionError.js';
 
-export type TraceEvent = {
-  kind: 'received' | 'applied' | 'merged' | 'dropped' | 'skipped' | 'error' | 'done';
-  detail?: unknown;
-};
+export type { TraceEvent } from './trace.js';
 
 /** Request state table (DESIGN 6.3); `queued` waits for an earlier `mode: 'queue'` request. */
 export type RequestState =
@@ -179,7 +177,14 @@ export class StateSurface {
     this.metas = new Map(options.slots.filter(meta => !meta.id.includes('$')).map(m => [m.id, m]));
     for (const meta of this.metas.values())
       if (meta.mode === 'client' && meta.props !== undefined) this.props.set(meta.id, meta.props);
-    this.trace = options.trace;
+    // `?debug=1` logs; `onTrace` subscribers (dev overlay, production hooks) always receive.
+    const log = options.trace;
+    this.trace = log
+      ? event => {
+          log(event);
+          emitTrace(event);
+        }
+      : emitTrace;
   }
 
   /**
@@ -207,9 +212,10 @@ export class StateSurface {
         entry => !Object.hasOwn(actions, entry.transition) || !actions[entry.transition].targets
       )
     )
-      console.warn(
-        '[StateSurface] several <Boot> transitions run on this page and at least one declares ' +
-          'no targets, so they abort each other. Declare targets to run them in parallel.'
+      warning(
+        'several <Boot> transitions run on this page and at least one declares no targets, so ' +
+          'they abort each other. Declare targets to run them in parallel.',
+        true
       );
     for (const entry of boot) void this.transition(entry.transition, entry.params);
   }
@@ -304,9 +310,11 @@ export class StateSurface {
       : undefined;
     if (!meta?.targets && this.options.development && !this.warnedTargets.has(name)) {
       this.warnedTargets.add(name);
-      console.warn(
-        `[StateSurface] "${name}" declares no targets, so it aborts every running action. ` +
-          'Declare targets to run it in parallel with actions on other slots.'
+      warning(
+        `"${name}" declares no targets, so it aborts every running action. ` +
+          'Declare targets to run it in parallel with actions on other slots.',
+        true,
+        { transition: name }
       );
     }
     let finish = () => {};
@@ -465,7 +473,16 @@ export class StateSurface {
       }
       for (const op of frame.ops) {
         const meta = this.metas.get(op.slot);
-        if (!meta) continue;
+        if (!meta) {
+          // The server checks ops against the page it rendered: a mismatch means this page
+          // is not the one the server projected for (an old tab, a forged page id).
+          warning(
+            `"${request.name}" sent an op for slot "${op.slot}", which is not on this page; it is ignored.`,
+            this.options.development === true,
+            { transition: request.name, slot: op.slot }
+          );
+          continue;
+        }
         if (
           ('html' in op && meta.mode !== 'server') ||
           (('props' in op || 'merge' in op) && meta.mode !== 'client')
@@ -503,6 +520,12 @@ export class StateSurface {
     request.ops = [];
     this.dirty.delete(request);
     this.trace?.({ kind: 'error', detail: error.message });
+    if (error.kind === 'protocol')
+      warning(
+        `"${request.name}" broke the frame protocol: ${error.message}`,
+        this.options.development === true,
+        { transition: request.name }
+      );
     this.options.report?.(error, { transition: request.name, kind: error.kind });
   }
 
@@ -621,9 +644,11 @@ export class StateSurface {
           this.options.host.setProps(slot, el, frame.props, meta);
         }
       });
-    } else if (this.options.development)
-      console.warn(
-        `[StateSurface] "${request.name}" failed without an error slot: ${frame.message}`
+    } else
+      warning(
+        `"${request.name}" failed without an error slot: ${frame.message}`,
+        this.options.development === true,
+        { transition: request.name }
       );
     this.trace?.({ kind: 'error', detail: frame });
     // Rejected input is an expected outcome, not an error to report.

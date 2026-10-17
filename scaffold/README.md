@@ -21,10 +21,11 @@ cp .env.example .env
 
 Available variables:
 
-| Variable    | Default   | Description                               |
-| ----------- | --------- | ----------------------------------------- |
-| `PORT`      | `3000`    | Server listen port                        |
-| `BASE_PATH` | _(empty)_ | Mount app under a sub-path (e.g. `/demo`) |
+| Variable              | Default      | Description                               |
+| --------------------- | ------------ | ----------------------------------------- |
+| `PORT`                | `3000`       | Server listen port                        |
+| `BASE_PATH`           | _(empty)_    | Mount app under a sub-path (e.g. `/demo`) |
+| `SURFACE_IMAGE_CACHE` | _(temp dir)_ | Disk cache for resized remote images      |
 
 `.env` is loaded automatically by `pnpm dev` and `pnpm start` via Node.js `--env-file-if-exists`. No extra dependencies needed.
 
@@ -43,12 +44,13 @@ pnpm format         # Format with Prettier
 ```
 server.ts                # App entry point
 routes/                  # Pages: routes/**/*.tsx (auto-loaded; `_` files/folders are not pages)
-  index.tsx              #   export default async function Page(ctx) → JSX with <Slot>
+  [lang]/index.tsx       #   export default async function Page(ctx) → JSX with <Slot> (/en, /ko)
   <route>/_components/   #   Slot components (props = slot state)
   _shared/               #   Cross-route components
 transitions/             # Server-side state generators; path = name (comments/add.ts → "comments/add")
 layouts/                 # Layout components (Layout.tsx)
-shared/                  # Data helpers, i18n utilities
+content/                 # Content collections: config.ts, guides/<lang>/*.md, pages/<lang>/*.yaml
+shared/                  # Data helpers, i18n utilities (pages.ts reads content/pages)
 client/                  # Assets (styles.css, plugins/)
 ```
 
@@ -71,6 +73,11 @@ parallel). `<form method="post" action={actionUrl(name)}>` works without JavaScr
 reads the result with `ctx.flash(name)`. The build writes `.state-surface/actions.d.ts` so
 `useAction(renew, name)` from `state-surface/client` is typed. `<ClientRouter />` in the layout head
 turns links between its pages into client navigations (server HTML swap, `transition:persist`
-elements and islands survive, hover prefetch); `data-surface-reload` opts a link out. Vite's surface plugin generates the registry for development and
-production. To embed in Express, install the optional express peer and mount
+elements and islands survive, hover prefetch); `data-surface-reload` opts a link out.
+`export const prerender = true` builds a page into `dist/client/<path>/index.html` (still served after
+the middleware); pages under `routes/[lang]/` answer `/en/…` and `/ko/…` (`surface({ i18n })` in
+`vite.config.ts`, `ctx.i18n` in pages). `getCollection`/`getEntry` from `state-surface/content` read the
+validated `content/` collections, and `<Image src={imported} alt width />` from `state-surface` writes
+WebP `srcset`, `width`/`height` and lazy loading. Vite's surface plugin generates the registry for
+development and production. To embed in Express, install the optional express peer and mount
 `surface({ manifest })` before body-parsing middleware.

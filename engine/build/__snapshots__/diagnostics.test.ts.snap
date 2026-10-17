@@ -1,0 +1,304 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`plugin diagnostics (DESIGN 3.1) > <Boot> in a client component 1`] = `
+"[state-surface] <root>/routes/index.tsx:8:9: <Starter> is rendered on the client and cannot contain <Boot>.
+  hint: Put <Boot> in the page or layout markup.
+     7 |       <body>
+>    8 |         <Starter client:load />
+       |         ^
+     9 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot child and component 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <Slot name="hero">: use either a child element or \`component\`, not both.
+  hint: Keep the child element (its props are the first state) or component={X} for an initially empty slot.
+     8 |       <body>
+>    9 |         <Slot name="hero" component={B}><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot child with children 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:27: <Slot name="hero">: the child element cannot have JSX children.
+  hint: Pass fixed content as props.
+     8 |       <body>
+>    9 |         <Slot name="hero"><A><B /></A></Slot>
+       |                           ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot in a Slot fallback 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:50: <Slot> cannot be nested inside another <Slot>.
+  hint: A Slot holds one component; declare the inner <Slot> next to the outer one in the page or layout.
+     8 |       <body>
+>    9 |         <Slot name="chart" client:only fallback={<Slot name="x"><B /></Slot>}><A /></Slot>
+       |                                                  ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot in island children 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:24: <Slot> cannot be used inside island children.
+  hint: Island children are a static fragment; declare Slots in the page or layout markup.
+     8 |       <body>
+>    9 |         <A client:idle><Slot name="x"><B /></Slot></A>
+       |                        ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot inside MDX content (source position) 1`] = `
+"[state-surface] <root>/content/docs/intro.mdx:6:1: <Slot> cannot be used in .mdx content.
+  hint: MDX renders inside page markup: declare Slots and <Boot> in the page; islands are allowed.
+     5 | 
+>    6 | <Slot name="x"><A /></Slot>
+       | ^"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot inside a Slot 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:28: <Slot> cannot be nested inside another <Slot>.
+  hint: A Slot holds one component; declare the inner <Slot> next to the outer one in the page or layout.
+     8 |       <body>
+>    9 |         <Slot name="outer"><Slot name="inner"><A /></Slot></Slot>
+       |                            ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot name declared twice on a page 1`] = `
+"[state-surface] <root>/layouts/Layout.tsx:4:22: Slot name "page:title" is declared in both routes/index.tsx and layouts/Layout.tsx, which render on page /.
+  hint: Rename one of them: transitions address each slot of a page by its unique name.
+     3 | export default function Layout(_: unknown, children: unknown) {
+>    4 |   return <html><body><Slot name="page:title"><A /></Slot>{children}</body></html>;
+       |                      ^
+     5 | }"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot name format 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: Slot name "Hero Title" must match [a-z0-9-]+(:[a-z0-9-]+)*.
+  hint: Use lowercase letters, digits and dashes with optional ":" namespaces, e.g. "chat:messages".
+     8 |       <body>
+>    9 |         <Slot name="Hero Title"><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot name with # 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: Slot name "list#1": "#" is reserved for keyed repeated slots.
+  hint: Pick another name; "#" separates the key of keyed repeated slots.
+     8 |       <body>
+>    9 |         <Slot name="list#1"><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot with text 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:27: <Slot name="hero"> needs exactly one component element as its child.
+  hint: Text, fragments, conditions and several elements are not allowed; the child props are the slot state. Use \`component={X}\` for an empty slot.
+     8 |       <body>
+>    9 |         <Slot name="hero">Welcome</Slot>
+       |                           ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > Slot with two children 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:27: <Slot name="hero"> needs exactly one component element as its child.
+  hint: Text, fragments, conditions and several elements are not allowed; the child props are the slot state. Use \`component={X}\` for an empty slot.
+     8 |       <body>
+>    9 |         <Slot name="hero"><A /><B /></Slot>
+       |                           ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > client directive on an HTML element 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <div> is an HTML element; client directives only apply to components.
+  hint: Move the markup into an imported component, or remove the directive.
+     8 |       <body>
+>    9 |         <div client:visible />
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > component that renders a Slot 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:28: <Panel> renders a <Slot>; Slots cannot be nested.
+  hint: Slots belong to page or layout markup; move the inner <Slot> out of the component.
+     8 |       <body>
+>    9 |         <Slot name="panel"><Panel /></Slot>
+       |                            ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > computed island 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: A client island must be a statically imported component.
+  hint: Computed components (member access, variables, conditions) cannot become islands; write one element per branch.
+     8 |       <body>
+>    9 |         <parts.A client:load />
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > defineServerComponent as an island 1`] = `
+"[state-surface] <root>/routes/index.tsx:8:9: <Stats> is a defineServerComponent and cannot be a client island.
+  hint: Use it as the child of <Slot mode="server">: its load runs on the server for every render.
+     7 |       <body>
+>    8 |         <Stats client:load />
+       |         ^
+     9 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > defineServerComponent in a static slot 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:28: <Slot name="stats">: defineServerComponent children need mode="server".
+  hint: Add mode="server" to the Slot (and no client directive).
+     8 |       <body>
+>    9 |         <Slot name="stats"><Stats /></Slot>
+       |                            ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > defineServerComponent in markup 1`] = `
+"[state-surface] <root>/routes/index.tsx:8:15: <Stats> is a defineServerComponent; use it as the child of <Slot mode="server">.
+  hint: Server components re-run load for every render, which only server Slots do.
+     7 |       <body>
+>    8 |         <main><Stats /></main>
+       |               ^
+     9 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > directive on the Slot child 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:27: <Slot name="hero">: put directives on the <Slot>, not on its child element.
+  hint: Move client:* and server:* directives to the <Slot>; the child element is its component.
+     8 |       <body>
+>    9 |         <Slot name="hero"><A client:load /></Slot>
+       |                           ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > external slot without schema 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <Slot name="agent">: an external slot needs a Standard Schema \`schema\`.
+  hint: Frames from ctx.external() are validated against it (DESIGN 8.1).
+     8 |       <body>
+>    9 |         <Slot name="agent" mode="server" external><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > island inside MDX content (source position) 1`] = `
+"[state-surface] <root>/content/docs/intro.mdx:10:1: A client island must be a statically imported component.
+  hint: Computed components (member access, variables, conditions) cannot become islands; write one element per branch.
+     9 | 
+>   10 | <parts.Counter client:load />
+       | ^"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > island not imported 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: A client island <Local> must be a statically imported component.
+  hint: Import it with \`import X from\` or \`import { X } from\`.
+     8 |       <body>
+>    9 |         <Local client:idle />
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > mode and client directive 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <Slot name="hero">: mode="server" cannot be combined with client directives.
+  hint: A client directive already makes it a client slot: remove mode, or remove the directives for a static or server slot.
+     8 |       <body>
+>    9 |         <Slot name="hero" mode="server" client:load><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > page without default export 1`] = `
+"[state-surface] <root>/routes/index.tsx:1:1: Pages must default-export a page function.
+  hint: export default async function Page(ctx: SurfaceContext) { … }
+>    1 | export const prerender = true;
+       | ^
+     2 | export function Page() {}"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > persist name used twice 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:61: persist ID "player" is used more than once.
+  hint: One name pairs one element across pages; give the other elements their own names.
+     8 |       <body>
+>    9 |         <A client:load transition:persist="player" /><video transition:persist="player" />
+       |                                                             ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > persist on a server slot 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:41: <Slot name="cart">: transition:persist needs a client slot.
+  hint: Server and static slots are rendered again for every page, so they cannot persist (DC-19).
+     8 |       <body>
+>    9 |         <Slot name="cart" mode="server" transition:persist><A /></Slot>
+       |                                         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > persist on an island without a name 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:24: <A>: transition:persist on an island needs a name (transition:persist="player").
+  hint: Automatic island ids differ per page, so the pair would silently not match (DC-19).
+     8 |       <body>
+>    9 |         <A client:load transition:persist />
+       |                        ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > persist-props without persist 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <A>: transition:persist-props needs transition:persist.
+  hint: Add transition:persist, or remove transition:persist-props (it keeps the previous page's props).
+     8 |       <body>
+>    9 |         <A client:load transition:persist-props />
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > plugins that are not imported 1`] = `
+"[state-surface] <root>/routes/index.tsx:13:25: \`plugins\` entries must be statically imported definePlugin() exports.
+  hint: Import each plugin by name (import { chatScroll } from '../client/plugins/chatScroll.js') and list that binding.
+    12 | }
+>   13 | export const plugins = [makePlugin()];
+       |                         ^
+    14 | "
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > route collision 1`] = `
+"[state-surface] <root>/routes/docs/index.tsx:5:1: Pages routes/docs.tsx and routes/docs/index.tsx both map to "/docs".
+  hint: Keep one of them; helpers next to pages go in _-prefixed files or folders.
+     4 | 
+>    5 | export default function Page() {
+       | ^
+     6 |   return ("
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > server:defer without mode="server" 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <Slot name="hero">: server:defer needs mode="server".
+  hint: Add mode="server": deferred content is rendered by the server after the page.
+     8 |       <body>
+>    9 |         <Slot name="hero" server:defer><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > swap on a static slot 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <Slot name="hero">: \`swap\` applies to mode="server" slots.
+  hint: Add mode="server", or remove swap: client slots update through props.
+     8 |       <body>
+>    9 |         <Slot name="hero" swap="morph"><A /></Slot>
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > two activation timings 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:9: <A>: use only one activation timing (client:load, client:idle).
+  hint: Keep one of client:load, client:idle, client:visible or client:media; client:only may be added to it.
+     8 |       <body>
+>    9 |         <A client:load client:idle />
+       |         ^
+    10 |       </body>"
+`;
+
+exports[`plugin diagnostics (DESIGN 3.1) > unknown directive 1`] = `
+"[state-surface] <root>/routes/index.tsx:9:12: <A>: unknown directive "client:hover".
+  hint: Use client:load, client:idle, client:visible, client:media or client:only.
+     8 |       <body>
+>    9 |         <A client:hover />
+       |            ^
+    10 |       </body>"
+`;

@@ -1,0 +1,8 @@
+.badge {
+  color: rgb(200, 0, 0);
+  border: 2px solid rgb(0, 0, 200);
+}
+
+.live {
+  outline: 3px solid rgb(0, 160, 0);
+}

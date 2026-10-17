@@ -28,6 +28,7 @@ import type { ActionMeta } from '../../shared/protocol.js';
 import type { DeferredPayload } from '../ssrRenderer.js';
 import { prerenderFile, prerenderView } from '../prerenderContext.js';
 import { imageResponse, type ImageService } from './imageEndpoint.js';
+import { prefixPath } from '../../shared/basePath.js';
 import {
   LANG_COOKIE,
   alternates,
@@ -746,7 +747,7 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
             return new Response(
               await renderPage(selected.module, selected.prerender ? prerenderView(ctx) : ctx, {
                 plugins: selected.plugins,
-                tags: documentTags,
+                tags: usage => documentTags(usage, selected.page),
                 buildId,
                 pageId: selected.page?.id,
                 seal: payload => seal(secrets(ctx), payload),
@@ -836,9 +837,12 @@ function createDocumentTags(document: DocumentConfig) {
   const engine = document.engine;
   const engineEntry = engine && resolveAsset(engine.loader);
   const loaded = new Set(engine ? (resolveChunk(engine.loader)?.files ?? []) : []);
-  return (usage: PageUsage): DocumentTags => {
-    if (!usage.engine || !engine) return { styles, preload: [], appEntry };
-    const css = new Set(styles);
+  return (usage: PageUsage, page?: PageDefinition): DocumentTags => {
+    const pageStyles = page?.styles?.length
+      ? [...new Set([...styles, ...page.styles.map(href => prefixPath(href))])]
+      : styles;
+    if (!usage.engine || !engine) return { styles: pageStyles, preload: [], appEntry };
+    const css = new Set(pageStyles);
     const preload = new Set<string>();
     const add = (source: string, eager: boolean) => {
       const chunk = resolveChunk(source);

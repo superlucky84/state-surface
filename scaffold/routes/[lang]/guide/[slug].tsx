@@ -4,6 +4,7 @@ import { getCollection, getEntry } from 'state-surface/content';
 import Layout from '../../../layouts/Layout.js';
 import GuideToc from './_components/guideToc.js';
 import { guideComponents } from './_components/guideContent.js';
+import prose from './_components/guideProse.module.css';
 import { localPath, pageLang } from '../../../shared/i18n.js';
 import { headerProps, pageText } from '../../../shared/pages.js';
 import { guideToc } from '../../../client/plugins/guideToc.js';
@@ -45,7 +46,7 @@ export default async function Page(ctx: SurfaceContext) {
             />
           </Slot>
         </div>
-        <article class="guide-article min-w-0 flex-1 space-y-6">
+        <article class={`${prose.article} min-w-0 flex-1 space-y-6`}>
           <h2 class="text-2xl font-semibold tracking-tight text-slate-900">{entry.data.title}</h2>
           <entry.Content components={guideComponents(lang)} />
           <div class="flex flex-wrap items-center gap-3 pt-2">

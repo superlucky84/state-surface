@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { listFiles } from './fsUtils.js';
-import { SurfaceBuildError } from './diagnostics.js';
+import { SurfaceBuildError, atDefaultExport } from './diagnostics.js';
 
 export type ScannedRoute = {
   urlPattern: string;
@@ -64,8 +64,11 @@ export async function scanRoutes(routesDir: string): Promise<ScannedRoute[]> {
     if (previous)
       throw new SurfaceBuildError(
         `Pages ${previous} and ${path.relative(path.dirname(routesDir), file)} both map to ` +
-          `"${urlPattern}". Keep one of them.`,
-        { file }
+          `"${urlPattern}".`,
+        {
+          ...(await atDefaultExport(file)),
+          hint: 'Keep one of them; helpers next to pages go in _-prefixed files or folders.',
+        }
       );
     owners.set(urlPattern, path.relative(path.dirname(routesDir), file));
     routes.push({ urlPattern, filePath: file });

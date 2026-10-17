@@ -62,6 +62,27 @@ assert.ok(
 );
 console.log('V-05: content only in the server bundle and prerendered HTML');
 
+// DESIGN 8.3-6: `surface({ sourcemap: 'hidden' })` maps client chunks back to the original
+// TSX without a sourceMappingURL comment; the server bundle keeps its own map.
+const clientFiles = await files(path.join(app, 'dist/client/assets'));
+for (const file of clientFiles.filter(name => name.endsWith('.js')))
+  assert.ok(
+    !(await readFile(file, 'utf8')).includes('sourceMappingURL'),
+    `${path.relative(app, file)} must not reference its hidden source map`
+  );
+const counterMap = clientFiles.find(name => /\/Counter-[\w-]+\.js\.map$/.test(name));
+assert.ok(counterMap, 'the island chunk has a hidden source map');
+const map = JSON.parse(await readFile(counterMap, 'utf8'));
+const index = map.sources.findIndex(source => source.endsWith('routes/_components/Counter.tsx'));
+assert.ok(index >= 0, `Counter.tsx is a source of ${path.basename(counterMap)}`);
+assert.equal(
+  map.sourcesContent[index],
+  await readFile(path.join(app, 'routes/_components/Counter.tsx'), 'utf8'),
+  'the map holds the original TSX'
+);
+assert.ok((await readFile(path.join(app, 'dist/server.mjs.map'), 'utf8')).includes('"sources"'));
+console.log('8.3-6: hidden client source maps of the original TSX, server bundle map');
+
 let failure;
 try {
   await build({
@@ -76,7 +97,12 @@ assert.ok(failure, 'client build reaching server-only modules must fail');
 const message = String(failure.message);
 assert.match(
   message,
-  /^\[state-surface\] Server-only modules are reachable from the browser bundle/
+  /^\[state-surface\] \S+\/broken\/lib\/fmt\.ts:1:1: Server-only modules are reachable from the browser bundle/
+);
+// The location is the first server-only import, with its code frame.
+assert.match(
+  message,
+  /> {4}1 \| import \{ connection \} from '\.\.\/server\/db\.server';\n {7}\| \^/
 );
 assert.equal(message.match(/\[state-surface\]/g).length, 1, message);
 assert.match(

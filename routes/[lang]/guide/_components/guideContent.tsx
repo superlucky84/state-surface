@@ -1,4 +1,5 @@
 import { highlightLines, type BlockComponents, type Nodes } from 'state-surface/content';
+import prose from './guideProse.module.css';
 
 /**
  * Styled renderers of the 10 guide blocks for `entry.Content({ components })` (DC-25 ③).
@@ -134,7 +135,7 @@ export function guideComponents(lang: string): Partial<BlockComponents> {
             <path d="M8 1.5a.5.5 0 0 1 .447.276l6 11A.5.5 0 0 1 14 13.5H2a.5.5 0 0 1-.447-.724l6-11A.5.5 0 0 1 8 1.5zM8 5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 5zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" />
           </svg>
         </span>
-        <div class="guide-block text-sm leading-6 text-amber-800">{children}</div>
+        <div class={`${prose.block} text-sm leading-6 text-amber-800`}>{children}</div>
       </div>
     ),
     sequence: ({ steps }) => (
@@ -174,7 +175,7 @@ export function guideComponents(lang: string): Partial<BlockComponents> {
           <span class={`mt-0.5 shrink-0 font-bold text-xs leading-5 ${styles[1]}`}>
             {styles[3]}
           </span>
-          <div class={`guide-block text-sm leading-6 ${styles[2]}`}>{children}</div>
+          <div class={`${prose.block} text-sm leading-6 ${styles[2]}`}>{children}</div>
         </div>
       );
     },
@@ -190,7 +191,7 @@ export function guideComponents(lang: string): Partial<BlockComponents> {
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zm-.25 2a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-1.75H7a.75.75 0 0 1-.75-.75z" />
           </svg>
         </span>
-        <div class="guide-block text-sm italic leading-6 text-indigo-800">{children}</div>
+        <div class={`${prose.block} text-sm italic leading-6 text-indigo-800`}>{children}</div>
       </div>
     ),
     debug: ({ items }) => (
@@ -213,7 +214,7 @@ export function guideComponents(lang: string): Partial<BlockComponents> {
               <span class="mt-0.5 shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">
                 {fix}
               </span>
-              <div class="guide-block text-sm leading-6 text-slate-600">{item.fix}</div>
+              <div class={`${prose.block} text-sm leading-6 text-slate-600`}>{item.fix}</div>
             </div>
           </div>
         ))}

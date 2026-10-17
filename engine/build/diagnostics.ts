@@ -1,8 +1,13 @@
+import { readFile } from 'node:fs/promises';
+
 /**
  * Build-time diagnostic with the original source location. Vite shows `loc` in the dev
  * overlay and fails production builds; the message already names `file:line:column`.
  */
 export class SurfaceBuildError extends Error {
+  /** The message without location and hint (kept to relocate it, e.g. MDX → source). */
+  readonly reason: string;
+  readonly hint?: string;
   readonly id?: string;
   readonly loc?: { file: string; line: number; column: number };
   readonly frame?: string;
@@ -34,10 +39,12 @@ export class SurfaceBuildError extends Error {
       : '';
     super(`[state-surface] ${prefix}${message}${where.hint ? `\n  hint: ${where.hint}` : ''}`);
     this.name = 'SurfaceBuildError';
+    this.reason = message;
+    this.hint = where.hint;
     this.id = where.file;
     if (where.file && position) {
       this.loc = { file: where.file, ...position };
-      this.frame = codeFrame(where.code!, position.line);
+      this.frame = codeFrame(where.code!, position.line, position.column);
     }
   }
 }
@@ -63,13 +70,28 @@ export function locate(code: string, offset: number) {
   return { line, column: offset - start };
 }
 
-function codeFrame(code: string, line: number) {
+function codeFrame(code: string, line: number, column: number) {
   const lines = code.split('\n');
   return lines
     .slice(Math.max(0, line - 2), line + 1)
-    .map((text, i) => {
+    .flatMap((text, i) => {
       const number = Math.max(1, line - 1) + i;
-      return `${number === line ? '>' : ' '} ${String(number).padStart(4)} | ${text}`;
+      const row = `${number === line ? '>' : ' '} ${String(number).padStart(4)} | ${text}`;
+      if (number !== line) return [row];
+      // The caret keeps tabs so it lines up under the source column.
+      const indent = text.slice(0, column).replace(/[^\t]/g, ' ');
+      return [row, `       | ${indent}^`];
     })
     .join('\n');
+}
+
+/**
+ * Location for file-level rules (route collisions, duplicate names): the module's default
+ * export, or its first line.
+ */
+export async function atDefaultExport(file: string) {
+  const code = await readFile(file, 'utf8').catch(() => undefined);
+  if (code === undefined) return { file };
+  const match = /^export\s+default\b/m.exec(code);
+  return { file, code, offset: match?.index ?? 0 };
 }

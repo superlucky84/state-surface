@@ -45,6 +45,11 @@ export interface PageDefinition {
   /** Route file path without extension (`guide/[slug]`), sent as `X-Surface-Page`. */
   id: string;
   slots: Record<string, PageSlotDefinition>;
+  /**
+   * DC-23: stylesheets of the page's module graph (CSS Modules of static and server
+   * components included), linked after the global styles. Root-relative URLs without BASE_PATH.
+   */
+  styles?: string[];
 }
 
 export interface ServerRoute {

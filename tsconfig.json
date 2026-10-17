@@ -37,7 +37,7 @@
     "layouts",
     "content",
     "testing",
-    ".state-surface/*.d.ts"
+    ".state-surface/*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

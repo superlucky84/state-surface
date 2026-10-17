@@ -378,6 +378,40 @@ describe('app analysis', () => {
     }
   });
 
+  it('collects the stylesheets of each page graph, skipping value imports (DC-23)', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'surface-styles-'));
+    try {
+      await mkdir(path.join(dir, 'routes'), { recursive: true });
+      const write = (file: string, code: string) => writeFile(path.join(dir, file), code);
+      await write('Badge.module.css', '.badge { color: red; }');
+      await write('Card.module.scss', '.card { color: blue; }');
+      await write('raw.css', 'p {}');
+      await write(
+        'Badge.tsx',
+        "import s from './Badge.module.css';\nexport default () => <b class={s.badge} />;"
+      );
+      await write(
+        'Card.tsx',
+        "import s from './Card.module.scss';\nimport css from './raw.css?inline';\nexport default () => <i class={s.card} />;"
+      );
+      await write(
+        'routes/a.tsx',
+        "import Badge from '../Badge.tsx';\nimport Card from '../Card.tsx';\nimport '../Badge.module.css';\nexport default () => <html><Badge /><Card /></html>;"
+      );
+      await write('routes/b.tsx', 'export default () => <html />;');
+      const resolve = async (source: string, importer: string) =>
+        source.startsWith('.') ? path.resolve(path.dirname(importer), source) : undefined;
+      const { pageStyles } = await new SurfaceAnalyzer(dir, '/engine', resolve).app();
+      expect(pageStyles.get(path.join(dir, 'routes/a.tsx'))).toEqual([
+        path.join(dir, 'Badge.module.css'),
+        path.join(dir, 'Card.module.scss'),
+      ]);
+      expect(pageStyles.get(path.join(dir, 'routes/b.tsx'))).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reads static Slot options for the page manifest and diagnoses invalid combinations', () => {
     const slotOf = (attrs: string) =>
       analyzeModule(

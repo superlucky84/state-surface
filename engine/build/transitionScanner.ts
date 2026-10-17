@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { listFiles } from './fsUtils.js';
-import { SurfaceBuildError } from './diagnostics.js';
+import { SurfaceBuildError, atDefaultExport } from './diagnostics.js';
 import { TRANSITION_NAME } from '../server/transition.js';
 
 export interface ScannedTransition {
@@ -37,7 +37,10 @@ export async function scanTransitions(dir: string): Promise<ScannedTransition[]>
     if (previous)
       throw new SurfaceBuildError(
         `transitions/${previous} and transitions/${relative} both register "${name}".`,
-        { file }
+        {
+          ...(await atDefaultExport(file)),
+          hint: 'Transition names are file paths under transitions/; rename or remove one file.',
+        }
       );
     owners.set(name, relative);
     transitions.push({ name, filePath: file });

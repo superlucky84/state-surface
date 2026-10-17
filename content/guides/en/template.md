@@ -228,6 +228,37 @@ Read `props.x` inside the returned render function instead of destructuring it a
 Only the child (or `component`) of a `<Slot mode="server">` can be a server component. For the browser, write a regular component and send its data as props.
 :::
 
+## Scoped CSS {#styles}
+
+Put utilities in the markup and give a component its own `*.module.css` file for what utilities express poorly — container queries, complex selectors, keyframes. Class names are hashed per file, so they apply only where the component uses them (`:global()` opts out). The build links what a page needs: CSS Modules of static and server components go into the page stylesheet in `<head>`, an island's CSS ships with its chunk and is linked before the island activates, and client navigation loads the next page's stylesheets before the swap. SSR, server HTML swaps and client renders import the same module, so the class names always match.
+
+```tsx label="✓ Card.tsx — utilities plus a CSS Module"
+import s from './Card.module.css';
+
+export default function Card({ title }: { title: string }) {
+  return <section class={`${s.card} rounded-lg p-4`}>{title}</section>;
+}
+```
+
+```css label="Card.module.css — @apply needs @reference to the app CSS"
+@reference "../../client/styles.css";
+
+.card {
+  container-type: inline-size;
+  @apply shadow-sm;
+}
+
+@container (min-width: 32rem) {
+  .card {
+    @apply grid grid-cols-2 gap-4;
+  }
+}
+```
+
+:::callout{kind="tip"}
+Keep `@apply` for what belongs together in the module; plain styling stays as utilities in the markup. The guide pages style their Markdown prose this way (`routes/[lang]/guide/_components/guideProse.module.css`).
+:::
+
 ## Plugin Patterns {#plugins}
 
 Plugins do browser-only DOM work after a slot renders — scroll position, observers, focus, third-party widgets — that a template cannot express. Define one with `definePlugin` from `state-surface/client` and declare it on the page (or its layout) with `export const plugins = [...]`; only those pages load its chunk. `attach(el, info)` runs when the slot DOM is ready (SSR display, client activation, every `swap="replace"`) and may return a cleanup; `update(el, info)` runs when the same DOM changed (`swap="morph"`, client props). `onPage` and `onAction` receive page-level events.

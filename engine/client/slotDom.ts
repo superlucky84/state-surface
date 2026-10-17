@@ -1,3 +1,4 @@
+import { warning } from './trace.js';
 import type { IslandMeta, UiPatch } from '../shared/protocol.js';
 import { hasScript } from '../shared/capability.js';
 import type { ComponentHost } from './componentHost.js';
@@ -91,7 +92,7 @@ export class SlotDom {
     isCurrent: () => boolean = () => true
   ) {
     if (this.options.development && hasScript(html))
-      console.warn(`[StateSurface] <script> in the HTML of slot "${slot}" does not run.`);
+      warning(`<script> in the HTML of slot "${slot}" does not run.`, true, { slot });
     if (swap === 'morph') {
       const { morphSlot } = await this.preloadMorph();
       if (!isCurrent()) return;

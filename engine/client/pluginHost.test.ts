@@ -161,4 +161,60 @@ describe('PluginHost', () => {
     expect(calls).toEqual(['cleanup:next', 'cleanup:chat']);
     expect(host.stats).toMatchObject({ plugins: 0, modules: 1 });
   });
+
+  it('warns in development when a plugin changes DOM that Lithent owns (DESIGN 3.1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML =
+      '<h-state name="chat"><p>client</p></h-state>' +
+      '<h-state name="page"><p>static</p><h-island data-island="$1"><b>island</b></h-island></h-state>';
+    const chat = document.querySelector<HTMLElement>('h-state[name="chat"]')!;
+    const page = document.querySelector<HTMLElement>('h-state[name="page"]')!;
+    const plugin = definePlugin({
+      name: 'meddler',
+      attach(el, info) {
+        el.setAttribute('data-enhanced', ''); // the slot element itself: allowed
+        if (info.slot === 'page') el.querySelector('p')!.textContent = 'enhanced'; // static: allowed
+        if (info.slot === 'page') el.querySelector('b')!.textContent = 'changed'; // island
+        if (info.slot === 'chat') el.querySelector('p')!.classList.add('x'); // client slot
+      },
+    });
+    const host = new PluginHost(
+      [{ id: 'p#m', load: 'load' }],
+      { 'p#m': async () => plugin },
+      () => {},
+      true
+    );
+    host.displayedSlot('chat', chat, 'client');
+    host.displayedSlot('page', page, 'static');
+    host.start();
+    await flush();
+    expect(warn.mock.calls.map(call => call[0])).toEqual([
+      expect.stringContaining(
+        'plugin "meddler" changed DOM inside client slot "chat" during attach'
+      ),
+      expect.stringContaining('plugin "meddler" changed DOM inside an island of slot "page"'),
+    ]);
+
+    warn.mockClear();
+    const quiet = definePlugin({ name: 'quiet', attach: el => el.setAttribute('data-x', '') });
+    const production = new PluginHost(
+      [{ id: 'p#q', load: 'load' }],
+      { 'p#q': async () => ({ ...plugin, name: 'prod' }) },
+      () => {},
+      false
+    );
+    production.displayedSlot('chat', chat, 'client');
+    production.start();
+    const allowed = new PluginHost(
+      [{ id: 'p#q', load: 'load' }],
+      { 'p#q': async () => quiet },
+      () => {},
+      true
+    );
+    allowed.displayedSlot('chat', chat, 'client');
+    allowed.start();
+    await flush();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

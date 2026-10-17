@@ -255,32 +255,6 @@ pre[class*="language-"] {
   color: #34d399;               /* emerald-400 */
 }
 
-/* ── Guide prose (Markdown inline content, DC-25) ── */
-
-.guide-article :not(pre) > code {
-  border-radius: 0.25rem;
-  background: rgb(241 245 249);
-  padding: 0.0625rem 0.3125rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125em;
-  color: rgb(15 23 42);
-}
-
-.guide-article a:not([class]) {
-  color: rgb(2 132 199);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.guide-block > * + * {
-  margin-top: 0.5rem;
-}
-
-.guide-block ul {
-  list-style: disc;
-  padding-left: 1.25rem;
-}
-
 /* ── Line numbers ── */
 
 .code-ln {

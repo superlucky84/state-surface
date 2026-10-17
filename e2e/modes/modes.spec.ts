@@ -564,3 +564,93 @@ test('V-30: tag manager nodes survive 20 navigations, page_view fires each time,
   expect(csp).toEqual([]);
   expect(failures).toEqual([]);
 });
+
+test('DC-23: CSS Modules match across SSR, server HTML and client renders; navigation adds only the CSS it needs', async ({
+  page,
+}) => {
+  const failures = errors(page);
+  const docs = documents(page);
+  const css = new Set<string>();
+  page.on('request', request => {
+    const { pathname } = new URL(request.url());
+    if (pathname.endsWith('.css')) css.add(pathname);
+  });
+  // The island chunk waits: its CSS must already style the server-rendered button.
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  await page.route(/\/assets\/Toggle-[\w-]+\.js$/, async route => {
+    await gate;
+    await route.continue();
+  });
+  const style = (selector: string, property: string) =>
+    page
+      .locator(selector)
+      .evaluate((el, name) => getComputedStyle(el).getPropertyValue(name), property);
+  /** Class names of the element that no loaded stylesheet defines. */
+  const undefinedClasses = (selector: string) =>
+    page.locator(selector).evaluate(el => {
+      const selectors = Array.from(document.styleSheets).flatMap(sheet =>
+        Array.from(sheet.cssRules, rule => (rule as CSSStyleRule).selectorText ?? '')
+      );
+      return el.classList.length
+        ? Array.from(el.classList).filter(name => !selectors.includes('.' + name))
+        : ['(no class)'];
+    });
+  const linked = () =>
+    page.evaluate(() =>
+      Array.from(document.head.querySelectorAll('link[rel=stylesheet]'), link =>
+        link.getAttribute('href')
+      )
+    );
+
+  await page.goto('/router/a');
+  await page.waitForLoadState('networkidle');
+  expect([...css]).toEqual([]);
+  await page.locator('#to-styled').click();
+  await expect(page.locator('#badge')).toHaveText('styled');
+  expect([...css].sort()).toEqual([
+    expect.stringMatching(/^\/assets\/Toggle-[\w-]+\.css$/),
+    expect.stringMatching(/^\/assets\/page-router_styled-[\w-]+\.css$/),
+  ]);
+  const fresh = await page.context().newPage();
+  await fresh.goto('/router/styled');
+  expect(
+    await fresh.evaluate(() =>
+      Array.from(document.head.querySelectorAll('link[rel=stylesheet]'), link =>
+        link.getAttribute('href')
+      )
+    )
+  ).toEqual(await linked());
+  await fresh.close();
+
+  // Static slot (page CSS) and the dormant island (chunk CSS) are styled before any JS runs.
+  expect(await style('#badge', 'color')).toBe('rgb(200, 0, 0)');
+  expect(await style('#toggle', 'background-color')).toBe('rgb(0, 128, 0)');
+  await expect(page.locator('#toggle')).toHaveText('toggle:off');
+  expect(await undefinedClasses('#badge')).toEqual([]);
+  expect(await undefinedClasses('#toggle')).toEqual([]);
+  const ssrClass = await page.locator('#toggle').getAttribute('class');
+
+  // Client render: the chunk's class names are the SSR ones.
+  release();
+  await expect(async () => {
+    await page.locator('#toggle').click();
+    await expect(page.locator('#toggle')).toHaveText('toggle:on', { timeout: 200 });
+  }).toPass();
+  expect(await page.locator('#toggle').getAttribute('class')).toBe(ssrClass);
+
+  // Server HTML swap: the transition renders classes the page CSS defines.
+  await page.getByRole('button', { name: 'Restyle' }).click();
+  await expect(page.locator('#live')).toHaveText('restyled');
+  expect(await undefinedClasses('#live')).toEqual([]);
+  expect(await style('#live', 'outline-color')).toBe('rgb(0, 160, 0)');
+
+  // Leaving the page drops its stylesheets and loads nothing new.
+  const before = css.size;
+  await page.locator('#to-a').click();
+  await heading(page, 'Page A');
+  expect(await linked()).toEqual([]);
+  expect(css.size).toBe(before);
+  expect(docs).toEqual(['/router/a']);
+  expect(failures).toEqual([]);
+});

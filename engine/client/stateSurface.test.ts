@@ -7,6 +7,7 @@ import type { TagFunction } from 'lithent';
 import { StateSurface, coalesceOps, type TraceEvent } from './stateSurface.js';
 import { ComponentHost } from './componentHost.js';
 import { SlotDom } from './slotDom.js';
+import { onTrace } from './trace.js';
 import type { Op, SlotMeta, WireFrame } from '../shared/protocol.js';
 
 const Text = ((props: { text?: string }) =>
@@ -252,6 +253,59 @@ describe('error frames', () => {
     expect(await surface.transition('fail')).toMatchObject({ ok: false, error: expect.any(Error) });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed without an error slot'));
     expect(report).toHaveBeenCalledOnce();
+  });
+});
+
+describe('runtime diagnostics (DESIGN 3.1)', () => {
+  it('reaches onTrace subscribers in production: frames, protocol and unknown slot warnings', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const events: TraceEvent[] = [];
+    const unsubscribe = onTrace(event => events.push(event));
+    try {
+      vi.stubGlobal('fetch', async () =>
+        ndjson([
+          {
+            type: 'patch',
+            reset: true,
+            ops: [
+              { slot: 'gone', html: '<p>x</p>' },
+              { slot: 'list', html: '<ul><li>a</li></ul>' },
+            ],
+          },
+          { type: 'done' },
+        ])
+      );
+      const { surface, slot } = setup({ development: false });
+      expect(await surface.transition('go')).toEqual({ ok: true });
+      expect(slot('list').innerHTML).toBe('<ul><li>a</li></ul>');
+      vi.stubGlobal('fetch', async () => ndjson([{ type: 'patch', ops: [] }, { type: 'done' }]));
+      await surface.transition('broken');
+      const warnings = events.filter(event => event.kind === 'warning');
+      expect(warnings.map(event => (event.detail as { message: string }).message)).toEqual([
+        '"go" sent an op for slot "gone", which is not on this page; it is ignored.',
+        '"broken" broke the frame protocol: The first patch must be a reset',
+      ]);
+      expect(events.map(event => event.kind)).toContain('done');
+      // Production: trace only, no console output.
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('warns on the console in development', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('fetch', async () =>
+      ndjson([
+        { type: 'patch', reset: true, ops: [{ slot: 'gone', remove: true }] },
+        { type: 'done' },
+      ])
+    );
+    const { surface } = setup({ development: true });
+    await surface.transition('go');
+    expect(warn).toHaveBeenCalledWith(
+      '[StateSurface] "go" sent an op for slot "gone", which is not on this page; it is ignored.'
+    );
   });
 });
 

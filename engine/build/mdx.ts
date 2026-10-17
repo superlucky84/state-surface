@@ -1,6 +1,8 @@
 import type { Code, Heading as MdHeading, Nodes, Parent, Root } from 'mdast';
 import type { Heading } from '../content/types.js';
-import { SurfaceBuildError } from './diagnostics.js';
+import type { RawSourceMap } from 'source-map';
+import { parseSync } from 'oxc-parser';
+import { SurfaceBuildError, locate } from './diagnostics.js';
 
 /**
  * `.mdx` content (DC-25 ③): trusted repository files compiled with `@mdx-js/mdx` to JSX
@@ -13,6 +15,10 @@ export interface CompiledMdx {
   /** JSX module code (before the JSX transform). */
   code: string;
   headings: Heading[];
+  /** Source map of `code` back to the `.mdx` file (ESM and text; JSX elements have no maps). */
+  map?: RawSourceMap;
+  /** JSX elements of the document in source order (1-based line and column). */
+  elements: Array<{ line: number; column: number; endLine: number; endColumn: number }>;
 }
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/;
@@ -78,11 +84,23 @@ function codeElement(node: Code) {
   };
 }
 
-function surfaceMdx(headings: Heading[]) {
+type Elements = CompiledMdx['elements'];
+const JSX_NODES = new Set(['mdxJsxFlowElement', 'mdxJsxTextElement']);
+
+function surfaceMdx(headings: Heading[], elements: Elements) {
   return () => (tree: Root) => {
     const used = new Map<string, number>();
     const walk = (parent: Parent) => {
       parent.children = parent.children.map(child => {
+        const position = child.position;
+        // Code fences become <Code> elements: they count like written JSX.
+        if ((child.type === 'code' || JSX_NODES.has(child.type)) && position)
+          elements.push({
+            line: position.start.line,
+            column: position.start.column,
+            endLine: position.end.line,
+            endColumn: position.end.column,
+          });
         if (child.type === 'code') return codeElement(child) as never;
         if (child.type === 'heading') {
           const heading = child as MdHeading;
@@ -103,10 +121,14 @@ function surfaceMdx(headings: Heading[]) {
 }
 
 async function compileNow(source: string, file: string): Promise<CompiledMdx> {
-  const { compile } = await import('@mdx-js/mdx');
+  const [{ compile }, { SourceMapGenerator }] = await Promise.all([
+    import('@mdx-js/mdx'),
+    import('source-map'),
+  ]);
   // Keep line numbers: the frontmatter becomes empty lines.
   const value = source.replace(FRONTMATTER, match => match.replace(/[^\n]/g, ''));
   const headings: Heading[] = [];
+  const elements: Elements = [];
   try {
     const output = await compile(
       { value, path: file },
@@ -114,10 +136,16 @@ async function compileNow(source: string, file: string): Promise<CompiledMdx> {
         jsx: true,
         jsxImportSource: 'lithent',
         development: false,
-        remarkPlugins: [surfaceMdx(headings)],
+        remarkPlugins: [surfaceMdx(headings, elements)],
+        SourceMapGenerator,
       }
     );
-    return { code: String(output), headings };
+    return {
+      code: String(output),
+      headings,
+      elements,
+      map: output.map as RawSourceMap | undefined,
+    };
   } catch (error) {
     const message = error as { reason?: string; message: string; line?: number; column?: number };
     throw new SurfaceBuildError(`MDX: ${message.reason ?? message.message}`, {
@@ -139,4 +167,76 @@ export function compileMdx(source: string, file: string): Promise<CompiledMdx> {
     compiled.catch(() => cache.delete(key));
   }
   return compiled;
+}
+
+/** JSX elements written in the document: the ones `_createMdxContent` returns, in order. */
+function contentElements(code: string) {
+  const program = parseSync('mdx.jsx', code, { lang: 'jsx' }).program as any;
+  const content = program.body.find(
+    (node: any) => node.type === 'FunctionDeclaration' && node.id?.name === '_createMdxContent'
+  );
+  const found: Array<{ start: number; end: number }> = [];
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (node.type === 'JSXElement') {
+      const name = node.openingElement.name;
+      // Markdown syntax renders as `_components.h1`; everything else was written as JSX.
+      const generated = name.type === 'JSXMemberExpression' && name.object.name === '_components';
+      if (!generated) found.push({ start: node.start, end: node.end });
+    }
+    for (const key of Object.keys(node)) if (key !== 'type') visit(node[key]);
+  };
+  visit(content?.body);
+  return found;
+}
+
+const offsetAt = (source: string, line: number, column: number) => {
+  let offset = 0;
+  for (let current = 1; current < line; current++) offset = source.indexOf('\n', offset) + 1;
+  return offset + column - 1;
+};
+
+/**
+ * Diagnostics of the compiled JSX (islands, Slot rules) point into the `.mdx` source. The
+ * MDX source map has no positions for JSX elements, so an error inside the document maps
+ * to the written element at the same index (and to its attribute when the error names
+ * one); errors in ESM use the source map.
+ */
+export async function inMdxSource(
+  error: unknown,
+  source: string,
+  file: string,
+  compiled: CompiledMdx
+): Promise<unknown> {
+  if (!(error instanceof SurfaceBuildError) || error.id !== file || !error.loc) return error;
+  const relocate = (line: number, column: number) =>
+    new SurfaceBuildError(error.reason, { file, code: source, line, column, hint: error.hint });
+  const offset = offsetAt(compiled.code, error.loc.line, error.loc.column + 1);
+  const written = contentElements(compiled.code);
+  if (written.length === compiled.elements.length) {
+    let index = -1;
+    written.forEach((element, i) => {
+      if (element.start <= offset && offset < element.end) index = i;
+    });
+    if (index >= 0) {
+      const target = compiled.elements[index];
+      const start = offsetAt(source, target.line, target.column);
+      const end = offsetAt(source, target.endLine, target.endColumn);
+      // `client:media=…` in the compiled element → the same attribute in the source.
+      const token = /^[\w:.-]+/.exec(compiled.code.slice(offset))?.[0];
+      const at =
+        offset > written[index].start && token ? source.slice(start, end).indexOf(token) : -1;
+      const position = locate(source, at > 0 ? start + at : start);
+      return relocate(position.line, position.column + 1);
+    }
+  }
+  if (!compiled.map) return new SurfaceBuildError(error.reason, { file, hint: error.hint });
+  const { SourceMapConsumer } = await import('source-map');
+  const original = await SourceMapConsumer.with(compiled.map, null, consumer =>
+    consumer.originalPositionFor({ line: error.loc!.line, column: error.loc!.column })
+  );
+  return original.line === null
+    ? new SurfaceBuildError(error.reason, { file, hint: error.hint })
+    : relocate(original.line, (original.column ?? 0) + 1);
 }

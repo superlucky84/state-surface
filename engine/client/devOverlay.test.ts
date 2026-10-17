@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StateSurface } from './stateSurface.js';
 import type { TraceEvent } from './stateSurface.js';
 import { attachDevOverlay } from './devOverlay.js';
+import { warning } from './trace.js';
 import { ComponentHost } from './componentHost.js';
 import { SlotDom } from './slotDom.js';
 
@@ -87,22 +88,25 @@ describe('devOverlay', () => {
     expect(logPanel?.textContent).toContain('applied');
   });
 
-  it('chains with existing trace hook', () => {
+  it('keeps the debug log and shows runtime warnings from any emitter', () => {
     setDebugMode(true);
     const { surface, traces } = createMockSurface();
     attachDevOverlay(surface);
 
     surface.trace?.({ kind: 'received', detail: { queueSize: 1 } });
+    warning('plugin "x" changed DOM inside client slot "a" during attach.', false);
+    warning('plugin "x" changed DOM inside client slot "a" during attach.', false);
 
-    // Original trace should still receive events
-    expect(traces).toHaveLength(1);
-    expect(traces[0].kind).toBe('received');
+    // The ?debug=1 console log still receives runtime events.
+    expect(traces.map(event => event.kind)).toEqual(['received']);
+    const panel = document.querySelector<HTMLElement>('[data-panel="warnings"]')!;
+    expect(panel.textContent).toBe('plugin "x" changed DOM inside client slot "a" during attach.');
+    expect(panel.parentElement!.style.display).toBe('');
   });
 
-  it('detach removes overlay and restores trace', () => {
+  it('detach removes the overlay and its trace subscription', () => {
     setDebugMode(true);
     const { surface } = createMockSurface();
-    const originalTrace = surface.trace;
     const detach = attachDevOverlay(surface)!;
 
     expect(document.getElementById('state-surface-dev-overlay')).toBeTruthy();
@@ -110,6 +114,7 @@ describe('devOverlay', () => {
     detach();
 
     expect(document.getElementById('state-surface-dev-overlay')).toBeNull();
-    expect(surface.trace).toBe(originalTrace);
+    // A later event does not reach the removed overlay.
+    expect(() => surface.trace?.({ kind: 'done' })).not.toThrow();
   });
 });

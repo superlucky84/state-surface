@@ -132,7 +132,7 @@ describe('demo SSR page', () => {
     expect(res.text).not.toContain('name="guide:content"');
     expect(res.text).not.toContain('animate-pulse');
     expect(slotHtml(res.text, 'guide:toc')).toContain('href="#');
-    const article = res.text.match(/<article class="guide-article[^>]*>([\s\S]*?)<\/article>/)![1];
+    const article = res.text.match(/<article[^>]*>([\s\S]*?)<\/article>/)![1];
     expect(article).toContain('<h2');
     expect(article.match(/<section id="/g)!.length).toBeGreaterThan(1);
     // Code blocks are highlighted on the server (no Prism plugin).

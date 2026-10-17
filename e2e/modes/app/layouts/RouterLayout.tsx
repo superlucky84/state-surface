@@ -55,6 +55,9 @@ export default function RouterLayout(
           </a>{' '}
           <a id="to-plain" href="/router/plain">
             plain
+          </a>{' '}
+          <a id="to-styled" href="/router/styled">
+            styled
           </a>
         </nav>
         <iframe id="frame" src="/assets/frame.html" transition:persist="frame" />

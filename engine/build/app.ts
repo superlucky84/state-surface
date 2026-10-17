@@ -7,9 +7,9 @@ import {
   type ModuleAnalysis,
   type SlotFacts,
 } from './analyze.js';
-import { SurfaceBuildError } from './diagnostics.js';
+import { SurfaceBuildError, atDefaultExport } from './diagnostics.js';
 import { listFiles } from './fsUtils.js';
-import { compileMdx } from './mdx.js';
+import { compileMdx, inMdxSource } from './mdx.js';
 import { scanRoutes, type ScannedRoute } from './routeScanner.js';
 import type { PagePlugin } from '../server/ssrRenderer.js';
 
@@ -29,6 +29,8 @@ export interface PageSlotFacts extends Omit<SlotFacts, 'schema'> {
 }
 
 const SCRIPT = /\.(?:[cm]?[jt]sx?|mdx)$/;
+// Vite's stylesheet languages (preprocessors need their package installed).
+const CSS = /\.(?:css|less|sass|scss|styl|stylus|pcss|postcss|sss)$/;
 
 /**
  * Analysis context bound to one plugin hook's resolver. Module facts are cached by absolute
@@ -65,8 +67,15 @@ export class SurfaceAnalyzer {
     let cached = this.facts.get(file);
     if (!cached) {
       cached = readFile(file, 'utf8').then(
-        async text =>
-          analyzeModule(file.endsWith('.mdx') ? (await compileMdx(text, file)).code : text, file),
+        async text => {
+          if (!file.endsWith('.mdx')) return analyzeModule(text, file);
+          const compiled = await compileMdx(text, file);
+          try {
+            return analyzeModule(compiled.code, file);
+          } catch (error) {
+            throw await inMdxSource(error, text, file, compiled);
+          }
+        },
         () => undefined
       );
       this.facts.set(file, cached);
@@ -86,6 +95,7 @@ export class SurfaceAnalyzer {
         file: importer,
         code,
         offset,
+        hint: 'Islands and Slot children must be project modules the build can resolve; check the import path.',
       });
     return file;
   }
@@ -99,21 +109,37 @@ export class SurfaceAnalyzer {
     if (!this.isProjectFile(file)) return;
     const target = await this.module(file);
     if (!target) return;
-    const fail = (message: string): never => {
-      throw new SurfaceBuildError(message, { file: importer, code, offset: use.offset });
+    const fail = (message: string, hint: string): never => {
+      throw new SurfaceBuildError(message, { file: importer, code, offset: use.offset, hint });
     };
     const server = target.serverExports.has(use.binding.imported);
     const slotMode = use.slot?.mode;
     if (server && use.kind === 'island')
-      fail(`<${use.local}> is a defineServerComponent and cannot be a client island.`);
+      fail(
+        `<${use.local}> is a defineServerComponent and cannot be a client island.`,
+        'Use it as the child of <Slot mode="server">: its load runs on the server for every render.'
+      );
     if (server && slotMode !== 'server')
-      fail(`<Slot name="${use.slot!.name}">: defineServerComponent children need mode="server".`);
-    if (target.usesSlot) fail(`<${use.local}> renders a <Slot>; Slots cannot be nested.`);
+      fail(
+        `<Slot name="${use.slot!.name}">: defineServerComponent children need mode="server".`,
+        'Add mode="server" to the Slot (and no client directive).'
+      );
+    if (target.usesSlot)
+      fail(
+        `<${use.local}> renders a <Slot>; Slots cannot be nested.`,
+        'Slots belong to page or layout markup; move the inner <Slot> out of the component.'
+      );
     const clientRendered = use.kind === 'island' || slotMode === 'client';
     if (clientRendered && target.usesBoot)
-      fail(`<${use.local}> is rendered on the client and cannot contain <Boot>.`);
+      fail(
+        `<${use.local}> is rendered on the client and cannot contain <Boot>.`,
+        'Put <Boot> in the page or layout markup.'
+      );
     if (clientRendered && target.islands.length)
-      fail(`<${use.local}> is rendered on the client and cannot contain islands.`);
+      fail(
+        `<${use.local}> is rendered on the client and cannot contain islands.`,
+        'A client-rendered component is one island: use the inner component as a plain element, or render it as its own island in the page.'
+      );
   }
 
   async checkElement(
@@ -129,7 +155,12 @@ export class SurfaceAnalyzer {
     if (target?.serverExports.has(binding.imported))
       throw new SurfaceBuildError(
         `<${local}> is a defineServerComponent; use it as the child of <Slot mode="server">.`,
-        { file: importer, code, offset }
+        {
+          file: importer,
+          code,
+          offset,
+          hint: 'Server components re-run load for every render, which only server Slots do.',
+        }
       );
   }
 
@@ -156,18 +187,23 @@ export class SurfaceAnalyzer {
   async app() {
     const routesDir = path.join(this.root, 'routes');
     const pages = await scanRoutes(routesDir);
-    const contentModule = path.join(this.engineDir, 'content.ts');
+    // `engine/content.ts` in this repository, `lib/content.js` in the package.
+    const contentModules = new Set(
+      ['.ts', '.js'].map(ext => path.join(this.engineDir, 'content' + ext))
+    );
     const content = await this.contentModules();
     const client = new Map<string, { file: string; exportName: string }>();
     const plugins = new Map<string, { file: string; exportName: string }>();
     const pagePlugins = new Map<string, PagePlugin[]>();
     const pageSlots = new Map<string, PageSlotFacts[]>();
+    // DC-23: stylesheets imported anywhere in a page's module graph (CSS Modules included).
+    const pageStyles = new Map<string, string[]>();
     const files = new Set<string>();
     for (const page of pages) {
       const facts = await this.module(page.filePath);
       if (facts && !facts.hasDefaultExport)
         throw new SurfaceBuildError('Pages must default-export a page function.', {
-          file: page.filePath,
+          ...(await atDefaultExport(page.filePath)),
           hint: 'export default async function Page(ctx: SurfaceContext) { … }',
         });
       const names = new Map<string, string>();
@@ -175,6 +211,8 @@ export class SurfaceAnalyzer {
       pagePlugins.set(page.filePath, declared);
       const slots: PageSlotFacts[] = [];
       pageSlots.set(page.filePath, slots);
+      const styles: string[] = [];
+      pageStyles.set(page.filePath, styles);
       const seen = new Set<string>();
       const queue = [page.filePath];
       while (queue.length) {
@@ -190,7 +228,12 @@ export class SurfaceAnalyzer {
             throw new SurfaceBuildError(
               `Slot name "${slot.name}" is declared in both ${path.relative(this.root, owner)} ` +
                 `and ${path.relative(this.root, file)}, which render on page ${page.urlPattern}.`,
-              { file }
+              {
+                file,
+                code: await readFile(file, 'utf8').catch(() => undefined),
+                offset: slot.offset,
+                hint: 'Rename one of them: transitions address each slot of a page by its unique name.',
+              }
             );
           names.set(slot.name, file);
         }
@@ -222,6 +265,7 @@ export class SurfaceAnalyzer {
                 file,
                 offset: use.offset,
                 code: await readFile(file, 'utf8').catch(() => undefined),
+                hint: "Export it with export const x = definePlugin({ … }) (import { definePlugin } from 'state-surface/client') and import that binding.",
               }
             );
           const id = this.componentId(target, use.binding);
@@ -230,12 +274,16 @@ export class SurfaceAnalyzer {
         }
         for (const source of module.sources) {
           const target = await this.resolve(source, file);
-          if (target === contentModule) queue.push(...content.filter(mdx => !seen.has(mdx)));
+          // `?inline`, `?url` and `?raw` imports are values, not page styles.
+          if (target && CSS.test(target) && !source.includes('?') && !styles.includes(target))
+            styles.push(target);
+          if (target && contentModules.has(target))
+            queue.push(...content.filter(mdx => !seen.has(mdx)));
           if (this.isProjectFile(target) && !seen.has(target)) queue.push(target);
         }
       }
     }
-    return { pages, client, plugins, pagePlugins, pageSlots, files };
+    return { pages, client, plugins, pagePlugins, pageSlots, pageStyles, files };
   }
 
   /** `schema={x}`: an imported binding or a module-level export of the declaring module. */
@@ -247,7 +295,10 @@ export class SurfaceAnalyzer {
     }
     const exported = module.exports.get(local);
     if (exported) return { file, exportName: exported };
-    throw new SurfaceBuildError(`Cannot resolve schema \`${local}\`.`, { file });
+    throw new SurfaceBuildError(`Cannot resolve schema \`${local}\`.`, {
+      file,
+      hint: 'Import the schema from a module the build can resolve, or export it from this module.',
+    });
   }
 }
 

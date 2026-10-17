@@ -1,3 +1,4 @@
+import { warning } from './trace.js';
 import { getBasePath } from '../shared/basePath.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
 import type { PrefetchStrategy, RouterOptions } from '../shared/surfaceTree.js';
@@ -112,10 +113,11 @@ export function persistPlan(
     const a = from.get(id);
     const b = to.get(id);
     if (el.tagName !== target.tagName || a?.component !== b?.component) {
-      if (DEV)
-        console.warn(
-          `[StateSurface] persist ID "${id}" names different elements or components on the two pages; it is not kept.`
-        );
+      warning(
+        `persist ID "${id}" names different elements or components on the two pages; it is not kept.`,
+        DEV,
+        { persist: id }
+      );
       continue;
     }
     plan.elements.push({ id, current: el, next: target });
