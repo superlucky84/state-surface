@@ -1,11 +1,10 @@
 import { StateSurface, type TraceEvent } from './stateSurface.js';
+import { DEV } from './dev.js';
 import { bindDeclarativeActions } from './actionDelegation.js';
 import { SlotDom } from './slotDom.js';
 import type { ComponentHost } from './componentHost.js';
 import type { PluginHost } from './pluginHost.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
-
-const DEV = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 /**
  * Action runtime chunk: frame streaming and the HTML adapter, declarative action

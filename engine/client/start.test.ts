@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { startLoader } from './start.js';
+import { onTrace, type TraceEvent } from './trace.js';
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 30));
 
@@ -119,12 +120,19 @@ describe('startLoader', () => {
     document.body.innerHTML = '<h-state name="gone"><p>ssr</p></h-state>';
     const reportError = vi.fn();
     vi.stubGlobal('reportError', reportError);
+    const traced: TraceEvent[] = [];
+    const unsubscribe = onTrace(event => traced.push(event));
     startLoader();
     await new Promise(resolve => setTimeout(resolve, 1100));
+    unsubscribe();
     expect(requests).toEqual([[location.href, 'HEAD']]);
     expect(document.querySelector('h-state')!.innerHTML).toBe('<p>ssr</p>');
     expect(reload).not.toHaveBeenCalled();
     expect(reportError).toHaveBeenCalledOnce();
+    // The production trace hook sees the same error with its context.
+    expect(traced).toEqual([
+      { kind: 'error', detail: expect.objectContaining({ message: expect.any(String) }) },
+    ]);
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(reload).toHaveBeenCalledOnce();
   });

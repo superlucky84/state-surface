@@ -1,7 +1,6 @@
 import { schedule } from './scheduler.js';
+import { DEV } from './dev.js';
 import { warning } from './trace.js';
-
-const DEV = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 export type SlotKind = 'client' | 'static' | 'server';
 
@@ -172,47 +171,17 @@ export class PluginHost {
   }
 
   private call(plugin: PluginDefinition, hook: string, run: () => void, slot?: string) {
-    const observed = slot !== undefined && this.development ? this.displayed.get(slot) : undefined;
-    const observer = observed && typeof MutationObserver !== 'undefined' && watchOwned(observed);
+    const watched =
+      DEV && this.development && slot !== undefined
+        ? watchOwnership(plugin, hook, slot, this.displayed.get(slot), this.warnedOwnership)
+        : undefined;
     try {
       run();
     } catch (error) {
       this.report(error, { plugin: plugin.name, hook });
     } finally {
-      if (observer) this.checkOwnership(plugin, hook, slot!, observed!, observer);
+      watched?.();
     }
-  }
-
-  /**
-   * Dev (DESIGN 3.1): a plugin enhances slot DOM but never changes what Lithent renders, the
-   * inside of client slots and islands; such changes are lost on the next render or break
-   * hydration.
-   */
-  private checkOwnership(
-    plugin: PluginDefinition,
-    hook: string,
-    slot: string,
-    { el, mode }: DisplayedSlot,
-    observer: MutationObserver
-  ) {
-    const records = observer.takeRecords();
-    observer.disconnect();
-    const owned = records.find(record => {
-      const target = record.target instanceof Element ? record.target : record.target.parentElement;
-      if (!target || !el.contains(target)) return false;
-      if (mode === 'client') return target !== el;
-      return !!target.closest('h-island') && el.contains(target.closest('h-island'));
-    });
-    const key = `${plugin.name}\0${slot}`;
-    if (!owned || this.warnedOwnership.has(key)) return;
-    this.warnedOwnership.add(key);
-    warning(
-      `plugin "${plugin.name}" changed DOM inside ${mode === 'client' ? `client slot "${slot}"` : `an island of slot "${slot}"`} during ${hook}. ` +
-        'Lithent owns that DOM: the change is lost on the next render. Change the component, or ' +
-        'enhance the slot element outside its islands.',
-      true,
-      { plugin: plugin.name, slot, hook }
-    );
   }
 
   private attach(
@@ -292,9 +261,42 @@ export class PluginHost {
   }
 }
 
-/** Records the mutations a plugin hook makes synchronously in its slot. */
-function watchOwned({ el }: DisplayedSlot) {
+/**
+ * Dev (DESIGN 3.1): a plugin enhances slot DOM but never changes what Lithent renders, the
+ * inside of client slots and islands; such changes are lost on the next render or break
+ * hydration. Records the mutations of one synchronous hook call; the returned function
+ * checks them.
+ */
+function watchOwnership(
+  plugin: PluginDefinition,
+  hook: string,
+  slot: string,
+  displayed: DisplayedSlot | undefined,
+  warned: Set<string>
+) {
+  if (!displayed || typeof MutationObserver === 'undefined') return undefined;
+  const { el, mode } = displayed;
   const observer = new MutationObserver(() => {});
   observer.observe(el, { subtree: true, childList: true, attributes: true, characterData: true });
-  return observer;
+  return () => {
+    const records = observer.takeRecords();
+    observer.disconnect();
+    const owned = records.some(record => {
+      const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      if (!target || !el.contains(target)) return false;
+      if (mode === 'client') return target !== el;
+      const island = target.closest('h-island');
+      return !!island && el.contains(island);
+    });
+    const key = `${plugin.name}\0${slot}`;
+    if (!owned || warned.has(key)) return;
+    warned.add(key);
+    warning(
+      `plugin "${plugin.name}" changed DOM inside ${mode === 'client' ? `client slot "${slot}"` : `an island of slot "${slot}"`} during ${hook}. ` +
+        'Lithent owns that DOM: the change is lost on the next render. Change the component, or ' +
+        'enhance the slot element outside its islands.',
+      true,
+      { plugin: plugin.name, slot, hook }
+    );
+  };
 }

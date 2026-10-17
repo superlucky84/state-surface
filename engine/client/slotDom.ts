@@ -1,3 +1,4 @@
+import { DEV } from './dev.js';
 import { warning } from './trace.js';
 import type { IslandMeta, UiPatch } from '../shared/protocol.js';
 import { hasScript } from '../shared/capability.js';
@@ -91,7 +92,7 @@ export class SlotDom {
     swap: 'replace' | 'morph' = 'replace',
     isCurrent: () => boolean = () => true
   ) {
-    if (this.options.development && hasScript(html))
+    if (DEV && this.options.development && hasScript(html))
       warning(`<script> in the HTML of slot "${slot}" does not run.`, true, { slot });
     if (swap === 'morph') {
       const { morphSlot } = await this.preloadMorph();

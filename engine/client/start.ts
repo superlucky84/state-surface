@@ -1,5 +1,6 @@
 /// <reference path="./virtual.d.ts" />
 import components from 'virtual:state-surface/islands';
+import { emitTrace } from './trace.js';
 import plugins from 'virtual:state-surface/plugins';
 import { setBasePath } from '../shared/basePath.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
@@ -61,6 +62,11 @@ export function startLoader(root: Document = document) {
   const debug = new URLSearchParams(location.search).get('debug') === '1';
   const report = (error: unknown, detail: Record<string, unknown>) => {
     if (debug) console.error('[StateSurface]', detail, error);
+    // Trace subscribers (onTrace) see unexpected errors with their context in production too.
+    emitTrace({
+      kind: 'error',
+      detail: { ...detail, message: error instanceof Error ? error.message : String(error) },
+    });
     (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
   };
 

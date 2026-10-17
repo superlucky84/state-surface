@@ -145,3 +145,6 @@ jobs:
       - run: pnpm test:conformance ${{ matrix.adapter }}
       - if: matrix.adapter == 'node'
         run: pnpm build && pnpm test:parity && pnpm build:adapter-app
+      # V-28 dev/prod identity: the same scenarios on `vite` dev and on the production build.
+      - if: matrix.adapter == 'node'
+        run: pnpm test:conformance:app

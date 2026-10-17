@@ -69,6 +69,14 @@ export interface HandlerOptions {
   /** `/_surface/image` transforms (DC-26): Node, Bun and Deno adapters pass one. */
   images?: ImageService;
 }
+/**
+ * Default export of `surface.server.ts`: the handler options of both `vite` dev and the
+ * production server entry (`serve({ ...handler, manifest })`).
+ */
+export type HandlerConfig = Omit<
+  HandlerOptions,
+  'manifest' | 'development' | 'prerendering' | 'readStatic'
+>;
 export interface SurfaceHandler {
   fetch(
     request: Request,

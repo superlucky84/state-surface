@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 
-export async function scenarios(origin, runtime) {
+/**
+ * V-28. `options.app`: the surface() app of conformance/app (real loader, prerendered pages
+ * built by the plugin); `options.development`: its `vite` dev server, where errors carry
+ * their detail and prerendered pages render on request.
+ */
+export async function scenarios(origin, runtime, options = {}) {
+  const buildId = options.buildId ?? 'conformance-build';
+  const { app = false, development = false } = options;
   let count = 0;
   const check = async (name, run) => {
     await run();
@@ -11,7 +18,7 @@ export async function scenarios(origin, runtime) {
   };
   const url = path => origin + '/demo' + path;
   // Headers the browser runtime sends (DESIGN 6.2): build id and page manifest id.
-  const surface = { 'x-surface-build': 'conformance-build', 'x-surface-page': 'index' };
+  const surface = { 'x-surface-build': buildId, 'x-surface-page': 'index' };
   const post = (name, body = {}, headers = {}) =>
     fetch(url('/transition/' + name), {
       method: 'POST',
@@ -34,7 +41,7 @@ export async function scenarios(origin, runtime) {
     assert.ok(html.includes('<p>Hello</p>'));
     assert.ok(!html.includes('data-ssr-hash'));
     const bootstrap = bootstrapOf(html);
-    assert.equal(bootstrap.buildId, 'conformance-build');
+    assert.equal(bootstrap.buildId, buildId);
     assert.equal(bootstrap.pageId, 'index');
     assert.equal(bootstrap.basePath, '/demo');
     const props = bootstrap.slots.find(slot => slot.id === 'fixture:state').props;
@@ -44,7 +51,7 @@ export async function scenarios(origin, runtime) {
     const entry = html.match(
       /<script type="module" src="([^"]+)" nonce="([^"]+)" data-ss><\/script><!--\/ss:head-->/
     );
-    assert.ok(entry && entry[1].endsWith('/assets/probe-12345678.js'));
+    assert.ok(entry && (app || entry[1].endsWith('/assets/probe-12345678.js')));
     assert.equal(entry[2], props.nonce);
   });
   await check('static page without engine script', async () => {
@@ -126,15 +133,17 @@ export async function scenarios(origin, runtime) {
   await check('build mismatch 409, page header 400, production error frame', async () => {
     const stale = await post('echo', {}, { 'x-surface-build': 'old-build' });
     assert.equal(stale.status, 409);
-    assert.equal((await stale.json()).buildId, 'conformance-build');
+    assert.equal((await stale.json()).buildId, buildId);
     assert.equal((await post('echo', {}, { 'x-surface-page': 'unknown' })).status, 400);
     const failed = await post('fail');
     const lines = (await failed.text()).trim().split('\n').map(JSON.parse);
+    // Development shows the error detail; production masks it.
+    const message = development ? 'secret-transition-detail' : 'Transition failed';
     assert.deepEqual(lines.at(-1), {
       type: 'error',
-      message: 'Transition failed',
+      message,
       slot: 'system:error',
-      html: '<p class="error">Transition failed</p>',
+      html: `<p class="error">${message}</p>`,
     });
   });
   await check('deferred server slot token and island endpoint', async () => {
@@ -145,7 +154,7 @@ export async function scenarios(origin, runtime) {
     assert.equal(slot.component, 'conformance/Deferred.tsx#default');
     const island = url(`/_surface/island/${encodeURIComponent(slot.component)}?p=${slot.defer}`);
     const response = await fetch(island, {
-      headers: { cookie: 'lang=ko', 'x-surface-build': 'conformance-build' },
+      headers: { cookie: 'lang=ko', 'x-surface-build': buildId },
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'public, max-age=60');
@@ -226,7 +235,9 @@ export async function scenarios(origin, runtime) {
   await check('SSR error hook and production masking', async () => {
     const response = await fetch(url('/failure'));
     assert.equal(response.status, 500);
-    assert.equal(await response.text(), 'Internal Server Error');
+    const body = await response.text();
+    if (development) assert.ok(body.includes('secret-render-detail'));
+    else assert.equal(body, 'Internal Server Error');
     const report = await (await fetch(url('/errors'))).json();
     assert.ok(report.errors >= 1);
   });
@@ -264,25 +275,34 @@ export async function scenarios(origin, runtime) {
   await check(
     'prerendered HTML through the middleware: headers, ETag/304, early response',
     async () => {
+      // The fixture's stored pages are bare markers; the app's are built (or, in dev,
+      // rendered) documents.
+      const built = async (response, path) => {
+        const text = (await response.text()).trim();
+        if (app) assert.ok(text.includes(`<p>built-marker ${path}</p>`), text);
+        else assert.equal(text, `<!doctype html><p>built-marker ${path}</p>`);
+      };
       const response = await fetch(url('/built'));
       assert.equal(response.status, 200);
-      assert.equal((await response.text()).trim(), '<!doctype html><p>built-marker /built</p>');
+      await built(response, '/built');
       assert.equal(response.headers.get('x-middleware'), 'after');
       assert.equal(response.headers.get('x-route-kind'), 'page');
       assert.equal(response.headers.get('x-prerendered'), 'true');
       assert.match(response.headers.get('content-type'), /text\/html/);
-      assert.equal(response.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
-      // Deno.serve compresses the body and weakens the ETag; the core ignores W/ when matching.
-      const etag = response.headers.get('etag');
-      assert.equal(etag.replace(/^W\//, ''), '"conformance-build"');
-      const cached = await fetch(url('/built'), { headers: { 'if-none-match': etag } });
-      assert.equal(cached.status, 304);
-      assert.equal(await cached.text(), '');
+      if (!development) {
+        assert.equal(response.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
+        // Deno.serve compresses the body and weakens the ETag; the core ignores W/ when matching.
+        const etag = response.headers.get('etag');
+        assert.equal(etag.replace(/^W\//, ''), `"${buildId}"`);
+        const cached = await fetch(url('/built'), { headers: { 'if-none-match': etag } });
+        assert.equal(cached.status, 304);
+        assert.equal(await cached.text(), '');
+      }
       const head = await fetch(url('/built'), { method: 'HEAD' });
       assert.equal(head.status, 200);
       assert.equal(await head.text(), '');
       const doc = await fetch(url('/built-docs/one'));
-      assert.equal((await doc.text()).trim(), '<!doctype html><p>built-marker /built-docs/one</p>');
+      await built(doc, '/built-docs/one');
       const missing = await fetch(url('/built-docs/two'));
       assert.equal(missing.status, 404);
       await missing.body?.cancel();
@@ -290,7 +310,7 @@ export async function scenarios(origin, runtime) {
       assert.equal(locked.status, 401);
       assert.equal(await locked.text(), 'locked');
       const unlocked = await fetch(url('/locked'), { headers: { cookie: 'pass=1' } });
-      assert.equal((await unlocked.text()).trim(), '<!doctype html><p>built-marker /locked</p>');
+      await built(unlocked, '/locked');
     }
   );
   await check('image endpoint: remote allowlist and widths, none on Workers', async () => {
@@ -315,7 +335,8 @@ export async function scenarios(origin, runtime) {
     const response = await fetch(url('/assets/probe-12345678.js'));
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /javascript/);
-    assert.match(response.headers.get('cache-control'), /immutable/);
+    // Vite serves public files in dev with its own cache headers.
+    if (!development) assert.match(response.headers.get('cache-control'), /immutable/);
     assert.ok((await response.text()).includes('fixture asset'));
     const head = await fetch(url('/assets/probe-12345678.js'), { method: 'HEAD' });
     assert.equal(head.status, 200);

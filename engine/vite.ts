@@ -32,6 +32,9 @@ const PLUGINS = 'virtual:state-surface/plugins';
 const ENTRY = 'virtual:state-surface/entry';
 const PRERENDER = 'virtual:state-surface/prerender';
 const CONTENT = 'virtual:state-surface/content';
+/** Handler options shared by the dev server and the production entry (`surface.server.ts`). */
+const HANDLER = 'virtual:state-surface/handler';
+const HANDLER_FILES = ['surface.server.ts', 'surface.server.js'];
 // DC-23: one client entry per page that imports the stylesheets of its module graph.
 const PAGE_STYLES = 'virtual:state-surface/page-styles';
 const STYLES_MANIFEST = '.vite/surface-styles.json';
@@ -93,6 +96,12 @@ export interface SurfacePluginOptions {
   /** Image optimization (DC-26): srcset widths, extra formats, allowed remote hosts. */
   images?: ImageOptions;
   /**
+   * Module whose default export holds the request handler options (`middleware`, `onError`,
+   * `limits`, `bodyLimit`, `security`, …) for both `vite` dev and the production server
+   * entry. Default `surface.server.ts` when present.
+   */
+  handler?: string;
+  /**
    * Production source maps of the original TSX (DESIGN 8.3-6). `'hidden'` writes maps
    * without a `sourceMappingURL` comment, to upload to an error tracker and delete before
    * deploying; `true` references them. The server bundle gets maps either way. A
@@ -147,6 +156,10 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       },
       facts
     );
+  const handlerFile = (root: string) =>
+    options.handler
+      ? path.resolve(root, options.handler)
+      : HANDLER_FILES.map(file => path.join(root, file)).find(file => existsSync(file));
   const appEntryFile = (root: string) => {
     const file = path.resolve(root, options.clientEntry ?? 'client/entry.ts');
     return existsSync(file) ? file : undefined;
@@ -234,7 +247,11 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
             ? { resolve: { conditions: [SOURCE_CONDITION, ...defaultServerConditions] } }
             : {}),
         },
-        define: { __SURFACE_ADAPTER__: JSON.stringify(adapter?.name ?? 'node') },
+        define: {
+          __SURFACE_ADAPTER__: JSON.stringify(adapter?.name ?? 'node'),
+          // Development-only engine checks are dropped from production bundles.
+          __SURFACE_DEV__: JSON.stringify(env.mode !== 'production'),
+        },
       };
       const sourcemap =
         env.command === 'build' && options.sourcemap && user.build?.sourcemap === undefined
@@ -277,6 +294,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       if (id === ENTRY || id === path.resolve(config.root, ENTRY)) return '\0' + ENTRY;
       if (id === PRERENDER || id === path.resolve(config.root, PRERENDER)) return '\0' + PRERENDER;
       if (id === CONTENT) return '\0' + CONTENT;
+      if (id === HANDLER) return '\0' + HANDLER;
       if (id.startsWith(PAGE_STYLES + '?')) return '\0' + id;
       // Dev reports server-only imports immediately; builds report the full chain in buildEnd.
       // Vitest's DOM environments are "client" too but mix server and browser code on purpose.
@@ -364,13 +382,18 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       }
       if (id === '\0' + PRERENDER)
         return `export { default as manifest } from '${VIRTUAL}';export { createHandler, isPrerendered, staticParams } from 'state-surface/internal/prerender';`;
+      if (id === '\0' + HANDLER) {
+        const file = handlerFile(config.root);
+        return file ? `export { default } from ${JSON.stringify(file)};` : 'export default {};';
+      }
       if (id === '\0' + ENTRY) {
         const name = adapter?.name ?? 'node';
+        const imports = `import manifest from '${VIRTUAL}';import handler from '${HANDLER}';`;
         if (name === 'cloudflare')
-          return `import manifest from '${VIRTUAL}';import {worker} from 'state-surface/adapters/cloudflare';export default worker({manifest});`;
+          return `${imports}import {worker} from 'state-surface/adapters/cloudflare';export default worker({...handler,manifest});`;
         if (name === 'express')
-          return `import manifest from '${VIRTUAL}';import express from 'express';import {surface} from 'state-surface/adapters/express';const app=express();app.use(surface({manifest}));app.listen(Number(process.env.PORT??3000));`;
-        return `import manifest from '${VIRTUAL}';import {serve} from 'state-surface/adapters/${name}';serve({manifest});`;
+          return `${imports}import express from 'express';import {surface} from 'state-surface/adapters/express';const app=express();app.use(surface({...handler,manifest}));app.listen(Number(process.env.PORT??3000));`;
+        return `${imports}import {serve} from 'state-surface/adapters/${name}';serve({...handler,manifest});`;
       }
       if (![VIRTUAL, ISLANDS, PLUGINS].some(name => id === '\0' + name)) return;
       const root = config.root;
@@ -647,11 +670,15 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         server.middlewares.use(async (req, res, next) => {
           try {
             const { default: manifest } = await server.ssrLoadModule(VIRTUAL);
+            // The production entry's options too (middleware, onError, limits): dev and
+            // production run the same core with the same configuration (DC-16 ④).
+            const { default: options } = await server.ssrLoadModule(HANDLER);
             const { createHandler } = await server.ssrLoadModule('state-surface/server');
             const handler = createHandler({
+              images: createImageService({ root: config.root, cacheDir: imageCache() }),
+              ...options,
               manifest,
               development: true,
-              images: createImageService({ root: config.root, cacheDir: imageCache() }),
             });
             await nodeListener(handler)(req, res);
           } catch (error) {

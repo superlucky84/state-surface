@@ -1,4 +1,5 @@
 import { warning } from './trace.js';
+import { DEV } from './dev.js';
 import { getBasePath } from '../shared/basePath.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
 import type { PrefetchStrategy, RouterOptions } from '../shared/surfaceTree.js';
@@ -82,7 +83,6 @@ function syncAttributes(el: Element, previous: Attributes, next: Attributes) {
   el.classList.add(...keep);
 }
 
-const DEV = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
 const persistedIn = (root: ParentNode) =>
   new Map(
     Array.from(root.querySelectorAll('[data-surface-persist]'), el => [

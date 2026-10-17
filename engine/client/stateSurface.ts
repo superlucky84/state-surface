@@ -1,3 +1,4 @@
+import { DEV } from './dev.js';
 import { emitTrace, warning, type TraceEvent } from './trace.js';
 import {
   checkWireFrame,
@@ -206,6 +207,7 @@ export class StateSurface {
     // the others (DC-30).
     const actions = this.options.actions ?? {};
     if (
+      DEV &&
       this.options.development &&
       boot.length > 1 &&
       boot.some(
@@ -308,7 +310,7 @@ export class StateSurface {
     const meta = Object.hasOwn(this.options.actions ?? {}, name)
       ? this.options.actions![name]
       : undefined;
-    if (!meta?.targets && this.options.development && !this.warnedTargets.has(name)) {
+    if (DEV && !meta?.targets && this.options.development && !this.warnedTargets.has(name)) {
       this.warnedTargets.add(name);
       warning(
         `"${name}" declares no targets, so it aborts every running action. ` +
