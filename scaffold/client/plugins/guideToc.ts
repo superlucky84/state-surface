@@ -34,10 +34,33 @@ function scheduleScroll(slotEl: Element) {
   setTimeout(() => scrollActiveGuideCategory(slotEl), 0);
 }
 
-/** Keeps the active guide category visible in the mobile category row. */
+/** The code of a guide code block without its line numbers. */
+export function codeText(button: Element): string {
+  const code = button.closest('.rounded-lg')?.querySelector('pre code');
+  if (!code) return '';
+  const copy = code.cloneNode(true) as Element;
+  copy.querySelectorAll('.code-ln').forEach(number => number.remove());
+  return copy.textContent ?? '';
+}
+
+function copyCode(event: Event) {
+  const button = (event.target as Element | null)?.closest?.('button[data-copy-code]');
+  if (!button) return;
+  void navigator.clipboard?.writeText(codeText(button));
+  button.textContent = 'Copied!';
+  setTimeout(() => (button.textContent = 'Copy'), 1500);
+}
+
+/**
+ * Keeps the active guide category visible in the mobile category row, and copies guide code
+ * blocks (they are prerendered HTML, so the button is handled here).
+ */
 export const guideToc = definePlugin({
   name: 'guide-toc',
   slots: ['guide:toc'],
+  onPage({ signal }) {
+    document.addEventListener('click', copyCode, { signal });
+  },
   attach(el) {
     scheduleScroll(el);
   },

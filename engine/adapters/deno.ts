@@ -1,4 +1,5 @@
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
+import { createImageService } from '../images/service.js';
 import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
 
 declare const Deno: {
@@ -41,7 +42,12 @@ export function serve(
   const env = options.env ?? Deno.env.toObject();
   checkBasePath(options.manifest.basePath, env);
   const adapter = deno(options);
-  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
+  const handler = createHandler({
+    readStatic: file => adapter.readStatic(file),
+    // DC-26: `/_surface/image` resizes allowed remote images (sharp, disk cache).
+    images: createImageService(),
+    ...options,
+  });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   return Deno.serve({ port: options.port ?? Number(env.PORT ?? 3000) }, async request => {
     const file = assetPath(request, base);

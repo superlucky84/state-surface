@@ -10,9 +10,11 @@
     "./client": "./engine/client.ts",
     "./vite": "./engine/vite.ts",
     "./rich": "./engine/rich.ts",
+    "./content": "./engine/content.ts",
     "./adapters/*": "./engine/adapters/*.ts",
     "./internal/assets": "./engine/server/assets.ts",
     "./internal/basePath": "./engine/shared/basePath.ts",
+    "./internal/images": "./engine/shared/image.ts",
     "./internal/island": "./engine/island.ts",
     "./internal/prerender": "./engine/server/prerenderEntry.ts",
     "./server-only": {
@@ -112,6 +114,7 @@
     "micromark-extension-frontmatter": "2.0.0",
     "oxc-parser": "0.94.0",
     "prismjs": "^1.30.0",
+    "sharp": "0.35.5",
     "yaml": "2.8.1"
   },
   "peerDependencies": {

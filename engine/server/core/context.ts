@@ -36,7 +36,7 @@ export interface SurfaceContext {
   /** Pages under `routes/[lang]/` (DC-24 ⑤): the language and links to this page in others. */
   i18n?: I18nContext;
   route: {
-    kind: 'page' | 'transition' | 'action' | 'island' | 'redirect' | 'not-found';
+    kind: 'page' | 'transition' | 'action' | 'island' | 'image' | 'redirect' | 'not-found';
     pattern?: string;
     name?: string;
     prerendered: boolean;

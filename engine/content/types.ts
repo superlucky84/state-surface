@@ -71,8 +71,12 @@ export interface CollectionConfig<
 }
 
 /** The validated data type of a collection config. */
-export type InferData<C> = C extends { schema: infer S }
-  ? S extends StandardSchema
-    ? InferOutput<S>
-    : Record<string, unknown>
-  : Record<string, unknown>;
+export type InferData<C> =
+  C extends CollectionConfig<infer S>
+    ? S extends StandardSchema
+      ? InferOutput<S>
+      : Record<string, unknown>
+    : Record<string, unknown>;
+
+/** What `virtual:state-surface/content` exports: collections with their entries. */
+export type ContentModule = Record<string, { locales?: readonly string[]; entries: RawEntry[] }>;

@@ -21,6 +21,7 @@ import { RICH, URL_ATTRIBUTES, neutralizeScripts, safeUrl } from '../shared/capa
 import { readServerComponent } from './serverComponent.js';
 import { buildSurfaceScript } from './ssr.js';
 import { nonceOf } from './prerenderContext.js';
+import { readImagePreload, type ImagePreload } from '../shared/image.js';
 
 /** A client plugin declared by the page or a module it imports (build-time analysis). */
 export type PagePlugin = PluginMeta;
@@ -114,6 +115,8 @@ interface RenderState {
   persist: Set<string>;
   /** `data-prefetch` strategies of links (Speculation Rules on pages without the router). */
   prefetch: Set<string>;
+  /** `<Image priority>` preloads by URL (DC-26, page SSR only). */
+  images: Map<string, ImagePreload>;
 }
 
 /** Nodes the engine creates itself (island children wrapper, transport template). */
@@ -156,6 +159,7 @@ function newState(ctx: SurfaceContext): RenderState {
     defer: false,
     persist: new Set(),
     prefetch: new Set(),
+    images: new Map(),
   };
 }
 
@@ -288,6 +292,17 @@ export async function renderPage(
       )
       .join('') +
     tags.styles.map(href => `<link rel="stylesheet" href="${escapeAttr(href)}" data-ss>`).join('') +
+    // DC-26: `<Image priority>` (the LCP candidate) starts loading with the stylesheets.
+    [...state.images.values()]
+      .map(
+        image =>
+          `<link rel="preload" as="image" href="${escapeAttr(image.href)}"` +
+          (image.srcset ? ` imagesrcset="${escapeAttr(image.srcset)}"` : '') +
+          (image.sizes ? ` imagesizes="${escapeAttr(image.sizes)}"` : '') +
+          (image.type ? ` type="${escapeAttr(image.type)}"` : '') +
+          ' fetchpriority="high" data-ss>'
+      )
+      .join('') +
     // Preloads fetch scripts: a nonce-based CSP checks them like the scripts (DESIGN 8.2).
     tags.preload
       .map(href => `<link rel="modulepreload" href="${escapeAttr(href)}"${nonceAttr} data-ss>`)
@@ -385,6 +400,8 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
     );
   const tag = node.type === 'e' ? node.tag : undefined;
   if (tag === 'html' || tag === 'head' || tag === 'body') state.structure[tag]++;
+  const preload = readImagePreload(node);
+  if (preload && !state.images.has(preload.href)) state.images.set(preload.href, preload);
   let current = node;
   if (tag && node.props) {
     if (node.props['data-action'] !== undefined) state.actions = true;

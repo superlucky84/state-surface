@@ -514,8 +514,8 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
       아니면 같은 origin `Referer`, 그것도 아니면 BASE_PATH 루트.
 - [x] flash: IC-09 키로 서명한 일회성 쿠키, 기본은 검증 오류·결과만, 입력값은 `flash.input`에 명시한 필드만, file 값
       제외, 3KB 한도(초과 시 입력값 → 오류 요약 순으로 축소, dev 경고). `ctx.flash(name)`, `actionUrl()` 헬퍼.
-- [ ] prerender 페이지에 액션 폼이 있으면 JS 없는 결과 표시 한계를 빌드 경고로 알린다(단계 7에서 prerender 도입 후 활성).
-      → 단계 7로 이월(prerender가 아직 없어 판정 대상이 없다).
+- [x] prerender 페이지에 액션 폼이 있으면 JS 없는 결과 표시 한계를 빌드 경고로 알린다(단계 7에서 prerender 도입 후 활성).
+      → 단계 7에서 구현(prerender 빌드가 `/_surface/action/` 폼을 찾아 경고).
 
 #### 데모
 
@@ -665,60 +665,99 @@ DESIGN 10.7~10.9.
 
 #### prerender (DC-24, DC-32)
 
-- [ ] `export const prerender`, `surface({ prerender: true })` 반전, 동적 라우트 `getStaticPaths()` 필수(없으면 빌드 오류),
+- [x] `export const prerender`, `surface({ prerender: true })` 반전, 동적 라우트 `getStaticPaths()` 필수(없으면 빌드 오류),
       목록 밖 params는 404.
-- [ ] 제한 ctx: `cookies`·`request` 헤더·`locals`·`flash`·`nonce` 접근은 원본 위치와 함께 빌드 오류.
-- [ ] 출력 `dist/client/<path>/index.html`, BASE_PATH 빌드 고정·시작 시 불일치 진단.
-- [ ] 서빙(DC-32): prerender HTML도 코어 통과 → `onRequest` 실행(`ctx.route.prerendered`) → 어댑터 `readStatic` 본문,
+- [x] 제한 ctx: `cookies`·`request` 헤더·`locals`·`flash`·`nonce` 접근은 원본 위치와 함께 빌드 오류.
+- [x] 출력 `dist/client/<path>/index.html`, BASE_PATH 빌드 고정·시작 시 불일치 진단.
+- [x] 서빙(DC-32): prerender HTML도 코어 통과 → `onRequest` 실행(`ctx.route.prerendered`) → 어댑터 `readStatic` 본문,
       빌드 해시 ETag·304, `Cache-Control: public, max-age=0, must-revalidate`. JS·CSS·이미지는 어댑터 우선.
-- [ ] 어댑터별 `readStatic`(Node·Bun·Deno 파일, Workers `ASSETS` 바인딩)과 Workers HTML 경로 `run_worker_first`.
-- [ ] 서버 없는 정적 호스팅 가이드(`_headers` 등)와 그때의 한계(인증·요청별 처리 없음).
+- [x] 어댑터별 `readStatic`(Node·Bun·Deno 파일, Workers `ASSETS` 바인딩)과 Workers HTML 경로 `run_worker_first`.
+- [x] 서버 없는 정적 호스팅 가이드(`_headers` 등)와 그때의 한계(인증·요청별 처리 없음).
+      → [docs/server-adapters.md](../server-adapters.md#static-hosting-without-a-server).
+- [x] (단계 5 이월) prerender 페이지에 JS 없는 액션 폼이 있으면 결과 표시 한계를 빌드 경고로 알린다.
 
 #### i18n (DC-24)
 
-- [ ] `routes/[lang]/…` 경로, 언어별 prerender, `hreflang` 대체 링크, 언어 없는 경로는 `lang` 쿠키 → `Accept-Language` →
+- [x] `routes/[lang]/…` 경로, 언어별 prerender, `hreflang` 대체 링크, 언어 없는 경로는 `lang` 쿠키 → `Accept-Language` →
       기본 언어 순 302, 정적 호스팅은 기본 언어 prerender + canonical.
-- [ ] 언어 전환은 같은 페이지의 다른 언어 경로로 이동하고 쿠키에 기록한다. `switch-lang` transition과 쿠키 기반 SSR
+- [x] 언어 전환은 같은 페이지의 다른 언어 경로로 이동하고 쿠키에 기록한다. `switch-lang` transition과 쿠키 기반 SSR
       언어 선택을 제거한다. 동등성 e2e의 언어 전환 시나리오를 경로 기준으로 갱신한다.
 
 #### 콘텐츠 컬렉션 (DC-25)
 
-- [ ] `content/config.ts`의 `defineCollection({ schema, loader, i18n })`, loader(`.md`·`.mdx`·`.json`·`.yaml`),
+- [x] `content/config.ts`의 `defineCollection({ schema, loader, i18n })`, loader(`.md`·`.mdx`·`.json`·`.yaml`),
       `getCollection`·`getEntry`, 스키마 기반 타입 추론, `Content` 컴포넌트와 heading 목록.
-- [ ] `.md` + `remark-directive` 블록 10종(paragraph·bullets·code·checklist·warning·sequence·diagram·callout·analogy·
+- [x] `.md` + `remark-directive` 블록 10종(paragraph·bullets·code·checklist·warning·sequence·diagram·callout·analogy·
       debug), 알 수 없는 디렉티브·속성 빌드 오류, rich 렌더러(단계 4) 공유, raw HTML 차단.
-- [ ] `.mdx`(`@mdx-js/rollup`, `jsxImportSource: 'lithent'`), 블록 렌더러를 MDX 컴포넌트로 노출, 지시자 분석·서버 전용
+- [x] `.mdx`(`@mdx-js/mdx`, `jsxImportSource: 'lithent'`), 블록 렌더러를 MDX 컴포넌트로 노출, 지시자 분석·서버 전용
       검사 적용.
-- [ ] i18n parity: `.md`는 섹션 ID·블록 수·블록 타입, `.mdx`는 heading 구조. 빌드 오류·dev 경고.
-- [ ] 진단(파일·필드·줄)과 dev 콘텐츠 변경 시 페이지 재로드.
-- [ ] 코드 하이라이트를 서버 렌더로 옮기고(DESIGN 5.1 서버 우선) Prism 클라이언트 플러그인 필요 여부를 확정한다.
+- [x] i18n parity: `.md`는 섹션 ID·블록 수·블록 타입, `.mdx`는 heading 구조. 빌드 오류·dev 경고.
+- [x] 진단(파일·필드·줄)과 dev 콘텐츠 변경 시 페이지 재로드.
+- [x] 코드 하이라이트를 서버 렌더로 옮기고(DESIGN 5.1 서버 우선) Prism 클라이언트 플러그인 필요 여부를 확정한다.
+      → 서버 `highlight`·`highlightLines`로 충분해 Prism 플러그인을 제거했다.
 
 #### 이행
 
-- [ ] `shared/content.ts`의 가이드를 `content/guides/<lang>/*.md`로, 홈·예제 UI 문구를 `content/pages/<lang>/*.yaml`로
+- [x] `shared/content.ts`의 가이드를 `content/guides/<lang>/*.md`로, 홈·예제 UI 문구를 `content/pages/<lang>/*.yaml`로
       옮기고 제거한다. 기존 `shared/guideContent.test.ts` parity 테스트를 프레임워크 parity 검사로 대체한다.
-- [ ] 가이드 본문을 2.0 API(페이지·Slot·transition·action, 모드와 지시자)로 다시 쓴다. ko·en 함께.
-- [ ] 가이드 페이지의 로딩 SSR + `<Boot transition="guide-load">`를 prerender 정적 페이지로 바꾸고 `guide-load`
+- [x] 가이드 본문을 2.0 API(페이지·Slot·transition·action, 모드와 지시자)로 다시 쓴다. ko·en 함께.
+- [x] 가이드 페이지의 로딩 SSR + `<Boot transition="guide-load">`를 prerender 정적 페이지로 바꾸고 `guide-load`
       transition을 제거한다.
 
 #### 이미지 (DC-26)
 
-- [ ] `<Image>`(WebP 단일 `<img>`)·`<Picture formats>`·`getImage()`, `alt` 필수, 원본 크기 `width`·`height`, 기본 lazy·async,
+- [x] `<Image>`(WebP 단일 `<img>`)·`<Picture formats>`·`getImage()`, `alt` 필수, 원본 크기 `width`·`height`, 기본 lazy·async,
       `priority`(eager·`fetchpriority="high"`·preload), `layout` 3종 srcset·sizes·기본 CSS, 기본 폭 목록.
-- [ ] `sharp` 빌드 변환·해시 파일명, dev 요청 시 변환과 `node_modules/.state-surface/images` 캐시.
-- [ ] 원격: `remotePatterns`만 변환(미등록은 빌드 오류), Node·Bun·Deno SSR `/_surface/image`(허용 도메인·폭만, 디스크
+- [x] `sharp` 빌드 변환·해시 파일명, dev 요청 시 변환과 `node_modules/.state-surface/images` 캐시.
+- [x] 원격: `remotePatterns`만 변환(미등록은 빌드 오류), Node·Bun·Deno SSR `/_surface/image`(허용 도메인·폭만, 디스크
       캐시), Workers는 원본 URL·`width`·`height` 필수·선택적 Cloudflare Images 위임.
 
 #### Baseline 테스트
 
-- [ ] prerender 결과와 같은 경로 SSR 결과의 HTML 일치(요청 의존 부분 제외).
-- [ ] prerender HTML 응답에 미들웨어 헤더·조기 응답 적용, 본문 불변, ETag·304(적합성 스위트에 추가, 5개 어댑터).
-- [ ] 콘텐츠 스키마·디렉티브 위반 진단 위치, parity 위반 빌드 오류, rich 렌더 악성 입력 차단.
-- [ ] 이미지 출력 속성·srcset·priority, 원격 미등록 오류, 대표 페이지 CLS ≤ 0.1.
+- [x] prerender 결과와 같은 경로 SSR 결과의 HTML 일치(요청 의존 부분 제외).
+- [x] prerender HTML 응답에 미들웨어 헤더·조기 응답 적용, 본문 불변, ETag·304(적합성 스위트에 추가, 5개 어댑터).
+- [x] 콘텐츠 스키마·디렉티브 위반 진단 위치, parity 위반 빌드 오류, rich 렌더 악성 입력 차단.
+- [x] 이미지 출력 속성·srcset·priority, 원격 미등록 오류, 대표 페이지 CLS ≤ 0.1.
 
 #### 제거 확인
 
 `shared/content.ts`, `switch-lang` transition, 쿠키 기반 SSR 언어 선택, `guide-load` transition, `shared/guideContent.test.ts`.
+→ 모두 제거했다(Prism 클라이언트 플러그인도 함께 제거).
+
+#### 계획 조정 (2026-10-17)
+
+- prerender 빌드: SSR 빌드의 `closeBundle`에서 같은 설정으로 prerender 전용 번들(`virtual:state-surface/prerender`,
+  source map·비압축)을 따로 빌드해 렌더한다. 서버 번들 entry를 늘리면 `entryFileNames: 'server.mjs'` 고정 빌드가 충돌하고
+  청크가 갈라져서다. 빌드 secret은 환경 변수로 넘겨 prerender HTML의 지연 슬롯 토큰을 서버가 연다(`unseal`이 빌드
+  secret도 시도). 원본 위치는 source map을 켠 stack의 첫 프로젝트 프레임이다.
+- `routes/[lang]/…`: i18n을 켜면 `getStaticPaths()` 항목에 `lang`이 없을 때 모든 언어로 늘리고, `lang`만 있는 라우트는
+  `getStaticPaths()`가 필요 없다(`staticParams`, 빌드와 dev 목록 검사 공용). 목록의 `lang`은 설정 언어여야 한다.
+- 언어 전환은 `?lang=xx` 링크(`ctx.i18n.switchHref`)다. 서버가 쿠키를 쓰고 같은 경로로 302하며, prefetch 요청
+  (`Purpose`·`Sec-Purpose`)은 쿠키 없이 204다. 정적 호스팅에서는 쿼리가 무시되어 해당 언어 페이지가 그대로 열린다.
+  데모 헤더의 전환 링크는 `data-prefetch="false"`다.
+- 데모 transition은 페이지 언어를 `lang` 파라미터(`data-params`, 폼 hidden 필드, `useAction` 인자)로 받는다. 쿠키로는
+  `/ko`로 직접 들어온 첫 방문자를 알 수 없어서다. `page:header`·홈 슬롯·`examples:list`는 transition이 바꾸지 않아
+  static 슬롯이 됐다.
+- `.mdx`의 `{#id}`는 MDX 표현식이라 쓸 수 없어 heading id는 자동 slug(모든 문자 체계 유지, 중복 시 `-2`)다. `.mdx`는
+  페이지 마크업 안에서 렌더되므로 아일랜드만 허용하고 `<Slot>`·`<Boot>`는 빌드 오류다. `state-surface/content`를 import하는
+  페이지의 분석 그래프에 `content/**/*.mdx`를 넣어 아일랜드 등록·서버 전용 검사를 받게 했다.
+- 콘텐츠 config는 Vite `runnerImport`로 읽고 `state-surface/content`를 정의 헬퍼로 별칭한다(config가 콘텐츠 모듈을 다시
+  부르지 않도록). 결과는 `virtual:state-surface/content` 데이터 모듈로 서버 번들에 들어가고 항목은 요청 간 공유되므로 동결한다.
+- data parity는 키·값 타입·레코드 목록 길이를 비교한다. 문자열 목록(검색 태그 등)은 언어마다 길이가 달라도 된다.
+- mdast → hast 변환에서 root는 자식 사이에 줄바꿈 텍스트를 넣어 인라인 요소 앞뒤에 공백이 생겼다("this ."). 인라인
+  내용은 paragraph를 거쳐 변환한다. Lithent SSR은 값이 `undefined`·`null`인 속성을 문자열로 출력하므로 엔진·데모 컴포넌트는
+  조건부 spread로 속성을 뺀다(`aria-current="undefined"` 수정).
+- 이미지: import 결과는 `ImageAsset { src, width, height, format, variants }`이고 빌드가 `dist/client/assets/<이름>-<해시>-<폭>.<확장자>`를
+  직접 쓴다(대부분 SSR 빌드에서만 import되어 client 빌드 asset으로 낼 수 없다, 인코딩은 `node_modules/.state-surface/images`
+  캐시 재사용). constrained srcset은 2배 폭을 덮는 첫 후보까지 넣는다. priority preload는 `<img>` 노드 표식을 SSR 렌더러가
+  읽어 stylesheet 다음에 쓴다. 원격 이미지는 모든 런타임에서 `width`·`height` 필수이고(컴포넌트가 동기라 원격 크기를 알 수
+  없다), prerender 페이지의 `/_surface/image` URL은 빌드가 변환해 정적 파일로 바꾼다. 변환 서비스는 Node·Express·Bun·Deno
+  어댑터가 넘기고(코어는 검증만, 런타임 API 없음) Workers는 404다. 원격 다운로드는 리다이렉트를 따르지 않고 image 형식·20MB·
+  10초 제한을 둔다. Deno 권한 모델에서 시작이 막히지 않게 캐시 경로는 첫 변환 때 정한다.
+- 의미 비교(`pnpm test:parity`): 언어 경로 매핑(`/x` → `/en/x`, ko 쿠키 → `/ko/x`), 헤더 슬롯·hreflang·`<html lang>`·
+  `lang` 파라미터/hidden 필드 정규화를 허용 차이로 더하고, 콘텐츠를 다시 쓴 홈·가이드와 제거된 `switch-lang`·`guide-load`는
+  비교하지 않는다(문서 14 + stream 1).
+- 코어 번들은 이미지 엔드포인트·원격 패턴 검사·`staticParams`로 107,733 B(비압축, 단계 6 94,725 B)다.
 
 **검증 ID**: V-26, V-27.
 
@@ -856,15 +895,16 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 ### 실행 기록
 
-| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                                                                                                      | 비고                                                                        |
-| ---- | ---------- | ---------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정                                                                                    | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md)  |
-| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                                                                              | IC-07 결정; portable core/type guard 통과                                   |
-| 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                            |
-| 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                     |
-| 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B    |
-| 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B       |
-| 6    | 2026-10-17 | `9c806c2`, 기준 `6aff8a6`                | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B |
+| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                                                                                                      | 비고                                                                         |
+| ---- | ---------- | ---------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정                                                                                    | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md)   |
+| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                                                                              | IC-07 결정; portable core/type guard 통과                                    |
+| 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                             |
+| 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                      |
+| 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B     |
+| 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B        |
+| 6    | 2026-10-17 | `9c806c2`, 기준 `6aff8a6`                | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B  |
+| 7    | 2026-10-17 | 단계 종료 커밋(Git 기록), 기준 `c1258ea` | 45 / 590 통과          | 5 runtime × 14 적합성(prerender 서빙·이미지 엔드포인트 추가), 의미 비교 14 + stream 1(언어 경로), 루트 E2E 12 + spike 5 및 /demo 12, modes E2E 12, 전체 tsc 0  | 홈 초기 JS gzip 11,016 B, 가이드 11,668 B(Prism 제거), CLS 0, core 107,733 B |
 
 ### 단계 0 실행 상세
 
@@ -1093,13 +1133,53 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과, Chromium 외 브라우저(`moveBefore` 미지원 Safari의 `insertBefore`
   fallback 포함), 실제 GTM 계정, BFCache 복귀, 수동·실기기 검증은 관측하지 않았다.
 
+### 단계 7 실행 상세 (2026-10-17)
+
+- prerender(DC-24, DC-32): 페이지 옵션·`surface({ prerender })` 반전·`getStaticPaths` 검사, 제한 ctx(`cookies`·요청 헤더·`locals`·
+  `flash`·`nonce`는 `PrerenderAccessError`, 빌드는 source map stack의 첫 프로젝트 프레임으로 `file:line:column`), SSR 빌드
+  `closeBundle`의 별도 prerender 번들, `dist/client/<path>/index.html`과 언어 없는 기본 언어 사본(canonical), BASE_PATH 시작
+  검사(Node·Express·Bun·Deno). 코어는 미들웨어 뒤 `readStatic` 본문·ETag(`W/` 무시)·304·`Cache-Control`을 쓰고 Workers는
+  `html_handling: "none"`·`run_worker_first`다. prerender 페이지의 JS 없는 액션 폼은 빌드 경고다(단계 5 이월).
+- 언어 경로: `routes/[lang]/`가 설정 언어만 매칭, 언어 없는 경로 302(`?lang` → 쿠키 → `Accept-Language` → 기본), `?lang=` 전환
+  쿠키·302, prefetch 204, `ctx.i18n`, hreflang·`x-default`, `staticParams`의 언어 확장.
+- 콘텐츠(DC-25): `content/config.ts`(Vite `runnerImport`), `.md` 섹션·블록 10종 파서와 오류 위치(디렉티브·속성·raw HTML·
+  텍스트 디렉티브·이미지·heading·순서 목록·코드 meta·중복 섹션), frontmatter·YAML·JSON 오류의 필드·줄, `.mdx`(`@mdx-js/mdx`
+  → `transformSurface` → esbuild, 코드 블록 `<Code>`, heading id), parity(빌드 오류·dev 경고), 동결된 항목·`Content`,
+  `virtual:state-surface/content`·`.state-surface/content.d.ts`, dev 변경 시 무효화와 재로드, 서버 Prism `highlight`·
+  `highlightLines`, `hastToNodes`의 `site` 링크(BASE_PATH).
+- 이미지(DC-26): `<Image>`·`<Picture>`·`getImage`, 이미지 import → `ImageAsset`(빌드 WebP·원본 형식·선택 AVIF 변형, dev는
+  `/_surface/image?src=`), priority preload, 원격 `remotePatterns`(호스트 와일드카드·경로 glob·포트·자격 증명 거부),
+  `/_surface/image` 코어 검증 + Node·Express·Bun·Deno sharp 서비스(디스크 캐시·리다이렉트 금지·형식·크기·시간 제한),
+  prerender 원격 이미지 정적화, Workers 원본·Cloudflare Images 선택. `.state-surface/images.d.ts`.
+- 데모 이전: 페이지를 `routes/[lang]/`로 옮기고(`git mv`) 홈·가이드·예제 목록·스트리밍·View Transition·UI Patch를 prerender,
+  actions·chat·search는 요청마다 렌더한다. UI 문구 9개 페이지 × 2개 언어를 `content/pages/<lang>/*.yaml`로 옮기고 1.0 설명
+  6곳(Surface·Template·Full Frame·Hydration·pending·VT 설명)을 2.0 기준으로 고쳤다. 가이드 7개 × 2개 언어 Markdown,
+  `guideComponents`(서버 하이라이트·줄 번호·복사 버튼은 `guide-toc` 플러그인), 헤더 언어 링크, transition `lang` 파라미터,
+  홈 히어로 `<Image priority>`(1600×900 PNG 25KB → 1080w WebP 17KB). 제거: `shared/content.ts`(4,472줄)·
+  `shared/guideContent.test.ts`·`switch-lang`·`guide-load`·쿠키 기반 언어 선택·Prism 클라이언트 플러그인.
+- 찾은 결함: ① mdast root 변환이 인라인 요소 사이에 줄바꿈을 넣어 문장에 공백이 생김 ② Lithent SSR이 `undefined` 속성을
+  `"undefined"`로 출력해 `aria-current="undefined"`(스크린 리더가 두 언어를 모두 현재로 읽을 수 있음)·`class="undefined"`
+  ③ Deno가 이미지 서비스 생성 시 env 접근으로 시작 실패(적합성에서 발견, 캐시 경로 지연 해석으로 수정)
+  ④ YAML 오류 위치가 `prettyErrors: false`에서 1:1로 나옴(데모 YAML 따옴표 누락으로 발견) ⑤ 한국어 검색 로딩 문구가 영어.
+- 검증: Vitest 45개 파일/590개(콘텐츠 빌드 27·렌더/조회 9·이미지 26·이미지 서비스/엔드포인트/빌드 15·prerender 10+4·i18n 12,
+  데모 테스트 11개 파일을 언어 경로로 갱신), 전체 tsc 0, typecheck:server, format:check, build(prerender 36페이지).
+  `pnpm test:parity` 문서 14 + stream 1. 루트 E2E 12(언어 링크·쿠키·경로 언어 transition, prerender 가이드·서버 하이라이트·
+  Prism 요청 0, 히어로 WebP·preload·CLS ≤ 0.1, 한국어 검색) + spike 5, `/demo` 12. `pnpm test:modes` 12(prerender 미들웨어·
+  ETag·401·404, MD/MDX 서버 렌더·MDX 아일랜드 하이드레이션·CSP 위반 0, 콘텐츠 sentinel이 client JS·CSS에 없음). Node·Express·
+  Bun·Deno·workerd 적합성 각 14개, 5개 어댑터 앱 빌드, portable core 107,733 B.
+- 크기(gzip level 9, `perf/measure.mjs` 중앙값): 홈 11,016 B(로더 6,389 + 라우터 4,627, 언어 전환이 링크라 액션 런타임 없음)·
+  가이드 11,668 B(+ `guide-toc` 652, 단계 6 28,031 B)·검색 21,976 B·채팅 25,277 B, 네 페이지 CLS 0.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions, 실제 정적 호스트 배포(`_headers`), 실제 원격 이미지 호스트,
+  Safari·Firefox(AVIF·`imagesrcset` preload), 실제 Cloudflare Images, 원격 CMS loader, 수동·실기기 검증(MT-13)은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4·5·6. IC-01~IC-04·IC-06~IC-09 결정.
-- **다음**: 단계 7(콘텐츠·이미지·prerender). 단계 6·7이 끝나면 단계 8. IC-05·IC-10은 단계 8·10에서 결정한다.
-- **블로커**: 없음. 라우터 gzip 4KB 예산 초과(4,626 B)와 로더 2KB 목표는 단계 8 패키징에서 다시 측정한다. idiomorph 파싱의
-  media 문서 보유 여부는 단계 9에서 확인한다. 데모 가이드 본문의 구 API 설명(`__UI__`·`__STATE__`·`defineTransition('name', fn)`
-  포함)과 prerender 액션 폼 빌드 경고는 단계 7에서 처리한다. Lithent 빈 텍스트 hydration은 업스트림 보강 후보다.
+- **완료**: 단계 0·1·2·3·4·5·6·7. IC-01~IC-04·IC-06~IC-09 결정.
+- **다음**: 단계 8(빌드 플러그인·진단 완성·패키징). IC-05·IC-10은 단계 8·10에서 결정한다.
+- **블로커**: 없음. 라우터 gzip 4KB 예산 초과(4,627 B)와 로더 2KB 목표는 단계 8 패키징에서 다시 측정한다. idiomorph 파싱의
+  media 문서 보유 여부는 단계 9에서 확인한다. `.mdx` 안 아일랜드 진단은 컴파일된 JSX 기준 위치라 단계 8에서 MDX source map으로
+  원본 줄을 잇는다. Lithent 빈 텍스트 hydration과 SSR의 `undefined` 속성 출력은 업스트림 보강 후보다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
-  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`.
+  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`, 단계 7 Entry `c1258ea`,
+  단계 7 중간(prerender·i18n) `6839eb5`.

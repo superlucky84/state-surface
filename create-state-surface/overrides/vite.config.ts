@@ -1,12 +1,17 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { surface } from 'state-surface/vite';
+import { DEFAULT_LOCALE, LOCALES } from './shared/locales.js';
 
 const rawBase = process.env.BASE_PATH;
 const base = rawBase ? `${rawBase.replace(/\/$/, '')}/` : '/';
 
 export default defineConfig({
-  plugins: [surface(), tailwindcss()],
+  // Pages live under routes/[lang]/: /en/…, /ko/… (DC-24 ⑤).
+  plugins: [
+    surface({ i18n: { locales: [...LOCALES], defaultLocale: DEFAULT_LOCALE } }),
+    tailwindcss(),
+  ],
   base,
   build: {
     outDir: 'dist/client',

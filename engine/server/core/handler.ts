@@ -1,5 +1,10 @@
 import { createContext, sequence, type Middleware, type SurfaceContext } from './context.js';
-import { isPrerendered, type PageDefinition, type ServerManifest } from './manifest.js';
+import {
+  isPrerendered,
+  staticParams,
+  type PageDefinition,
+  type ServerManifest,
+} from './manifest.js';
 import { renderPage, renderSlotHtml, type DocumentTags, type PageUsage } from '../ssrRenderer.js';
 import { resolveAsset, resolveAssetCss, resolveChunk } from '../assets.js';
 import type { DocumentConfig } from './manifest.js';
@@ -22,6 +27,7 @@ import { FLASH_COOKIE, openFlash, redirectTarget, sealFlash, type Flash } from '
 import type { ActionMeta } from '../../shared/protocol.js';
 import type { DeferredPayload } from '../ssrRenderer.js';
 import { prerenderFile, prerenderView } from '../prerenderContext.js';
+import { imageResponse, type ImageService } from './imageEndpoint.js';
 import {
   LANG_COOKIE,
   alternates,
@@ -59,6 +65,8 @@ export interface HandlerOptions {
   readStatic?: (file: string, platform: Record<string, unknown>) => Promise<Response | null>;
   /** Build only: render prerendered pages, skip middleware and throw errors to the caller. */
   prerendering?: boolean;
+  /** `/_surface/image` transforms (DC-26): Node, Bun and Deno adapters pass one. */
+  images?: ImageService;
 }
 export interface SurfaceHandler {
   fetch(
@@ -224,7 +232,7 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
     if (!route.pattern.includes(':')) return Promise.resolve(true);
     let paths = staticPaths.get(route);
     if (!paths) {
-      paths = Promise.resolve(route.module.getStaticPaths?.() ?? []).then(
+      paths = staticParams(route, manifest).then(
         list => new Set(list.map(item => paramKey(item))),
         error => {
           staticPaths.delete(route);
@@ -357,6 +365,16 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
           ctx.route = { kind: 'transition', name: transitionName, prerendered: false };
         if (mounted && request.method === 'POST' && actionName)
           ctx.route = { kind: 'action', name: actionName, prerendered: false };
+        if (
+          mounted &&
+          segments.length === 2 &&
+          segments[0] === '_surface' &&
+          segments[1] === 'image' &&
+          ['GET', 'HEAD'].includes(request.method)
+        ) {
+          selected = undefined;
+          ctx.route = { kind: 'image', prerendered: false };
+        }
         if (mounted && islandId && ['GET', 'HEAD', 'POST'].includes(request.method)) {
           selected = undefined;
           ctx.route = { kind: 'island', name: islandId, prerendered: false };
@@ -745,6 +763,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
               { headers: { 'content-type': 'text/html; charset=utf-8' } }
             );
           if (ctx.route.kind === 'island') return island();
+          if (ctx.route.kind === 'image')
+            return imageResponse(ctx.url, manifest.images, options.images, !!options.development);
           if (ctx.route.kind === 'transition') return transition();
           if (ctx.route.kind === 'action') return action();
           return notFound();

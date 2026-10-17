@@ -1,9 +1,9 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition, TransitionError } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
-import { streamingContent } from '../shared/content.js';
+import { streamingContent } from '../shared/pages.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -12,16 +12,15 @@ async function* streamDemo(
   ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
   const mode = (params.mode as string) ?? 'full-sequence';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  const lang: Lang = paramLang(params);
   const ko = lang === 'ko';
-  const base = streamingContent(lang);
+  const base = await streamingContent(lang);
 
   if (mode === 'error-demo') {
     // Demonstrate error frame
     yield {
       type: 'state',
       states: {
-        'page:header': base['page:header'],
         'demo:controls': {
           ...base['demo:controls'],
           description: ko ? '에러 데모 진행 중...' : 'Error demo in progress...',
@@ -51,7 +50,6 @@ async function* streamDemo(
   yield {
     type: 'state',
     states: {
-      'page:header': base['page:header'],
       'demo:controls': {
         ...base['demo:controls'],
         description: ko
@@ -175,7 +173,6 @@ async function* streamDemo(
   yield {
     type: 'state',
     states: {
-      'page:header': base['page:header'],
       'demo:controls': {
         ...base['demo:controls'],
         description: ko

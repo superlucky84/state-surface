@@ -3,13 +3,18 @@ import { fileURLToPath } from 'url';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { surface } from './engine/vite.js';
+import { DEFAULT_LOCALE, LOCALES } from './shared/locales.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rawBase = process.env.BASE_PATH;
 const base = rawBase ? `${rawBase.replace(/\/$/, '')}/` : '/';
 
 export default defineConfig({
-  plugins: [surface(), tailwindcss()],
+  // Pages live under routes/[lang]/: /en/…, /ko/… (DC-24 ⑤).
+  plugins: [
+    surface({ i18n: { locales: [...LOCALES], defaultLocale: DEFAULT_LOCALE } }),
+    tailwindcss(),
+  ],
   base,
   build: {
     outDir: 'dist/client',

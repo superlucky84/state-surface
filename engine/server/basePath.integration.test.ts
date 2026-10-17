@@ -13,18 +13,27 @@ beforeAll(async () => {
 
 describe('basePath integration', () => {
   it('serves SSR routes under BASE_PATH prefix', async () => {
-    const res = await request(app).get('/demo/examples/search');
+    const res = await request(app).get('/demo/en/examples/search');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<h-state name="search:input"');
     expect(res.text).toContain('"basePath":"/demo"');
+    // Language links and alternates (ctx.i18n) keep the prefix. Navigation links use the
+    // build's prefixPath(), which this harness leaves empty (manifest basePath is unset).
+    expect(res.text).toContain('href="/demo/ko/examples/search?lang=ko"');
+    expect(res.text).toMatch(/hreflang="ko" href="http:\/\/[^"]+\/demo\/ko\/examples\/search"/);
+
+    // A path without a language redirects within the prefix.
+    const neutral = await request(app).get('/demo/examples/search');
+    expect(neutral.status).toBe(302);
+    expect(neutral.headers.location).toBe('/demo/en/examples/search');
   });
 
   it('serves transition endpoint under BASE_PATH prefix', async () => {
     const res = await request(app)
       .post('/demo/transition/search')
-      .set(surfaceHeaders('examples/search'))
-      .send({ query: 'state-surface' })
+      .set(surfaceHeaders('[lang]/examples/search'))
+      .send({ query: 'state-surface', lang: 'en' })
       .expect('Content-Type', /ndjson/);
 
     expect(res.status).toBe(200);
@@ -35,14 +44,17 @@ describe('basePath integration', () => {
   });
 
   it('sets language cookie path using BASE_PATH', async () => {
-    const res = await request(app)
-      .post('/demo/transition/switch-lang')
-      .set(surfaceHeaders('index'))
-      .send({ lang: 'ko' });
+    const res = await request(app).get('/demo/ko/examples/search?lang=ko');
     const setCookie = res.headers['set-cookie']?.[0];
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/demo/ko/examples/search');
     expect(setCookie).toContain('lang=ko');
     expect(setCookie).toContain('Path=/demo');
+
+    // The remembered language picks the redirect target of language-less paths.
+    const neutral = await request(app).get('/demo/').set('Cookie', 'lang=ko');
+    expect(neutral.status).toBe(302);
+    expect(neutral.headers.location).toBe('/demo/ko');
   });
 });

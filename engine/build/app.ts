@@ -8,6 +8,8 @@ import {
   type SlotFacts,
 } from './analyze.js';
 import { SurfaceBuildError } from './diagnostics.js';
+import { listFiles } from './fsUtils.js';
+import { compileMdx } from './mdx.js';
 import { scanRoutes, type ScannedRoute } from './routeScanner.js';
 import type { PagePlugin } from '../server/ssrRenderer.js';
 
@@ -26,7 +28,7 @@ export interface PageSlotFacts extends Omit<SlotFacts, 'schema'> {
   schema?: ExportRef;
 }
 
-const SCRIPT = /\.(?:[cm]?[jt]sx?)$/;
+const SCRIPT = /\.(?:[cm]?[jt]sx?|mdx)$/;
 
 /**
  * Analysis context bound to one plugin hook's resolver. Module facts are cached by absolute
@@ -63,7 +65,8 @@ export class SurfaceAnalyzer {
     let cached = this.facts.get(file);
     if (!cached) {
       cached = readFile(file, 'utf8').then(
-        text => analyzeModule(text, file),
+        async text =>
+          analyzeModule(file.endsWith('.mdx') ? (await compileMdx(text, file)).code : text, file),
         () => undefined
       );
       this.facts.set(file, cached);
@@ -134,9 +137,27 @@ export class SurfaceAnalyzer {
    * Scan pages and their reachable project modules. Returns the routes, the components
    * rendered on the client (componentId → file/export) and every analyzed file.
    */
+  /** `.mdx` content entries: part of every page that imports `state-surface/content`. */
+  private async contentModules() {
+    const dir = path.join(this.root, 'content');
+    const files = await listFiles(dir).catch(() => [] as string[]);
+    return files
+      .filter(
+        file =>
+          file.endsWith('.mdx') &&
+          !path
+            .relative(dir, file)
+            .split(path.sep)
+            .some(part => part.startsWith('_') || part.startsWith('.'))
+      )
+      .sort();
+  }
+
   async app() {
     const routesDir = path.join(this.root, 'routes');
     const pages = await scanRoutes(routesDir);
+    const contentModule = path.join(this.engineDir, 'content.ts');
+    const content = await this.contentModules();
     const client = new Map<string, { file: string; exportName: string }>();
     const plugins = new Map<string, { file: string; exportName: string }>();
     const pagePlugins = new Map<string, PagePlugin[]>();
@@ -209,6 +230,7 @@ export class SurfaceAnalyzer {
         }
         for (const source of module.sources) {
           const target = await this.resolve(source, file);
+          if (target === contentModule) queue.push(...content.filter(mdx => !seen.has(mdx)));
           if (this.isProjectFile(target) && !seen.has(target)) queue.push(target);
         }
       }

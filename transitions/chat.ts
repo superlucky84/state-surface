@@ -1,9 +1,9 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
-import { chatContent } from '../shared/content.js';
+import { chatContent } from '../shared/pages.js';
 import { appendMessage } from '../shared/chatHistory.server.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -62,11 +62,11 @@ async function* chat(
   ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
   const userText = String(params.message ?? '').trim();
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  const lang: Lang = paramLang(params);
   // Nothing to send: an empty success (the engine answers `done` only).
   if (!userText) return;
 
-  const content = chatContent(lang);
+  const content = await chatContent(lang);
   // Written before the first frame, so the session cookie is part of the response.
   const history = appendMessage(ctx, { id: `u-${Date.now()}`, role: 'user', text: userText });
 

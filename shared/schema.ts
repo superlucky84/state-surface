@@ -45,6 +45,16 @@ export function integer(
   };
 }
 
+/** A check that also accepts a missing value. */
+export function optional<Input, Output>(
+  check: Check<Input, Output>
+): Check<Input | undefined, Output | undefined> {
+  return {
+    parse: value =>
+      value === undefined || value === null ? { value: undefined } : check.parse(value),
+  };
+}
+
 /** An object of checks: every field is validated and all issues are reported by path. */
 export function object<Shape extends Record<string, Check<any, any>>>(
   shape: Shape

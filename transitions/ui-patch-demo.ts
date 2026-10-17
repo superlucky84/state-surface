@@ -1,7 +1,7 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -38,9 +38,8 @@ async function* uiPatchDemo(
 ): AsyncGenerator<StateFrame, void, unknown> {
   const action = (params.action as string) ?? 'theme';
   const theme = (params.theme as string) ?? 'reset';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  const lang: Lang = paramLang(params);
   const ko = lang === 'ko';
-  const headerTitle = ko ? 'UI Patch 데모' : 'UI Patch Demo';
 
   if (action === 'theme') {
     const patch = THEMES[theme] ?? THEMES.reset;
@@ -49,7 +48,6 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: theme, lang },
         'uipatch:preview': { theme, lang, updating: true },
       },
@@ -76,7 +74,6 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: theme, lang },
         'uipatch:preview': { theme, lang, updating: false },
       },
@@ -97,7 +94,6 @@ async function* uiPatchDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': { title: headerTitle, nav: 'examples', page: 'ui-patch', lang },
         'uipatch:controls': { currentTheme: 'reset', lang },
         'uipatch:preview': { theme: 'reset', lang, updating: false },
       },

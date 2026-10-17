@@ -64,6 +64,66 @@ test('client:load hydrates at start; client:visible chunk waits until visible', 
   }).toPass();
 });
 
+test('DC-24/DC-32: prerendered pages pass the middleware and answer with the built HTML', async ({
+  request,
+}) => {
+  const one = await request.get('/pre/one');
+  expect(one.status()).toBe(200);
+  expect(one.headers()).toMatchObject({
+    'x-prerendered': 'true',
+    'cache-control': 'public, max-age=0, must-revalidate',
+    'content-security-policy': expect.stringContaining("script-src 'self'"),
+  });
+  const html = await one.text();
+  expect(html).toContain('<h1 id="slug">one</h1>');
+  expect(html).not.toMatch(/nonce=/);
+  const etag = one.headers().etag;
+  expect(etag).toMatch(/^"[0-9a-f]+"$/);
+  expect((await request.get('/pre/one', { headers: { 'if-none-match': etag } })).status()).toBe(
+    304
+  );
+  // An early middleware response replaces the built HTML; unlisted params are 404.
+  expect((await request.get('/pre/two')).status()).toBe(401);
+  expect((await request.get('/pre/two', { headers: { cookie: 'pass=1' } })).status()).toBe(200);
+  expect((await request.get('/pre/other')).status()).toBe(404);
+  const live = await request.get('/actions');
+  expect(live.headers()['x-prerendered']).toBe('false');
+});
+
+test('DC-25: Markdown and MDX entries render on the server; an MDX island hydrates', async ({
+  page,
+}) => {
+  const urls = scripts(page);
+  const violations: string[] = [];
+  page.on('console', message => {
+    if (/Content Security Policy/i.test(message.text())) violations.push(message.text());
+  });
+  await page.goto('/content/intro');
+  await expect(page.locator('#toc a')).toHaveText(['Getting started', 'Next steps']);
+  await expect(page.locator('#doc section#start h2')).toHaveText('Getting started');
+  await expect(page.locator('#doc figcaption')).toHaveText('hello.ts');
+  // Highlighted on the server: token spans without a highlighter script.
+  await expect(page.locator('#doc code.language-ts .token.keyword')).toHaveText('const');
+  await expect(page.locator('#doc aside.callout-tip')).toContainText('Markdown callout.');
+  await expect(page.locator('#doc a[href="/pre/one"]')).toHaveCount(1);
+  expect(urls.filter(url => /prism/i.test(url))).toEqual([]);
+
+  await page.goto('/content/live');
+  await expect(page.locator('#toc a')).toHaveText(['Live document', 'Counter island']);
+  expect(
+    await page.locator('#toc a').evaluateAll(links => links.map(a => a.getAttribute('href')))
+  ).toEqual(['#live-document', '#counter-island']);
+  await expect(page.locator('#doc h2#counter-island')).toHaveCount(1);
+  await expect(page.locator('#doc aside.callout-tip')).toHaveText('MDX callout');
+  await expect(page.locator('#doc .token.number')).toHaveText('42');
+  const counter = page.locator('#doc h-island button.mdx');
+  await expect(counter).toHaveText('mdx:5');
+  await expect.poll(() => named(urls, 'Counter').length).toBeGreaterThan(0);
+  await counter.click();
+  await expect(counter).toHaveText('mdx:6');
+  expect(violations).toEqual([]);
+});
+
 test('V-04: typing into a dormant island activates it and hydration keeps the edit', async ({
   page,
 }) => {

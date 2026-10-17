@@ -46,6 +46,22 @@ for (const sentinel of ['SENTINEL-SERVER-FILE-7f3a2c', 'SENTINEL-SERVER-MARKER-9
 }
 console.log('V-05: server-only sentinels absent from every client output file');
 
+// DC-25: content is built into the server bundle; prerendered HTML shows it, scripts never do.
+const contentSentinel = 'SENTINEL-CONTENT-4d1e9a';
+assert.ok(server.includes(contentSentinel), 'server bundle should include content');
+for (const file of await files(path.join(app, 'dist/client'))) {
+  if (file.endsWith('.html')) continue;
+  const text = await readFile(file, 'utf8');
+  assert.ok(!text.includes(contentSentinel), `content leaked into ${path.relative(app, file)}`);
+}
+assert.ok(
+  (await readFile(path.join(app, 'dist/client/content/intro/index.html'), 'utf8')).includes(
+    contentSentinel
+  ),
+  'prerendered content page should contain its text'
+);
+console.log('V-05: content only in the server bundle and prerendered HTML');
+
 let failure;
 try {
   await build({

@@ -74,10 +74,11 @@ on the adapter rather than trusting arbitrary forwarded headers.
 
 Node/Bun/Deno static directories default to `dist/client`. Adapters serve asset paths
 under BASE_PATH, enforce the static-root boundary, and set MIME and hashed-asset
-cache headers. HTML stays in the core, including future prerender middleware.
+cache headers. HTML stays in the core, including prerendered HTML (below).
 `node()`/`express()`/`bun()`/`deno()`/`cloudflare()` export adapter descriptors with
-name, serverEntry, supports and readStatic. Image transformation is not available
-at Worker request time (stage 7 handles diagnostics).
+name, serverEntry, supports and readStatic. Node, Express, Bun and Deno also pass an
+image service to `/_surface/image` (sharp, disk cache in `SURFACE_IMAGE_CACHE` or the
+temp directory); Workers have none and answer 404 there (see Images below).
 
 Deno defaults to reading its environment once; run with `--allow-net --allow-read=dist/client
 --allow-env`. Applications can instead supply `env` explicitly and grant only named
@@ -101,6 +102,63 @@ ignores these blank lines; they are not state frames. waitUntil retains cleanup 
 This was necessary for idle-stream cancellation under local workerd even with the
 request-signal flag. No client assertions are skipped to accommodate this behavior.
 Worker CPU and post-disconnect waitUntil limits remain platform constraints.
+
+## Prerendered pages
+
+Pages opt in with `export const prerender = true` (or `surface({ prerender: true })`
+with `export const prerender = false` to opt out); dynamic routes list their params
+with `getStaticPaths()`. Under `routes/[lang]/` with `surface({ i18n })`, entries
+without `lang` are built for every locale, and a route whose only param is `lang`
+needs no `getStaticPaths()`. `pnpm build` writes `dist/client/<path>/index.html` and,
+for language routes, a language-less copy of the default language with a canonical
+link. A prerendered page cannot read cookies, request headers, `locals`, `flash` or
+the nonce: the build fails at the line that tried.
+
+Behind any adapter the request still goes through the core: middleware runs with
+`ctx.route.prerendered === true` (it may answer early, e.g. 401), then the built HTML
+is read with `readStatic` and answered with `ETag: "<buildId>"`, 304 on a match and
+`Cache-Control: public, max-age=0, must-revalidate`. Prerendered HTML has no nonce,
+so a CSP for those pages uses `script-src 'self'`. Workers need
+`assets.html_handling: "none"` and `run_worker_first: true` so HTML reaches the worker.
+Without a static reader (dev, tests) prerendered pages render on each request with
+the same restricted context.
+
+### Static hosting without a server
+
+`dist/client` alone can be uploaded to a static host (Cloudflare Pages, Netlify, S3 +
+CDN). Only prerendered pages and assets work there; everything that needs a request
+does not:
+
+- no middleware: no authentication, no per-request headers or redirects;
+- no transitions, JS-less forms (`/_surface/action`), deferred slots, SSR pages or
+  `/_surface/image` (remote images in prerendered pages are already static files);
+- no language redirect: `/` serves the default-language copy with its canonical link,
+  and `?lang=` switch links simply open the other language's page;
+- headers come from the host's configuration, for example a `_headers` file:
+
+```text
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Content-Security-Policy: script-src 'self'; object-src 'none'; base-uri 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+```
+
+Build with the BASE_PATH the host serves under; it is part of every URL in the HTML.
+
+## Images
+
+`import hero from './hero.png'` gives an `ImageAsset`; `pnpm build` writes WebP (and
+`images.formats: ['avif']`) variants at `images.widths` (default 640…2048, never above
+the original) to `dist/client/assets/`, so local images are optimized on every runtime,
+Workers included. Remote images need an `images.remotePatterns` entry plus `width` and
+`height`; Node, Express, Bun and Deno resize them through `/_surface/image` (configured
+widths only, no redirects, image content types, 20MB and 10s limits), prerendering
+turns them into static files, and Workers use the original URL unless
+`images.cloudflare` delegates to Cloudflare Images (`/cdn-cgi/image/…`).
 
 ## Validation
 

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mountComponent } from './lithentBridge.js';
-import ChatMessages from '../../routes/examples/chat/_components/chatMessages.js';
+import ChatMessages from '../../routes/[lang]/examples/chat/_components/chatMessages.js';
 import type { TagFunction } from 'lithent';
 
 const component = ChatMessages as unknown as TagFunction;

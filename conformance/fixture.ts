@@ -99,6 +99,12 @@ export function fixture(basePath = '/demo'): HandlerOptions {
           bridge: '/assets/bridge.js',
         },
       },
+      // DC-26: `/_surface/image` allows these hosts and widths (Workers have no transform).
+      images: {
+        widths: [640],
+        formats: ['webp'],
+        remotePatterns: [{ hostname: 'images.invalid' }],
+      },
       routes: [
         {
           pattern: '/',

@@ -14,6 +14,9 @@ StateSurface is a **state-layout mapping runtime** — a production-ready framew
 - Concurrency policy: a new action aborts the same action and actions whose **targets** overlap;
   disjoint targets run in parallel, transitions without targets overlap everything, `mode: 'queue'`
   runs one name in order
+- Pages may **prerender** (`export const prerender = true`: built HTML, still answered after the middleware),
+  languages are URL paths (`routes/[lang]/` with `surface({ i18n })`), content lives in `content/` collections
+  and images are resized by the build (`<Image>`, `<Picture>`)
 
 ## Document Reading Order
 
@@ -42,7 +45,7 @@ When context is needed, read in this order:
 
 ```bash
 pnpm install
-pnpm dev                          # start dev server via tsx watch server.ts
+pnpm dev                          # Vite dev server with the shared server core
 pnpm build                        # production build (Vite)
 pnpm test                         # run all tests with Vitest
 pnpm test path/to/file.test.ts    # run a single test file
@@ -67,7 +70,8 @@ BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
 
 ```
 engine/              # Framework core — users should not edit these files
-  index.ts           # 'state-surface': Slot, Boot, ClientRouter, prefixPath, getBasePath, actionUrl, protocol types
+  index.ts           # 'state-surface': Slot, Boot, ClientRouter, Image, Picture, getImage, prefixPath, actionUrl, types
+  content.ts         # 'state-surface/content' (server only): defineCollection, getCollection, getEntry, highlight
   server.ts          # 'state-surface/server': createHandler, defineTransition, TransitionError, defineServerComponent
   client.ts          # 'state-surface/client': definePlugin, useAction, navigate, ActionError
   vite.ts            # 'state-surface/vite': surface() plugin (manifest with page manifests/buildId, islands, transform)
@@ -79,8 +83,18 @@ engine/              # Framework core — users should not edit these files
     routeScanner.ts  # Page discovery: routes/**/*.tsx except `_` files/folders, URL collisions
     transitionScanner.ts # transitions/**/*.ts → names (path, kebab-case), .state-surface/actions.d.ts
     diagnostics.ts   # SurfaceBuildError with file:line:column and code frame
+    prerender.ts     # Build-time render of prerendered pages → dist/client/<path>/index.html (+ language-less copy)
+    content.ts       # Collections: .md directive blocks, .json/.yaml, schema/parity diagnostics with file:line
+    mdx.ts           # .mdx → JSX (lithent), code → <Code>, heading ids
+    images.ts        # Image imports → ImageAsset + variants in dist/client/assets, prerendered remote images
+  content/           # Block renderers (renderMd, mdxComponents), server Prism highlighting, query runtime
+  images/
+    service.ts       # sharp transforms with disk cache (dev, builds, /_surface/image on Node/Bun/Deno)
   server/
-    core/            # Web Request→Response handler (pages, /transition, /_surface/island, /_surface/action), context, manifest
+    core/            # Web Request→Response handler (pages, prerendered HTML, language redirects, /transition,
+                     #   /_surface/island, /_surface/action, /_surface/image), context, manifest (staticParams)
+    i18n.ts          # Language paths: locale match, 302 + ?lang= switch cookie, ctx.i18n, hreflang alternates
+    prerenderContext.ts # Restricted ctx for prerendered pages (cookies/headers/locals/flash/nonce throw)
     ssrRenderer.ts   # Page pipeline + renderSlotHtml (html ops, deferred responses), capability enforcement
     projection.ts    # Request reducer and per-slot projection, targets, coalescing, limits, ctx.external
     transitionResponse.ts # Generator/async result → wire frames (engine-sent done, idle timeout, size limits)
@@ -119,25 +133,29 @@ engine/              # Framework core — users should not edit these files
     capability.ts    # URL scheme allowlist, script neutralization, rich marker
     ndjson.ts        # NDJSON encode/decode with streaming chunk parser
     routeModule.ts   # PageModule contract (default page function, prerender, getStaticPaths, plugins)
+    image.ts         # <Image>, <Picture>, getImage, remotePatterns matching, image config
+    richHast.ts      # hast → Lithent allowlist (rich Markdown and content collections)
 client/              # User assets
   styles.css         # Tailwind CSS entry point (linked by the engine)
   plugins/           # definePlugin() client plugins, declared per page with `export const plugins`
   entry.ts           # (optional) app entry run on every page before the engine
+content/             # Content collections (config.ts): guides/<lang>/*.md, pages/<lang>/*.yaml (page UI texts)
 shared/              # User data helpers
-  content.ts         # Bilingual content data (ko/en) for all pages
-  i18n.ts            # i18n helpers (getLang(ctx) from cookie)
-  schema.ts          # Demo Standard Schema builder (object/text/integer)
+  pages.ts           # Page texts from content/pages (typed) → slot props, headerProps(ctx)
+  i18n.ts            # pageLang(ctx), paramLang(params), localPath(lang, path)
+  locales.ts         # LOCALES / DEFAULT_LOCALE (also used by vite.config.ts)
+  schema.ts          # Demo Standard Schema builder (object/text/integer/optional)
   *.server.ts        # Demo server stores (chat history, actions comments/likes)
 transitions/         # Server-side state generators: path = name (comments/add.ts → "comments/add")
 layouts/
   Layout.tsx         # Document shell with page:header and system:error slots
 routes/              # Pages (routes/**/*.tsx) + page-specific components
-  index.tsx          # GET / — home page (hero, concepts, features)
-  guide/[slug].tsx   # GET /guide/:slug — guides (loading SSR + <Boot transition="guide-load">)
-  examples/*.tsx     # GET /examples/... — demos (streaming, actions, view-transition, search, chat, ui-patch)
+  [lang]/index.tsx   # GET /en, /ko — home page (hero image, concepts, features), prerendered
+  [lang]/guide/[slug].tsx # GET /en/guide/:slug — guides from the content collection, prerendered
+  [lang]/examples/*.tsx   # GET /en/examples/... — demos (streaming, actions, view-transition, search, chat, ui-patch)
   _shared/components/    # Cross-route components (pageHeader, systemError)
   <route>/_components/   # Per-route slot components (`_` folders are not pages)
-.state-surface/      # Generated (gitignored): actions.d.ts typing useAction/<Boot>/actionUrl
+.state-surface/      # Generated (gitignored): actions.d.ts, content.d.ts (collections), images.d.ts (image imports)
 ```
 
 ## Architecture
@@ -232,7 +250,8 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   `client:only` skips SSR and shows `fallback`; `mode="server"` renders on the server and is updated with server
   HTML (`swap="replace"` default, `swap="morph"`); `defineServerComponent({ load, render })` children re-run `load`
   per render. `server:defer` renders the fallback and loads the content from `/_surface/island/:componentId`.
-  The demo uses server slots everywhere except `chat:current` (client, token streaming via `merge`).
+  The demo's header, home slots and `examples:list` are static; the other slots are server slots except
+  `chat:current` (client, token streaming via `merge`).
 - Capability (DC-13): `strict` (default) forbids raw HTML and strips non-http(s)/mailto/relative URLs in slot
   content; `rich` allows `Markdown` from `state-surface/rich`; `unsafe` allows raw HTML with inert scripts and
   optional `sandbox="iframe"`. External agent frames enter only via `yield* ctx.external(source)` into
@@ -263,16 +282,33 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   `.state-surface/actions.d.ts`), and generates
   `virtual:state-surface/manifest` (server: per-page plugins and page manifests, buildId, build secret),
   `virtual:state-surface/islands`
-  (componentId → lazy chunk loader) and `virtual:state-surface/plugins` (plugin id → lazy chunk loader).
-- componentId = project-relative module path + `#` + export name (e.g. `routes/examples/chat/_components/chatInput.tsx#default`).
+  (componentId → lazy chunk loader), `virtual:state-surface/plugins` (plugin id → lazy chunk loader) and
+  `virtual:state-surface/content` (parsed collections; `.mdx` entries import their module).
+- componentId = project-relative module path + `#` + export name (e.g. `routes/[lang]/examples/chat/_components/chatInput.tsx#default`).
+- Prerender (DC-24, DC-32): `closeBundle` of the SSR build builds a prerender bundle and writes
+  `dist/client/<path>/index.html`; dynamic routes list params with `getStaticPaths()` (on `[lang]` routes entries
+  without `lang` cover every locale). Request-only ctx access fails the build at its line. Served after the
+  middleware with `ETag: "<buildId>"`/304; prerendered HTML has no nonce. JS-less action forms on prerendered pages
+  warn at build time (no flash on a static page).
+- Content (DC-25): `content/config.ts` `collections` (`defineCollection({ schema, i18n: { locales, parity }, loader })`),
+  `.md` with `## Heading {#id}` sections and `:::name{attr}` blocks (unknown directives, raw HTML, images are build
+  errors), `.mdx` (islands allowed, Slot/Boot not), `.json`/`.yaml` data. Parity errors break the build and warn in
+  dev; `entry.Content({ components })` renders with server-highlighted code. Content changes reload the dev page.
+- Images (DC-26): image imports are `ImageAsset`s with build-written WebP (+ `images.formats`) variants; `<Image>`
+  needs `alt`, writes `width`/`height`, lazy/async, `priority` → eager + head preload. Remote URLs need
+  `images.remotePatterns` and `width`/`height`; Node/Bun/Deno resize via `/_surface/image`, prerender makes them
+  static files, Workers use the original URL. Lithent SSR prints `undefined` attribute values: spread optional
+  attributes conditionally.
 
 ### i18n (Korean / English)
 
-- All pages support bilingual content (ko/en) driven by `lang` cookie
-- Language switch is a transition (`data-action="switch-lang"`) — server yields full frame in target language
-- `shared/content.ts` holds `{ ko, en }` content; server sends only the selected language's data
-- `shared/i18n.ts` provides `getLang(req)` helper (reads cookie, defaults to `en`)
-- Page functions call `getLang(ctx)` at SSR time for correct initial language rendering
+- Languages are URL paths: `surface({ i18n: { locales: ['en', 'ko'], defaultLocale: 'en' } })` serves
+  `routes/[lang]/…` as `/en/…`, `/ko/…`; pages read `ctx.i18n` (`lang`, `href(lang)`, `switchHref(lang)`)
+- A path without a language answers 302 (`lang` cookie → `Accept-Language` → `en`); `?lang=ko` links set the cookie
+  and redirect (the header's EN/KO links, `data-prefetch="false"`); hreflang alternates are written per page
+- Texts: `content/pages/<lang>/<page>.yaml` via `shared/pages.ts`; guides `content/guides/<lang>/*.md`
+- Transitions get the page language as a `lang` param (`data-params`, hidden form field, `useAction` argument);
+  `paramLang(params)` falls back to `en` (no cookie reading)
 
 ### Base Path (Sub-Path Mounting)
 
@@ -285,18 +321,20 @@ with `data-pending` until it ends and `data-has-result` after its first result (
 
 ### Showcase Site Pages
 
-| Route                       | Slots                                                                    | Features                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `/`                         | `page:hero`, `page:concepts`, `page:features`                            | `initial` SSR only, surface composition                                                   |
-| `/guide/:slug`              | `guide:content`, `guide:toc`                                             | Dynamic `[param]`, boot auto-run, full→partial, 10 block types                            |
-| `/examples`                 | `examples:list`                                                          | Examples landing page with links to all demos                                             |
-| `/examples/streaming`       | `demo:controls`, `demo:timeline`, `demo:output`                          | Full/partial frames, `removed`, error frame                                               |
-| `/examples/actions`         | `actions:playground`, `actions:log`, `actions:likes`, `actions:comments` | `data-action`, scoped pending, `useAction` island, typed + queue `like`, JS-less PRG form |
-| `/examples/view-transition` | `vt:description`, `vt:gallery`                                           | Action-level View Transition, `view-transition-name` morphing                             |
-| `/examples/search`          | `search:input`, `search:results`                                         | Form `data-action`, pending state, `swap="morph"` input                                   |
-| `/examples/chat`            | `chat:messages`, `chat:input`, `chat:typing`, `chat:current`             | Abort previous, server history store, client `merge` streaming                            |
+| Route (`/en`, `/ko`)              | Slots                                                                    | Features                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `/:lang`                          | `page:hero`, `page:concepts`, `page:features` (static)                   | Prerendered, `<Image priority>` hero, texts from `content/pages`                          |
+| `/:lang/guide/:slug`              | `guide:toc` (static)                                                     | Prerendered from `content/guides` Markdown, `getStaticPaths`, server-highlighted code     |
+| `/:lang/examples`                 | `examples:list` (static)                                                 | Prerendered examples landing page                                                         |
+| `/:lang/examples/streaming`       | `demo:controls`, `demo:timeline`, `demo:output`                          | Prerendered page whose transition still streams: full/partial frames, `removed`, error    |
+| `/:lang/examples/actions`         | `actions:playground`, `actions:log`, `actions:likes`, `actions:comments` | `data-action`, scoped pending, `useAction` island, typed + queue `like`, JS-less PRG form |
+| `/:lang/examples/view-transition` | `vt:description`, `vt:gallery`                                           | Prerendered, action-level View Transition, `view-transition-name` morphing                |
+| `/:lang/examples/search`          | `search:input`, `search:results`                                         | Form `data-action`, pending state, `swap="morph"` input                                   |
+| `/:lang/examples/chat`            | `chat:messages`, `chat:input`, `chat:typing`, `chat:current`             | Abort previous, server history store, client `merge` streaming                            |
+| `/:lang/examples/ui-patch`        | `uipatch:controls`, `uipatch:preview`                                    | Prerendered, UI patches (`classAdd`/`cssVars`)                                            |
 
-All pages share `page:header`, `system:error` and `<ClientRouter />` (client navigation) via `layouts/Layout.tsx`.
+All pages share the static `page:header`, `system:error` and `<ClientRouter />` (client navigation) via
+`layouts/Layout.tsx`. Paths without a language (`/`, `/examples/search`) redirect to the visitor's language.
 
 ## Reference Projects
 
@@ -323,12 +361,14 @@ Used as a DOM diff/patch engine only — no component API exposed to users. Key 
 
 ### Guide System
 
-- 6 guides: `quickstart` + 5 concept guides (`surface`, `template`, `transition`, `action`, `accumulate`)
+- 7 guides: `quickstart` + `surface`, `template`, `transition`, `action`, `accumulate`, `ui-patch` (2.0 API)
+- Markdown in `content/guides/<lang>/<slug>.md` (frontmatter `title`, `order`, `demoHref`, `demoLabel`)
 - 10 block types: `paragraph`, `bullets`, `code`, `checklist`, `warning`, `sequence`, `diagram`, `callout`, `analogy`, `debug`
-- Bilingual (ko/en) with i18n parity enforced by tests (same section IDs, block counts, block types)
-- Guide content in `shared/content.ts` → `GUIDE_DATA[lang][slug]`
-- Block renderers in `routes/guide/_components/guideContent.tsx`
-- TOC with section anchor jump links in `routes/guide/_components/guideToc.tsx`
+  (plain Markdown for paragraph/bullets/code, `:::name` directives for the rest)
+- Bilingual (ko/en) with framework parity (`i18n.parity`: same section IDs, block counts and types; build error)
+- Styled block renderers in `routes/[lang]/guide/_components/guideContent.tsx` (`guideComponents(lang)`)
+- TOC with section anchor jump links in `routes/[lang]/guide/_components/guideToc.tsx`; the `guide-toc` plugin also
+  copies code blocks (no client highlighter)
 
 ### Animation Presets
 

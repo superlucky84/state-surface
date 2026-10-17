@@ -1,16 +1,17 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition, TransitionError } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
-import { viewTransitionContent } from '../shared/content.js';
+import { viewTransitionContent } from '../shared/pages.js';
 
 async function* vtDemo(
   params: Record<string, unknown>,
   ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
-  const base = viewTransitionContent(lang);
+  const lang: Lang = paramLang(params);
+  const base = await viewTransitionContent(lang);
+  const grid = { 'vt:description': base['vt:description'], 'vt:gallery': base['vt:gallery'] };
   const cardId = params.card as string | undefined;
   const back = params.back as boolean | undefined;
 
@@ -18,7 +19,7 @@ async function* vtDemo(
     // Return to grid view
     yield {
       type: 'state',
-      states: base,
+      states: grid,
     };
     return;
   }
@@ -33,13 +34,12 @@ async function* vtDemo(
     yield {
       type: 'state',
       states: {
-        'page:header': base['page:header'],
         'vt:description': base['vt:description'],
         'vt:gallery': {
           mode: 'detail',
           cards: cards,
           selected,
-          backLabel: lang === 'ko' ? '갤러리로 돌아가기' : 'Back to Gallery',
+          backLabel: base.backLabel,
           lang,
         },
       },
@@ -50,7 +50,7 @@ async function* vtDemo(
   // Default: show grid
   yield {
     type: 'state',
-    states: base,
+    states: grid,
   };
 }
 

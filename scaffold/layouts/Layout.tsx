@@ -3,10 +3,9 @@ import PageHeader, { type HeaderProps } from '../routes/_shared/components/pageH
 import SystemError from '../routes/_shared/components/systemError.js';
 
 export interface LayoutProps {
-  /** `page:header` slot state; the switch-lang transition replaces it. */
+  /** `page:header` props (a static slot: language links are page URLs, DC-24 ⑤). */
   header: HeaderProps;
   title?: string;
-  lang?: string;
   /** `chat` is a full-viewport shell whose main element fills the remaining height. */
   variant?: 'page' | 'chat';
   children?: unknown;
@@ -18,12 +17,12 @@ export interface LayoutProps {
  * these pages client navigations.
  */
 export default function Layout(
-  { header, title = 'StateSurface', lang = 'en', variant = 'page' }: LayoutProps,
+  { header, title = 'StateSurface', variant = 'page' }: LayoutProps,
   children: unknown
 ) {
   const chat = variant === 'chat';
   return (
-    <html lang={lang}>
+    <html lang={header.lang}>
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -45,7 +44,7 @@ export default function Layout(
               : 'mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-6 md:px-8'
           }
         >
-          <Slot name="page:header" mode="server">
+          <Slot name="page:header">
             <PageHeader {...header} />
           </Slot>
           {children}

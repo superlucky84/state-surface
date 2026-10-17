@@ -18,6 +18,16 @@ export type {
 
 // Base path
 export { prefixPath, getBasePath } from './shared/basePath.js';
+export { Image, Picture, getImage } from './shared/image.js';
+export type {
+  ImageAsset,
+  ImageFormat,
+  ImageLayout,
+  ImageProps,
+  ImageResult,
+  PictureProps,
+  RemotePattern,
+} from './shared/image.js';
 
 // Actions (typed transitions, JS-less forms)
 export { actionUrl } from './shared/actions.js';

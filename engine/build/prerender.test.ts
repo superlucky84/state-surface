@@ -25,8 +25,18 @@ afterEach(async () => {
 describe('prerender build output (DC-24 ④)', () => {
   it('writes <path>/index.html for static routes and every getStaticPaths entry', async () => {
     dir = await mkdtemp(path.join(tmpdir(), 'surface-prerender-'));
-    const pages = await prerender(bundle(), options(dir));
+    const warnings: string[] = [];
+    const pages = await prerender(bundle(), {
+      ...options(dir),
+      warn: message => warnings.push(message),
+    });
     expect(pages.map(page => page.path)).toEqual(['/static', '/docs/a', '/docs/b c']);
+    // Stage 5 carry-over: JS-less action forms cannot show their result on a static page.
+    expect(warnings).toHaveLength(1);
+    // Fixture routes have no page file, so the pattern names the page.
+    expect(warnings[0]).toMatch(
+      /^\/static \(\/static\) is prerendered and has a JS-less action form/
+    );
     expect(await readFile(path.join(dir, 'static/index.html'), 'utf8')).toContain(
       '<h1>static</h1>'
     );
@@ -36,7 +46,15 @@ describe('prerender build output (DC-24 ④)', () => {
   it('also writes the language-less path as the default language with a canonical link', async () => {
     dir = await mkdtemp(path.join(tmpdir(), 'surface-prerender-'));
     const pages = await prerender(bundle('bundle-i18n'), options(dir));
-    expect(pages.map(page => page.path)).toEqual(['/en', '/', '/ko']);
+    expect(pages.map(page => page.path)).toEqual([
+      '/en',
+      '/',
+      '/ko',
+      '/en/docs/shared',
+      '/docs/shared',
+      '/ko/docs/shared',
+      '/ko/docs/only-ko',
+    ]);
     const en = await readFile(path.join(dir, 'en/index.html'), 'utf8');
     const neutral = await readFile(path.join(dir, 'index.html'), 'utf8');
     expect(en).toContain('hreflang="ko" href="https://docs.example/ko"');

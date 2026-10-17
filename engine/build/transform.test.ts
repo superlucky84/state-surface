@@ -314,32 +314,38 @@ describe('app analysis', () => {
     const app = await real.app();
     expect(app.pages).toHaveLength(9);
     const pluginsOf = (page: string) =>
-      app.pagePlugins.get(path.resolve('routes', page))?.map(plugin => [plugin.id, plugin.load]);
+      app.pagePlugins
+        .get(path.resolve('routes/[lang]', page))
+        ?.map(plugin => [plugin.id, plugin.load]);
+    // Stage 7: guides are prerendered with server-highlighted code, so only the TOC plugin.
     expect(pluginsOf('guide/[slug].tsx')).toEqual([
-      ['client/plugins/prism.ts#prism', 'load'],
       ['client/plugins/guideToc.ts#guideToc', 'idle'],
     ]);
     expect(pluginsOf('examples/chat.tsx')).toEqual([
       ['client/plugins/chatScroll.ts#chatScroll', 'load'],
     ]);
     expect(pluginsOf('index.tsx')).toEqual([]);
-    expect(app.plugins.size).toBe(3);
+    expect(app.plugins.size).toBe(2);
     // Stage 4: transition-updated demo slots are server slots; only the chat bubble streams
     // into a client slot. Stage 5: the actions page has a useAction island.
     expect([...app.client.keys()].sort()).toEqual([
-      'routes/examples/actions/_components/likeButton.tsx#default',
-      'routes/examples/chat/_components/chatCurrent.tsx#default',
+      'routes/[lang]/examples/actions/_components/likeButton.tsx#default',
+      'routes/[lang]/examples/chat/_components/chatCurrent.tsx#default',
     ]);
     const slotsOf = (page: string) =>
       Object.fromEntries(
-        (app.pageSlots.get(path.resolve('routes', page)) ?? []).map(slot => [slot.name, slot])
+        (app.pageSlots.get(path.resolve('routes/[lang]', page)) ?? []).map(slot => [
+          slot.name,
+          slot,
+        ])
       );
     expect(slotsOf('examples/search.tsx')['search:input']).toMatchObject({
       mode: 'server',
       swap: 'morph',
-      componentId: 'routes/examples/search/_components/searchInput.tsx#default',
+      componentId: 'routes/[lang]/examples/search/_components/searchInput.tsx#default',
     });
-    expect(slotsOf('examples/search.tsx')['page:header']).toMatchObject({ mode: 'server' });
+    // Stage 7: the header's language links are page URLs, so it is a static slot.
+    expect(slotsOf('examples/search.tsx')['page:header']).toMatchObject({ mode: 'static' });
     expect(slotsOf('examples/chat.tsx')['chat:current']).toMatchObject({ mode: 'client' });
   });
 

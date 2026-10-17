@@ -58,7 +58,7 @@ function fail(where: Located, message: string, point?: { line?: number; column?:
   throw new SurfaceBuildError(message, {
     file: where.file,
     code: where.source,
-    ...(point?.line ? { line: point.line, column: point.column ?? 1 } : {}),
+    ...(point?.line && where.source ? { line: point.line, column: point.column ?? 1 } : {}),
   });
 }
 const at = (node: { position?: { start: { line: number; column: number } } }) =>
@@ -85,8 +85,16 @@ function clean(node: unknown): HastNode[] {
     },
   ];
 }
-const hastOf = (nodes: RootContent[] | PhrasingContent[]) =>
+/** Block content: a root (blocks are separated by newline text, which HTML ignores). */
+const hastOf = (nodes: RootContent[]) =>
   clean(toHast({ type: 'root', children: nodes } as Root, { allowDangerousHtml: false }));
+/** Inline content through a paragraph: a root would put newlines between phrasing nodes. */
+const inlineHast = (nodes: PhrasingContent[]) => {
+  const [paragraph] = clean(
+    toHast({ type: 'paragraph', children: nodes }, { allowDangerousHtml: false })
+  );
+  return paragraph?.type === 'element' ? paragraph.children : [];
+};
 
 function textOf(node: MdastNodes): string {
   if ('value' in node && typeof node.value === 'string') return node.value;
@@ -120,7 +128,7 @@ function itemContent(where: Located, item: ListItem): HastNode[] {
     fail(where, 'Task list items ([ ]) are not supported; use :::checklist.', at(item));
   for (const child of item.children) checkInline(where, child);
   if (item.children.length === 1 && item.children[0].type === 'paragraph')
-    return hastOf(item.children[0].children);
+    return inlineHast(item.children[0].children);
   return hastOf(item.children);
 }
 
@@ -202,7 +210,7 @@ function block(where: Located, node: RootContent): BlockData {
   switch (node.type) {
     case 'paragraph':
       checkInline(where, node);
-      return { type: 'paragraph', children: hastOf(node.children) };
+      return { type: 'paragraph', children: inlineHast(node.children) };
     case 'list':
       if (node.ordered) fail(where, 'Ordered lists belong in :::sequence.', at(node));
       return { type: 'bullets', items: node.children.map(item => itemContent(where, item)) };
@@ -279,11 +287,14 @@ function block(where: Located, node: RootContent): BlockData {
 function yamlData(where: Located, text: string, line: number) {
   const document = parseDocument(text, { prettyErrors: false });
   const [error] = document.errors;
-  if (error)
+  if (error) {
+    // Without pretty errors only the offset is set.
+    const before = text.slice(0, error.pos[0]).split('\n');
     fail(where, `Invalid YAML: ${error.message.split('\n')[0]}`, {
-      line: line + (error.linePos?.[0].line ?? 1) - 1,
-      column: error.linePos?.[0].col,
+      line: line + before.length - 1,
+      column: before[before.length - 1].length + 1,
     });
+  }
   return { data: document.toJS() as unknown, document, line };
 }
 
@@ -350,7 +361,7 @@ export function parseMarkdown(where: Located) {
       sections.push({
         id,
         text,
-        heading: hastOf(children),
+        heading: inlineHast(children),
         line: node.position?.start.line ?? 1,
         blocks: [],
       });
@@ -376,13 +387,18 @@ export interface ContentResult {
 
 const EXTENSIONS = new Set(['.md', '.mdx', '.json', '.yaml', '.yml']);
 
-/** Shape of a data value for i18n parity: keys, array lengths and value types. */
+/**
+ * Shape of a data value for i18n parity: keys, value types and the length of lists of
+ * records. Lists of plain values (tags, bullet strings) may differ in length per language.
+ */
 function shapeDiff(a: unknown, b: unknown, at = ''): string | undefined {
   const kind = (value: unknown) =>
     Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
   if (kind(a) !== kind(b))
     return `${at || 'value'} is ${kind(a)} in one language and ${kind(b)} in the other`;
   if (Array.isArray(a) && Array.isArray(b)) {
+    const plain = (list: unknown[]) => list.every(item => !item || typeof item !== 'object');
+    if (plain(a) && plain(b)) return undefined;
     if (a.length !== b.length) return `${at || 'value'} has ${a.length} vs ${b.length} items`;
     for (let i = 0; i < a.length; i++) {
       const diff = shapeDiff(a[i], b[i], `${at}[${i}]`);

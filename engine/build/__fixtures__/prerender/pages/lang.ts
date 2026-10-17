@@ -3,8 +3,7 @@ import type { SurfaceContext } from '../../../../server/core/context.js';
 
 export const prerender = true;
 
-export const getStaticPaths = () => [{ lang: 'en' }, { lang: 'ko' }];
-
+// No getStaticPaths: a route whose only param is [lang] is built for every locale.
 export default async function Page(ctx: SurfaceContext) {
   return h(
     'html',

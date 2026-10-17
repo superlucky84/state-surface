@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { guideToc } from './guideToc.js';
+import { codeText, guideToc } from './guideToc.js';
 
 function installAnimationFrameStub() {
   globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
@@ -84,5 +84,27 @@ describe('guideToc plugin', () => {
     guideToc.update(slot);
 
     expect(scrollSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('guide code copy', () => {
+  it('copies the code without line numbers, keeping indentation', async () => {
+    document.body.innerHTML = `
+      <div class="rounded-lg">
+        <button type="button" data-copy-code>Copy</button>
+        <pre><code class="language-ts"><span class="code-ln"> 1</span>if (a) {
+<span class="code-ln"> 2</span>  run();
+<span class="code-ln"> 3</span>}</code></pre>
+      </div>`;
+    const button = document.querySelector('button')!;
+    expect(codeText(button)).toBe('if (a) {\n  run();\n}');
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const controller = new AbortController();
+    guideToc.onPage!({ signal: controller.signal });
+    button.click();
+    expect(writeText).toHaveBeenCalledWith('if (a) {\n  run();\n}');
+    expect(button.textContent).toBe('Copied!');
+    controller.abort();
   });
 });

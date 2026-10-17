@@ -1,19 +1,13 @@
-import { prefixPath } from 'state-surface';
-
 export type HeaderProps = {
   title: string;
-  nav: string;
-  page?: string;
-  lang?: string;
+  nav: 'home' | 'guide' | 'examples';
+  lang: string;
+  /** Navigation in the page language (`/ko/guide/surface`). */
+  links: { home: string; guide: string; examples: string };
+  /** The same page in each language; the links remember the choice (DC-24 ⑤). */
+  languages: Array<{ lang: string; label: string; href: string }>;
   backHref?: string;
   backLabel?: string;
-  switchParams?: Record<string, unknown>;
-};
-
-const NAV_PAGES: Record<string, string> = {
-  home: 'home',
-  guide: 'guide',
-  examples: 'examples',
 };
 
 function navLinkClass(active: boolean): string {
@@ -30,20 +24,7 @@ function langBtnClass(active: boolean): string {
   return 'rounded px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900';
 }
 
-const Header = ({
-  title,
-  nav,
-  page: pageProp,
-  lang,
-  backHref,
-  backLabel,
-  switchParams,
-}: HeaderProps) => {
-  const currentLang = lang ?? 'en';
-  const page = pageProp ?? NAV_PAGES[nav] ?? 'home';
-  const extra = switchParams ?? {};
-  const targetLang = currentLang === 'ko' ? 'en' : 'ko';
-
+const Header = ({ title, nav, lang, links, languages, backHref, backLabel }: HeaderProps) => {
   return (
     <header class="rounded-2xl border border-slate-200 bg-white/90 px-5 py-5 shadow-sm backdrop-blur md:px-6">
       <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -59,32 +40,29 @@ const Header = ({
           )}
           <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
           <div class="flex items-center gap-1 rounded-md border border-slate-200 p-0.5">
-            <button
-              type="button"
-              data-action="switch-lang"
-              data-params={JSON.stringify({ ...extra, lang: 'en', page })}
-              class={langBtnClass(currentLang === 'en')}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              data-action="switch-lang"
-              data-params={JSON.stringify({ ...extra, lang: 'ko', page })}
-              class={langBtnClass(currentLang === 'ko')}
-            >
-              KO
-            </button>
+            {languages.map(language => (
+              // A switch is a deliberate choice: no prefetch (it would only answer 204).
+              <a
+                href={language.href}
+                hreflang={language.lang}
+                lang={language.lang}
+                data-prefetch="false"
+                {...(language.lang === lang ? { 'aria-current': 'true' } : {})}
+                class={langBtnClass(language.lang === lang)}
+              >
+                {language.label}
+              </a>
+            ))}
           </div>
         </div>
         <nav class="flex flex-wrap items-center gap-2">
-          <a class={navLinkClass(nav === 'home')} href={prefixPath('/')}>
+          <a class={navLinkClass(nav === 'home')} href={links.home}>
             Home
           </a>
-          <a class={navLinkClass(nav === 'guide')} href={prefixPath('/guide/surface')}>
+          <a class={navLinkClass(nav === 'guide')} href={links.guide}>
             Guide
           </a>
-          <a class={navLinkClass(nav === 'examples')} href={prefixPath('/examples')}>
+          <a class={navLinkClass(nav === 'examples')} href={links.examples}>
             Examples
           </a>
           <a

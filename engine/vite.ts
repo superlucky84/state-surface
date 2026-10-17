@@ -11,13 +11,27 @@ import { SurfaceBuildError } from './build/diagnostics.js';
 import { nodeListener } from './adapters/http.js';
 import { scanRoutes } from './build/routeScanner.js';
 import { prerender } from './build/prerender.js';
+import { loadContent } from './build/content.js';
+import { compileMdx } from './build/mdx.js';
+import {
+  IMAGE_FILE,
+  IMAGE_TYPES,
+  checkImageOptions,
+  imageConfig,
+  imageModule,
+  type ImageOptions,
+} from './build/images.js';
+import { createImageService } from './images/service.js';
 import type { Adapter } from './adapters/types.js';
+import type { CollectionConfig, RawEntry } from './content/types.js';
 
 const VIRTUAL = 'virtual:state-surface/manifest';
 const ISLANDS = 'virtual:state-surface/islands';
 const PLUGINS = 'virtual:state-surface/plugins';
 const ENTRY = 'virtual:state-surface/entry';
 const PRERENDER = 'virtual:state-surface/prerender';
+const CONTENT = 'virtual:state-surface/content';
+const CONTENT_CONFIGS = ['ts', 'mts', 'js', 'mjs'].map(ext => `content/config.${ext}`);
 // Set while the plugin builds the prerender bundle (no nested prerendering, same secret).
 const PRERENDER_BUILD = 'STATE_SURFACE_PRERENDER_BUILD';
 const BUILD_SECRET = 'STATE_SURFACE_BUILD_SECRET';
@@ -53,6 +67,8 @@ export interface SurfacePluginOptions {
   i18n?: { locales: string[]; defaultLocale: string };
   /** Public origin for hreflang/canonical links in prerendered HTML (`https://example.com`). */
   site?: string;
+  /** Image optimization (DC-26): srcset widths, extra formats, allowed remote hosts. */
+  images?: ImageOptions;
 }
 
 /** Pages that may prerender: the option, or a `prerender` export (its value decides later). */
@@ -79,6 +95,7 @@ function isServerOnly(id: string) {
 }
 
 export function surface(options: SurfacePluginOptions = {}): Plugin {
+  checkImageOptions(options.images);
   let config: ResolvedConfig;
   const facts: FactsCache = new Map();
   // Root secret for deferred-slot tokens and flash (IC-09) when SURFACE_SECRET is unset:
@@ -115,6 +132,14 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
     (context as { environment?: { config: { consumer?: string } } }).environment?.config
       .consumer === 'client';
   const adapter = options.adapter;
+  // Encoded variants are reused across builds and dev restarts.
+  const imageCache = () => path.join(config.root, 'node_modules/.state-surface/images');
+  const images = () =>
+    imageConfig(options.images, {
+      adapter: adapter?.name ?? 'node',
+      prerender: !!process.env[PRERENDER_BUILD],
+    });
+  const basePath = () => (config.base === '/' ? '' : config.base.replace(/\/$/, ''));
   return {
     name: 'state-surface',
     enforce: 'pre',
@@ -157,6 +182,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       if (id === PLUGINS) return '\0' + PLUGINS;
       if (id === ENTRY || id === path.resolve(config.root, ENTRY)) return '\0' + ENTRY;
       if (id === PRERENDER || id === path.resolve(config.root, PRERENDER)) return '\0' + PRERENDER;
+      if (id === CONTENT) return '\0' + CONTENT;
       // Dev reports server-only imports immediately; builds report the full chain in buildEnd.
       // Vitest's DOM environments are "client" too but mix server and browser code on purpose.
       if (
@@ -197,8 +223,30 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         );
     },
     async load(id) {
+      // DC-26: `import hero from './hero.png'` is an ImageAsset (size + variants).
+      if (
+        IMAGE_FILE.test(id) &&
+        !id.startsWith('\0') &&
+        path.isAbsolute(id) &&
+        !id.split(path.sep).includes('node_modules')
+      ) {
+        this.addWatchFile(id);
+        return imageModule(id, {
+          command: config.command,
+          root: config.root,
+          base: basePath(),
+          clientDir: path.join(config.root, 'dist/client'),
+          cacheDir: imageCache(),
+          config: images(),
+        }).catch(forRollup);
+      }
+      if (id === '\0' + CONTENT) {
+        const content = await contentModule(config).catch(forRollup);
+        for (const file of content.files) this.addWatchFile(file);
+        return content.code;
+      }
       if (id === '\0' + PRERENDER)
-        return `export { default as manifest } from '${VIRTUAL}';export { createHandler, isPrerendered } from 'state-surface/internal/prerender';`;
+        return `export { default as manifest } from '${VIRTUAL}';export { createHandler, isPrerendered, staticParams } from 'state-surface/internal/prerender';`;
       if (id === '\0' + ENTRY) {
         const name = adapter?.name ?? 'node';
         if (name === 'cloudflare')
@@ -285,6 +333,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         "import { defineManifest } from 'state-surface/server';",
         "import { configureAssets } from 'state-surface/internal/assets';",
         "import { setBasePath } from 'state-surface/internal/basePath';",
+        "import { configureImages } from 'state-surface/internal/images';",
         ...app.pages.map((r, i) => `import * as route${i} from ${JSON.stringify(r.filePath)};`),
         ...transitions.map(
           (transition, i) => `import transition${i} from ${JSON.stringify(transition.filePath)};`
@@ -292,15 +341,16 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
         ...[...modules].map(
           ([file, local]) => `import * as ${local} from ${JSON.stringify(file)};`
         ),
-        `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)});`,
-        `export default defineManifest({${options.prerender ? 'prerender:true,' : ''}${options.i18n ? `i18n:${JSON.stringify(options.i18n)},` : ''}${options.site ? `site:${JSON.stringify(options.site)},` : ''}basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:{${transitions.map((transition, i) => `${JSON.stringify(transition.name)}:transition${i}`).join(',')}}});`,
+        `setBasePath(${JSON.stringify(base)}); configureAssets(${JSON.stringify(assets)}); configureImages(${JSON.stringify(images())});`,
+        `export default defineManifest({${options.prerender ? 'prerender:true,' : ''}${options.i18n ? `i18n:${JSON.stringify(options.i18n)},` : ''}${options.site ? `site:${JSON.stringify(options.site)},` : ''}images:${JSON.stringify(images())},basePath:${JSON.stringify(base)},buildId:${JSON.stringify(buildId)},secret:${JSON.stringify(secret)},assets:${JSON.stringify(assets)},document:${JSON.stringify(document)},components:{${[...components].map(([id, value]) => `${JSON.stringify(id)}:${value}`).join(',')}},routes:[${app.pages.map((r, i) => `{pattern:${JSON.stringify(r.urlPattern)},module:route${i},plugins:${JSON.stringify(app.pagePlugins.get(r.filePath) ?? [])},page:${pages[i]}}`).join(',')}],transitions:{${transitions.map((transition, i) => `${JSON.stringify(transition.name)}:transition${i}`).join(',')}}});`,
       ].join('\n');
     },
     async transform(code, id) {
-      if (!/\.[jt]sx$/.test(id.split('?')[0]) || id.startsWith('\0')) return;
+      if (!/\.(?:[jt]sx|mdx)$/.test(id.split('?')[0]) || id.startsWith('\0')) return;
       const file = id.split('?')[0];
       const analyzer = analyzerFor(this);
       if (!analyzer.isProjectFile(file)) return;
+      if (file.endsWith('.mdx')) return transformMdx(code, file, analyzer).catch(forRollup);
       return transformSurface(code, file, analyzer).catch(forRollup);
     },
     /**
@@ -358,6 +408,8 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           engineDir: ENGINE_DIR,
           clientDir: path.join(config.root, 'dist/client'),
           env: process.env,
+          images: createImageService({ cacheDir: imageCache() }),
+          warn: message => config.logger.warn(`[state-surface] ${message}`),
         });
         if (pages.length)
           config.logger.info(
@@ -370,15 +422,30 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       }
     },
     async buildStart() {
-      // Editors and tsc read the action type map before any manifest is generated.
+      // Editors and tsc read the action and collection type maps before any manifest is
+      // generated.
       await writeActionTypes(
         config.root,
         await scanTransitions(path.join(config.root, 'transitions')).catch(forRollup)
       );
+      await writeContentTypes(config.root);
+      await writeGenerated(config.root, 'images.d.ts', IMAGE_TYPES);
     },
     configureServer(server) {
+      const contentDir = path.join(config.root, 'content') + path.sep;
       const changed = (file: string) => {
         facts.delete(file);
+        // DC-25: content files are build input; a change rebuilds the content module and
+        // reloads the page.
+        if (file.startsWith(contentDir)) {
+          void writeContentTypes(config.root).catch(error => config.logger.error(String(error)));
+          for (const id of ['\0' + CONTENT, '\0' + VIRTUAL]) {
+            const mod = server.moduleGraph.getModuleById(id);
+            if (mod) server.moduleGraph.invalidateModule(mod);
+          }
+          server.ws.send({ type: 'full-reload' });
+          return;
+        }
         const transitionsDir = path.join(config.root, 'transitions');
         const graphChanged =
           analyzed.has(file) ||
@@ -403,7 +470,11 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           try {
             const { default: manifest } = await server.ssrLoadModule(VIRTUAL);
             const { createHandler } = await server.ssrLoadModule('state-surface/server');
-            const handler = createHandler({ manifest, development: true });
+            const handler = createHandler({
+              manifest,
+              development: true,
+              images: createImageService({ root: config.root, cacheDir: imageCache() }),
+            });
             await nodeListener(handler)(req, res);
           } catch (error) {
             server.ssrFixStacktrace(error as Error);
@@ -413,6 +484,133 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       };
     },
   };
+}
+
+/** The content config file, if the project has one. */
+const contentConfig = (root: string) =>
+  CONTENT_CONFIGS.map(file => path.join(root, file)).find(file => existsSync(file));
+
+/**
+ * `virtual:state-surface/content` (DC-25): every collection parsed and validated, as data.
+ * `.mdx` entries import their compiled module. Dev reports parity problems as warnings.
+ */
+async function contentModule(config: ResolvedConfig) {
+  const root = config.root;
+  const file = contentConfig(root);
+  if (!file) return { code: 'export default {};', files: [] as string[] };
+  const { runnerImport } = await import('vite');
+  // The config may import `state-surface/content` for defineCollection: that resolves to the
+  // definition helper, not to this module.
+  const { module, dependencies } = await runnerImport<{
+    collections?: Record<string, CollectionConfig>;
+  }>(file, {
+    root,
+    configFile: false,
+    logLevel: 'error',
+    resolve: {
+      alias: [
+        {
+          find: /^state-surface\/content$/,
+          replacement: path.join(ENGINE_DIR, 'content/define.ts'),
+        },
+      ],
+    },
+  });
+  const collections = module.collections;
+  if (!collections || typeof collections !== 'object')
+    throw new SurfaceBuildError('content/config.ts must export `collections`.', {
+      file: path.relative(root, file),
+      hint: 'export const collections = { guides: defineCollection({ schema }) };',
+    });
+  const result = await loadContent({
+    root,
+    collections,
+    parity: config.command === 'serve' ? 'warn' : 'error',
+    mdxHeadings: async (mdx, source) => (await compileMdx(source, mdx)).headings,
+  });
+  for (const warning of result.warnings) config.logger.warn(`[state-surface] ${warning}`);
+  const imports: string[] = [];
+  const relative = (target: string) => path.relative(root, target).split(path.sep).join('/');
+  const entry = (raw: RawEntry) => {
+    const { module: _module, ...rest } = raw;
+    const json = JSON.stringify({ ...rest, file: relative(raw.file) });
+    if (raw.kind !== 'mdx') return json;
+    const local = `mdx${imports.length}`;
+    imports.push(`import * as ${local} from ${JSON.stringify(raw.file)};`);
+    return `{...${json},module:${local}}`;
+  };
+  const body = Object.entries(result.collections).map(([name, entries]) => {
+    const locales = collections[name].i18n?.locales;
+    return `${JSON.stringify(name)}:{${locales ? `locales:${JSON.stringify(locales)},` : ''}entries:[${entries.map(entry).join(',')}]}`;
+  });
+  return {
+    code: `${imports.join('\n')}\nexport default {${body.join(',\n')}};`,
+    files: [file, ...dependencies.filter(dep => path.isAbsolute(dep)), ...result.files],
+  };
+}
+
+/**
+ * `.mdx` → JSX (MDX) → call-site transform (islands) → JS. MDX documents render inside page
+ * markup: islands are allowed, Slots and `<Boot>` belong to pages.
+ */
+async function transformMdx(source: string, file: string, analyzer: SurfaceAnalyzer) {
+  const { code } = await compileMdx(source, file);
+  const surfaced = await transformSurface(code, file, analyzer);
+  const analysis = await analyzer.module(file);
+  if (analysis?.slots.length || analysis?.usesBoot)
+    throw new SurfaceBuildError(
+      `${analysis.usesBoot ? '<Boot>' : '<Slot>'} cannot be used in .mdx content; put it in the page.`,
+      { file }
+    );
+  const { transformWithEsbuild } = await import('vite');
+  const output = await transformWithEsbuild(surfaced?.code ?? code, file, {
+    loader: 'jsx',
+    jsx: 'automatic',
+    jsxImportSource: 'lithent',
+    sourcemap: true,
+  });
+  return { code: output.code, map: output.map };
+}
+
+/** Write `.state-surface/content.d.ts`: collection names and data types from the config. */
+async function writeContentTypes(root: string) {
+  const config = contentConfig(root);
+  const target = config
+    ? path
+        .relative(path.join(root, '.state-surface'), config)
+        .split(path.sep)
+        .join('/')
+        .replace(/\.[cm]?[jt]s$/, '')
+    : undefined;
+  const content = [
+    '// Generated by state-surface from content/config.ts. Do not edit.',
+    ...(target
+      ? [`type ConfigCollections = typeof import(${JSON.stringify(target)})['collections'];`]
+      : []),
+    '',
+    'declare global {',
+    '  namespace StateSurface {',
+    target
+      ? '    interface Collections extends ConfigCollections {}'
+      : '    interface Collections {}',
+    '  }',
+    '}',
+    '',
+    'export {};',
+    '',
+  ].join('\n');
+  const file = path.join(root, '.state-surface/content.d.ts');
+  if ((await readFile(file, 'utf8').catch(() => undefined)) === content) return;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
+}
+
+/** Write a `.state-surface/` file when its content changes. */
+async function writeGenerated(root: string, name: string, content: string) {
+  const file = path.join(root, '.state-surface', name);
+  if ((await readFile(file, 'utf8').catch(() => undefined)) === content) return;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
 }
 
 /** Write `.state-surface/actions.d.ts` when its content changes (DC-22 ⑤). */

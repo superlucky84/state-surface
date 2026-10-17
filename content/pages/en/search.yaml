@@ -1,0 +1,121 @@
+title: Search
+input:
+  placeholder: e.g. streaming, action, hydration...
+  label: Search StateSurface features and concepts
+  buttonLabel: Search
+  hint: Form data-action triggers a search transition. Results stream as NDJSON frames.
+results:
+  loading: 'Searching for "{query}"...'
+  empty: 'No results found for "{query}".'
+features:
+  - title: Surface
+    description: TSX page functions whose <Slot> boundaries render <h-state> anchors.
+    href: /guide/surface
+    tags:
+      - surface
+      - layout
+      - html
+      - anchor
+      - h-state
+      - shell
+  - title: Template
+    description: Slot child components whose props are the slot state.
+    href: /guide/template
+    tags:
+      - template
+      - tsx
+      - projection
+      - component
+      - render
+  - title: Transition
+    description: Server-side async generators that yield state frames progressively.
+    href: /guide/transition
+    tags:
+      - transition
+      - stream
+      - frame
+      - ndjson
+      - generator
+      - server
+  - title: Action
+    description: Declarative triggers via data-action attributes for transition invocation.
+    href: /guide/action
+    tags:
+      - action
+      - data-action
+      - click
+      - submit
+      - form
+      - pending
+  - title: Streaming Demo
+    description: Full/partial frames, removed keys, and error frames in real time.
+    href: /examples/streaming
+    tags:
+      - streaming
+      - full
+      - partial
+      - removed
+      - error
+      - frame
+      - demo
+  - title: Actions Playground
+    description: Button actions, form submissions, scoped pending, and multiple actions.
+    href: /examples/actions
+    tags:
+      - action
+      - button
+      - form
+      - pending
+      - scoped
+      - playground
+      - demo
+  - title: Full Frame
+    description: Declares complete UI state. Replaces the transition's targets. First frame must be full.
+    href: /examples/streaming
+    tags:
+      - full
+      - frame
+      - replace
+      - state
+  - title: Partial Frame
+    description: Merges changes via "changed" and "removed" arrays into existing state.
+    href: /examples/streaming
+    tags:
+      - partial
+      - frame
+      - changed
+      - removed
+      - merge
+  - title: Hydration
+    description: Client slots and islands hydrate per <h-state> root from the __SURFACE__ snapshot.
+    href: /guide/template
+    tags:
+      - hydration
+      - ssr
+      - hash
+      - boundary
+  - title: Abort Previous
+    description: Starting a new transition cancels the previous in-flight stream.
+    href: /examples/streaming
+    tags:
+      - abort
+      - cancel
+      - concurrency
+      - previous
+  - title: Pending State
+    description: data-pending on the request's anchors until it ends, data-has-result after its first result.
+    href: /examples/actions
+    tags:
+      - pending
+      - data-pending
+      - loading
+      - spinner
+  - title: Boot Auto-Run
+    description: <Boot> runs a transition once the page loads; the SSR state shows until it answers.
+    href: /guide/transition
+    tags:
+      - boot
+      - auto
+      - ssr
+      - hydration
+      - initial

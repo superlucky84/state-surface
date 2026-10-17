@@ -16,6 +16,14 @@ import { startServer } from '../perf/server.mjs';
  * `useAction` island and the JS-less `actions:comments` form). Element structure, attributes,
  * text, base path, boot entries and rendered slots must match; each transition must touch the
  * same slots frame by frame.
+ *
+ * Stage 7 (DC-24, DC-25): languages are URL paths, so `/x` with the `lang=ko` cookie is now
+ * `/ko/x` and `/x` is `/en/x`. The header is a static slot with language links (compared
+ * without it, and transitions no longer send it), hrefs and redirect targets carry the
+ * language, actions send `lang` (a param or a hidden field), `<html lang>` follows the page
+ * and hreflang links join the head. The home page and guides are rewritten content (DC-25 ⑥:
+ * guides on the 2.0 API, home concepts corrected) and their boot transitions are gone, so they
+ * are not compared; neither are `switch-lang` and `guide-load`, which were removed.
  */
 
 /** Stage 5 additions to the actions page, removed from the current tree before comparing. */
@@ -49,20 +57,60 @@ const stage4Shape = frame =>
           ...new Set(frame.ops.filter(op => !('ui' in op && op.ui === null)).map(op => op.slot)),
         ].sort(),
       ];
-const pageOf = { 'switch-lang': 'index', search: 'examples/search', 'guide-load': 'guide/[slug]' };
+const pageOf = { search: '[lang]/examples/search' };
+/** Stage 7: rewritten or removed (see above). */
+const NOT_COMPARED = new Set(['/', '/guide/quickstart', '/guide/surface']);
+const REMOVED_TRANSITIONS = new Set(['switch-lang', 'guide-load']);
+/** Static since stage 7: not in the bootstrap slot list. */
+const STATIC_SLOTS = new Set(['page:header', 'examples:list']);
 
+/** Stage 7 normalization, applied to both trees (see the allowed differences above). */
+const stage7 = (node, base) => {
+  if (!Array.isArray(node)) return node;
+  const [tag, attributes, children] = node;
+  if (slotName(node) === 'page:header') return undefined;
+  if (tag === 'link' && attributes.some(([key, value]) => key === 'rel' && value === 'alternate'))
+    return undefined;
+  if (
+    tag === 'input' &&
+    attributes.some(([key, value]) => key === 'name' && value === 'lang') &&
+    attributes.some(([key, value]) => key === 'type' && value === 'hidden')
+  )
+    return undefined;
+  const unprefix = value =>
+    value.startsWith(base + '/')
+      ? base + value.slice(base.length).replace(/^\/(?:en|ko)(?=\/|$)/, '') || base + '/'
+      : value;
+  const fixed = attributes
+    .filter(([key]) => !(tag === 'html' && key === 'lang'))
+    .map(([key, value]) => {
+      if (key === 'href') return [key, unprefix(value)];
+      if (key === 'value' && attributes.some(([k, v]) => k === 'name' && v === '_redirect'))
+        return [key, unprefix(value)];
+      if (key === 'data-params') {
+        const params = JSON.parse(value);
+        delete params.lang;
+        return [key, JSON.stringify(params)];
+      }
+      return [key, value];
+    });
+  return [
+    tag,
+    fixed,
+    (children ?? []).map(child => stage7(child, base)).filter(child => child !== undefined),
+  ];
+};
 const snapshot = JSON.parse(await readFile(new URL('./stage1-demo.json', import.meta.url), 'utf8'));
 const server = await startServer(3301);
 let pages = 0;
 try {
-  for (const [variant, cookie] of [
-    ['pages', undefined],
-    ['ko', 'lang=ko'],
+  for (const [variant, lang] of [
+    ['pages', 'en'],
+    ['ko', 'ko'],
   ]) {
     for (const [path, expected] of Object.entries(snapshot[variant])) {
-      const response = await fetch(server.origin + path, {
-        headers: cookie ? { cookie } : {},
-      });
+      if (NOT_COMPARED.has(path)) continue;
+      const response = await fetch(server.origin + `/${lang}${path}`);
       assert.equal(response.status, expected.status, `${variant} ${path} status`);
       const html = await response.text();
       if (expected.status !== 200) continue;
@@ -72,10 +120,11 @@ try {
       assert.deepEqual(actual.json.boot, baseline.json.boot, `${variant} ${path}: boot`);
       // Stage 1 listed slots that had state; stage 4 lists every rendered slot (empty ones too).
       for (const slot of baseline.json.slots ?? [])
-        assert.ok(actual.json.slots?.includes(slot), `${variant} ${path}: slot ${slot}`);
+        if (!STATIC_SLOTS.has(slot))
+          assert.ok(actual.json.slots?.includes(slot), `${variant} ${path}: slot ${slot}`);
       assert.deepEqual(
-        withoutStage5(actual.tree),
-        baseline.tree,
+        stage7(withoutStage5(actual.tree), actual.json.basePath),
+        stage7(baseline.tree, baseline.json.basePath),
         `${variant} ${path}: document tree`
       );
       assert.equal(actual.styles.length, baseline.styles.length, `${variant} ${path}: styles`);
@@ -83,9 +132,12 @@ try {
       pages++;
     }
   }
-  const home = await (await fetch(server.origin + '/')).text();
+  const home = await (await fetch(server.origin + '/en')).text();
   const buildId = JSON.parse(home.match(/id="__SURFACE__"[^>]*>(.*?)<\/script>/)[1]).buildId;
+  let streams = 0;
   for (const [name, expected] of Object.entries(snapshot.transitions)) {
+    if (REMOVED_TRANSITIONS.has(name)) continue;
+    streams++;
     const response = await fetch(`${server.origin}/transition/${name}`, {
       method: 'POST',
       headers: {
@@ -94,18 +146,20 @@ try {
         'x-surface-build': buildId,
         'x-surface-page': pageOf[name],
       },
-      body: JSON.stringify(expected.body),
+      body: JSON.stringify({ ...expected.body, lang: 'en' }),
     });
     assert.equal(response.status, expected.status, name);
     assert.deepEqual(
       (await response.text()).trim().split('\n').map(JSON.parse).map(stage4Shape),
-      expected.frames.map(stage1Shape),
+      expected.frames
+        .map(stage1Shape)
+        .map(([kind, slots]) => [kind, slots.filter(slot => slot !== 'page:header')]),
       name
     );
   }
   console.log(
     `Stage 1 parity: ${pages} SSR documents (en + ko) and ` +
-      `${Object.keys(snapshot.transitions).length} transition streams match semantically`
+      `${streams} transition stream${streams === 1 ? '' : 's'} match semantically`
   );
 } finally {
   await server.stop();

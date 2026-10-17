@@ -8,24 +8,47 @@ beforeAll(async () => {
 });
 
 describe('dynamic param validation', () => {
-  it('GET /guide/surface works with valid slug', async () => {
-    const res = await request(app).get('/guide/surface');
+  it('GET /en/guide/surface works with valid slug', async () => {
+    const res = await request(app).get('/en/guide/surface');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
   });
 
-  it('GET /guide/template works with valid slug', async () => {
-    const res = await request(app).get('/guide/template');
+  it('GET /ko/guide/template works with valid slug', async () => {
+    const res = await request(app).get('/ko/guide/template');
 
     expect(res.status).toBe(200);
   });
 
-  it('GET /guide/nonexistent returns 500 for invalid slug', async () => {
-    const res = await request(app).get('/guide/nonexistent');
+  it('GET /en/guide/nonexistent returns 404 (prerendered routes answer listed params only)', async () => {
+    const res = await request(app).get('/en/guide/nonexistent');
 
-    expect(res.status).toBe(500);
-    expect(res.text).toContain('Invalid guide slug');
+    expect(res.status).toBe(404);
+    expect(res.text).toContain('Not Found');
+  });
+});
+
+describe('language paths', () => {
+  it('GET /examples/search redirects to the language from the lang cookie', async () => {
+    const res = await request(app).get('/examples/search').set('cookie', 'lang=ko');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/ko/examples/search');
+  });
+
+  it('GET /en/examples?lang=ko switches language, remembers it and drops the query', async () => {
+    const res = await request(app).get('/en/examples?lang=ko');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/ko/examples');
+    expect(String(res.headers['set-cookie'])).toMatch(/^lang=ko;/);
+  });
+
+  it('GET /fr/examples returns 404 (only configured locales match)', async () => {
+    const res = await request(app).get('/fr/examples');
+
+    expect(res.status).toBe(404);
   });
 });
 
@@ -51,42 +74,54 @@ describe('404 handling', () => {
 });
 
 describe('cross-route navigation links', () => {
-  it('GET / includes navigation links to other routes', async () => {
-    const res = await request(app).get('/');
+  it('GET /en includes navigation links to other routes', async () => {
+    const res = await request(app).get('/en');
 
-    // Header template includes nav links
-    expect(res.text).toContain('href="/"');
-    expect(res.text).toContain('href="/guide/surface"');
-    expect(res.text).toContain('href="/examples"');
+    // Header template includes nav links in the page language
+    expect(res.text).toContain('href="/en"');
+    expect(res.text).toContain('href="/en/guide/surface"');
+    expect(res.text).toContain('href="/en/examples"');
+    // ...and a language switch to the same page
+    expect(res.text).toContain(
+      '<a href="/ko?lang=ko" hreflang="ko" lang="ko" data-prefetch="false"'
+    );
   });
 
-  it('GET /examples/search includes same navigation links', async () => {
-    const res = await request(app).get('/examples/search');
+  it('GET /ko/examples/search includes same navigation links in Korean', async () => {
+    const res = await request(app).get('/ko/examples/search');
 
-    expect(res.text).toContain('href="/"');
-    expect(res.text).toContain('href="/examples"');
+    expect(res.text).toContain('href="/ko"');
+    expect(res.text).toContain('href="/ko/examples"');
+    expect(res.text).toContain(
+      '<a href="/en/examples/search?lang=en" hreflang="en" lang="en" data-prefetch="false"'
+    );
   });
 });
 
 describe('all routes render valid HTML', () => {
-  const routes = [
-    '/',
-    '/examples/search',
-    '/guide/surface',
-    '/examples/streaming',
-    '/examples/actions',
+  // Prerendered pages render through the restricted prerender context: no CSP nonce.
+  const routes: Array<[route: string, prerendered: boolean]> = [
+    ['/en', true],
+    ['/ko', true],
+    ['/en/examples/search', false],
+    ['/en/guide/surface', true],
+    ['/en/examples/streaming', true],
+    ['/en/examples/actions', false],
   ];
 
-  for (const route of routes) {
+  for (const [route, prerendered] of routes) {
     it(`GET ${route} returns valid HTML document`, async () => {
       const res = await request(app).get(route);
 
       expect(res.status).toBe(200);
       expect(res.text).toContain('<!doctype html>');
-      expect(res.text).toContain('<html');
+      expect(res.text).toContain(`<html lang="${route.split('/')[1]}">`);
       expect(res.text).toContain('</html>');
+      if (prerendered) expect(res.text).not.toContain('nonce=');
       expect(res.text).toMatch(
-        /<script type="module" src="\/engine\/client\/loader.ts" nonce="[0-9a-f]+" data-ss><\/script>/
+        prerendered
+          ? /<script type="module" src="\/engine\/client\/loader.ts" data-ss><\/script>/
+          : /<script type="module" src="\/engine\/client\/loader.ts" nonce="[0-9a-f]+" data-ss><\/script>/
       );
     });
   }

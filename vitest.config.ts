@@ -2,11 +2,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import { surface } from './engine/vite.js';
+import { DEFAULT_LOCALE, LOCALES } from './shared/locales.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [surface()],
+  plugins: [surface({ i18n: { locales: [...LOCALES], defaultLocale: DEFAULT_LOCALE } })],
   resolve: {
     alias: [
       {

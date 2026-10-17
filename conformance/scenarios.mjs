@@ -293,6 +293,24 @@ export async function scenarios(origin, runtime) {
       assert.equal((await unlocked.text()).trim(), '<!doctype html><p>built-marker /locked</p>');
     }
   );
+  await check('image endpoint: remote allowlist and widths, none on Workers', async () => {
+    const image = (host, width) =>
+      fetch(
+        url(`/_surface/image?url=${encodeURIComponent(`https://${host}/a.png`)}&w=${width}&f=webp`)
+      );
+    const workers = runtime === 'cloudflare';
+    const blocked = await image('evil.test', 640);
+    assert.equal(blocked.status, workers ? 404 : 403);
+    await blocked.body?.cancel();
+    const width = await image('images.invalid', 999);
+    assert.equal(width.status, workers ? 404 : 400);
+    await width.body?.cancel();
+    // `.invalid` never resolves: an allowed URL that cannot be fetched is a 502, not a crash.
+    const unreachable = await image('images.invalid', 640);
+    assert.equal(unreachable.status, workers ? 404 : 502);
+    assert.equal(unreachable.headers.get('cache-control'), 'no-store');
+    await unreachable.body?.cancel();
+  });
   await check('static asset MIME, cache, HEAD and traversal boundary', async () => {
     const response = await fetch(url('/assets/probe-12345678.js'));
     assert.equal(response.status, 200);

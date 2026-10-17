@@ -1,9 +1,9 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
-import { searchContent, searchResults } from '../shared/content.js';
+import { searchContent, searchResults } from '../shared/pages.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -12,29 +12,29 @@ async function* search(
   ctx: SurfaceContext
 ): AsyncGenerator<StateFrame, void, unknown> {
   const query = (params.query as string) ?? '';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  const lang: Lang = paramLang(params);
 
-  const base = searchContent(lang, query);
+  const base = await searchContent(lang, query);
 
-  // Frame 1: full — show header + input + loading results
+  // Frame 1: full — show the input + loading results
   yield {
     type: 'state',
     states: {
-      ...base,
-      'search:results': { loading: true, query },
+      'search:input': base['search:input'],
+      'search:results': { loading: true, query, labels: base.results },
     },
   };
 
   await delay(300);
 
   // Frame 2: partial — update results only
-  const items = searchResults(lang, query);
+  const items = await searchResults(lang, query);
 
   yield {
     type: 'state',
     full: false,
     states: {
-      'search:results': { loading: false, query, items },
+      'search:results': { loading: false, query, items, labels: base.results },
     },
     changed: ['search:results'],
   };

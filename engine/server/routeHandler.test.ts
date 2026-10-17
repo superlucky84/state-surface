@@ -10,11 +10,12 @@ beforeAll(async () => {
 });
 
 describe('multi-route SSR', () => {
-  it('GET / returns SSR-rendered home page', async () => {
-    const res = await request(app).get('/');
+  it('GET /en returns SSR-rendered home page', async () => {
+    const res = await request(app).get('/en');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
+    expect(res.text).toContain('<html lang="en">');
     expect(res.text).toContain('<h-state name="page:header"');
     expect(res.text).toContain('<h-state name="page:hero"');
     expect(res.text).toContain('<h-state name="page:concepts"');
@@ -24,8 +25,23 @@ describe('multi-route SSR', () => {
     expect(res.text).not.toContain('data-ssr-hash');
   });
 
-  it('GET /examples/search returns SSR-rendered search page', async () => {
-    const res = await request(app).get('/examples/search');
+  it('GET /ko renders the home page in Korean', async () => {
+    const res = await request(app).get('/ko');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<html lang="ko">');
+    expect(res.text).toContain('<h-state name="page:hero"');
+  });
+
+  it('GET / redirects to a language path', async () => {
+    const res = await request(app).get('/');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/en');
+  });
+
+  it('GET /en/examples/search returns SSR-rendered search page', async () => {
+    const res = await request(app).get('/en/examples/search');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
@@ -36,19 +52,21 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('Search');
   });
 
-  it('GET /guide/surface returns SSR-rendered guide page', async () => {
-    const res = await request(app).get('/guide/surface');
+  it('GET /en/guide/surface returns the prerendered guide page', async () => {
+    const res = await request(app).get('/en/guide/surface');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
     expect(res.text).toContain('<h-state name="page:header"');
-    expect(res.text).toContain('<h-state name="guide:content"');
     expect(res.text).toContain('<h-state name="guide:toc"');
+    // The guide body is the Markdown collection entry rendered into the page, not a slot.
+    expect(res.text).not.toContain('<h-state name="guide:content"');
+    expect(res.text).toContain('id="tldr"');
     expect(res.text).toContain('id="__SURFACE__"');
   });
 
-  it('GET /examples/streaming returns SSR-rendered streaming page', async () => {
-    const res = await request(app).get('/examples/streaming');
+  it('GET /en/examples/streaming returns SSR-rendered streaming page', async () => {
+    const res = await request(app).get('/en/examples/streaming');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
@@ -58,8 +76,8 @@ describe('multi-route SSR', () => {
     expect(res.text).toContain('id="__SURFACE__"');
   });
 
-  it('GET /examples/actions returns SSR-rendered actions page', async () => {
-    const res = await request(app).get('/examples/actions');
+  it('GET /en/examples/actions returns SSR-rendered actions page', async () => {
+    const res = await request(app).get('/en/examples/actions');
 
     expect(res.status).toBe(200);
     expect(res.text).toContain('<!doctype html>');
@@ -75,35 +93,31 @@ const bootstrapOf = (html: string) =>
   );
 
 describe('<Boot> in __SURFACE__', () => {
-  it('GET /guide/surface records the boot transition', async () => {
-    const res = await request(app).get('/guide/surface');
-    expect(bootstrapOf(res.text).boot).toEqual([
-      { transition: 'guide-load', params: { slug: 'surface', lang: 'en' } },
-    ]);
-    expect(res.text).not.toContain('__BOOT__');
-  });
-
-  it('pages without <Boot> have no boot entries', async () => {
-    for (const path of ['/', '/examples/search'])
-      expect(bootstrapOf((await request(app).get(path)).text).boot).toBeUndefined();
+  it('demo pages have no boot entries (the guide is prerendered, not loaded by <Boot>)', async () => {
+    for (const path of ['/en/guide/surface', '/en', '/en/examples/search']) {
+      const res = await request(app).get(path);
+      expect(bootstrapOf(res.text).boot).toBeUndefined();
+      expect(res.text).not.toContain('__BOOT__');
+    }
   });
 });
 
 describe('empty anchors', () => {
-  it('GET / includes only home-specific slots', async () => {
-    const res = await request(app).get('/');
+  it('GET /en includes only home-specific slots', async () => {
+    const res = await request(app).get('/en');
 
     expect(res.text).toContain('name="page:hero"');
     expect(res.text).toContain('name="page:concepts"');
     expect(res.text).toContain('name="page:features"');
     expect(res.text).not.toContain('name="guide:content"');
+    expect(res.text).not.toContain('name="guide:toc"');
     expect(res.text).not.toContain('name="demo:controls"');
     expect(res.text).not.toContain('name="search:input"');
     expect(res.text).not.toContain('name="search:results"');
   });
 
-  it('GET /examples/search leaves search:results empty initially', async () => {
-    const res = await request(app).get('/examples/search');
+  it('GET /en/examples/search leaves search:results empty initially', async () => {
+    const res = await request(app).get('/en/examples/search');
 
     // search:results has no initial state
     expect(res.text).toMatch(/<h-state name="search:results"[^>]*><\/h-state>/);
@@ -111,20 +125,23 @@ describe('empty anchors', () => {
 });
 
 describe('response headers', () => {
-  it('GET / sends HTML content type and default security headers', async () => {
-    const res = await request(app).get('/');
+  // `/en` is prerendered (restricted context), `/en/examples/search` renders per request.
+  for (const path of ['/en', '/en/examples/search']) {
+    it(`GET ${path} sends HTML content type and default security headers`, async () => {
+      const res = await request(app).get(path);
 
-    expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toContain('text/html; charset=utf-8');
-    expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
-  });
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html; charset=utf-8');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
+    });
 
-  it('allows disabling default security headers', async () => {
-    const res = await request(appWithoutSecurityHeaders).get('/');
+    it(`allows disabling default security headers (GET ${path})`, async () => {
+      const res = await request(appWithoutSecurityHeaders).get(path);
 
-    expect(res.status).toBe(200);
-    expect(res.headers['x-content-type-options']).toBeUndefined();
-    expect(res.headers['x-frame-options']).toBeUndefined();
-  });
+      expect(res.status).toBe(200);
+      expect(res.headers['x-content-type-options']).toBeUndefined();
+      expect(res.headers['x-frame-options']).toBeUndefined();
+    });
+  }
 });

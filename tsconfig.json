@@ -18,8 +18,10 @@
       "state-surface/client": ["./engine/client.ts"],
       "state-surface/adapters/*": ["./engine/adapters/*.ts"],
       "state-surface/vite": ["./engine/vite.ts"],
+      "state-surface/content": ["./engine/content.ts"],
       "state-surface/internal/assets": ["./engine/server/assets.ts"],
       "state-surface/internal/basePath": ["./engine/shared/basePath.ts"],
+      "state-surface/internal/images": ["./engine/shared/image.ts"],
       "state-surface/internal/island": ["./engine/island.ts"],
       "state-surface/internal/prerender": ["./engine/server/prerenderEntry.ts"],
       "state-surface/server-only": ["./engine/serverOnly.ts"]
@@ -33,6 +35,7 @@
     "routes",
     "transitions",
     "layouts",
+    "content",
     "testing",
     ".state-surface/*.d.ts"
   ],

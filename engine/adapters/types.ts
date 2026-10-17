@@ -26,7 +26,11 @@ export const contentType = (path: string) =>
     html: 'text/html; charset=utf-8',
     svg: 'image/svg+xml',
     png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
     webp: 'image/webp',
+    avif: 'image/avif',
+    gif: 'image/gif',
     ico: 'image/x-icon',
     woff2: 'font/woff2',
   })[path.split('.').pop()!] ?? 'application/octet-stream';

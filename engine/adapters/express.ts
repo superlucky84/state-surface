@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
+import { createImageService } from '../images/service.js';
 import { nodeListener } from './http.js';
 import { node } from './node.js';
 import { assetPath, checkBasePath, type Adapter } from './types.js';
@@ -12,7 +13,12 @@ export function surface(
 ): RequestHandler {
   checkBasePath(options.manifest.basePath, options.env ?? process.env);
   const adapter = express(options);
-  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
+  const handler = createHandler({
+    readStatic: file => adapter.readStatic(file),
+    // DC-26: `/_surface/image` resizes allowed remote images (sharp, disk cache).
+    images: createImageService(),
+    ...options,
+  });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   const listener = nodeListener(handler, {
     env: options.env,

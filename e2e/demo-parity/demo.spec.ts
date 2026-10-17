@@ -20,38 +20,90 @@ async function ready(page: Page, path: string) {
 
 const slot = (page: Page, name: string) => page.locator(`h-state[name="${name}"]`);
 
-test('language action changes content and persists across a document load', async ({ page }) => {
+test('language links open the same page in the other language and remember the choice', async ({
+  page,
+}) => {
+  const base = process.env.BASE_PATH ?? '';
+  // A path without a language redirects (cookie → Accept-Language → default, DC-24 ⑤).
   await ready(page, './');
+  expect(new URL(page.url()).pathname).toBe(`${base}/en`);
   const hero = slot(page, 'page:hero');
   const english = await hero.textContent();
-  const response = page.waitForResponse(r => r.url().endsWith('/transition/switch-lang'));
-  await page.getByRole('button', { name: 'KO', exact: true }).click();
-  expect((await response).status()).toBe(200);
+  await page.getByRole('link', { name: 'KO', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${base}/ko$`));
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
   await expect(hero).not.toHaveText(english!);
   const korean = await hero.textContent();
-  await page.reload();
+  // The choice is a cookie: language-less paths now lead to Korean pages.
+  await page.goto('examples/streaming');
+  expect(new URL(page.url()).pathname).toBe(`${base}/ko/examples/streaming`);
+  await page.goto('./');
   await expect(hero).toHaveText(korean!);
+  // Transitions answer in the page language (`lang` param), not the cookie's.
+  await page.goto('en/examples/streaming');
+  await page.getByRole('button', { name: 'Run Full Sequence', exact: true }).click();
+  await expect(slot(page, 'demo:controls')).toContainText('Sequence complete!');
 });
 
-test('guide boot streams sections, highlights code, and exposes section navigation', async ({
+test('the hero image loads as WebP from its srcset, preloaded and without layout shift', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __cls: number };
+    w.__cls = 0;
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries() as Array<
+        PerformanceEntry & { value: number; hadRecentInput: boolean }
+      >)
+        if (!entry.hadRecentInput) w.__cls += entry.value;
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
+  const images: string[] = [];
+  page.on('response', response => {
+    if (response.request().resourceType() === 'image')
+      images.push(`${response.status()} ${response.headers()['content-type']}`);
+  });
+  await ready(page, 'en');
+  const hero = slot(page, 'page:hero').locator('img');
+  await expect(hero).toHaveAttribute('width', '960');
+  await expect(hero).toHaveAttribute('height', '540');
+  await expect
+    .poll(() => hero.evaluate(img => (img as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
+  expect(await hero.evaluate(img => (img as HTMLImageElement).currentSrc)).toMatch(
+    new RegExp(`^[^?]*${process.env.BASE_PATH ?? ''}/assets/hero-[0-9a-f]+-\\d+\\.webp$`)
+  );
+  await expect(page.locator('head link[rel="preload"][as="image"]')).toHaveCount(1);
+  expect(images.length).toBeGreaterThan(0);
+  expect(images.every(image => image === '200 image/webp')).toBe(true);
+  expect(
+    await page.evaluate(() => (window as unknown as { __cls: number }).__cls)
+  ).toBeLessThanOrEqual(0.1);
+});
+
+test('guides are prerendered pages with server-highlighted code and section navigation', async ({
   page,
 }) => {
   const requests: string[] = [];
   page.on('request', r => {
-    if (r.url().includes('/transition/guide-load')) requests.push(r.url());
+    if (r.url().includes('/transition/') || /prism/i.test(r.url())) requests.push(r.url());
   });
-  await ready(page, 'guide/quickstart');
-  await expect(page.locator('pre code.prism-done').first()).toBeVisible();
-  await expect(page.locator('pre code .token').first()).toBeVisible();
-  expect(requests).toHaveLength(1);
+  await ready(page, 'en/guide/quickstart');
+  await expect(page.locator('article pre code .token').first()).toBeVisible();
+  await expect(page.locator('article pre code .code-ln').first()).toHaveText('1');
+  await expect(page.locator('article :not(pre) > code').first()).toBeVisible();
+  expect(requests).toEqual([]);
   const link = slot(page, 'guide:toc').locator('a[href^="#"]').first();
   const href = await link.getAttribute('href');
   await link.click();
   await expect(page).toHaveURL(new RegExp(`${href}$`));
+  // The Korean guide has the same sections (parity is a build check).
+  await ready(page, 'ko/guide/quickstart');
+  await expect(slot(page, 'guide:toc').locator(`a[href="${href}"]`).first()).toHaveCount(1);
 });
 
 test('search form streams results and links respect BASE_PATH', async ({ page }) => {
-  await ready(page, 'examples/search');
+  await ready(page, 'en/examples/search');
   await page.getByRole('textbox').fill('streaming');
   await page.getByRole('textbox').press('Enter');
   await expect(slot(page, 'search:results').getByRole('link').first()).toBeVisible();
@@ -63,11 +115,16 @@ test('search form streams results and links respect BASE_PATH', async ({ page })
   await expect(slot(page, 'search:results')).not.toContainText('Searching for');
   await slot(page, 'search:results').getByRole('link').first().click();
   await expect(page.locator('main')).toBeVisible();
-  expect(new URL(page.url()).pathname).toMatch(new RegExp(`^${process.env.BASE_PATH ?? ''}/`));
+  expect(new URL(page.url()).pathname).toMatch(new RegExp(`^${process.env.BASE_PATH ?? ''}/en/`));
+  // Korean page: the form sends its language, results come back in Korean.
+  await ready(page, 'ko/examples/search');
+  await page.getByRole('textbox').fill('스트리밍');
+  await page.getByRole('textbox').press('Enter');
+  await expect(slot(page, 'search:results').getByRole('link').first()).toContainText('스트리밍');
 });
 
 test('button, form and scoped pending actions complete', async ({ page }) => {
-  await ready(page, 'examples/actions');
+  await ready(page, 'en/examples/actions');
   await page.getByRole('button', { name: 'Primary Button', exact: true }).click();
   await expect(slot(page, 'actions:playground')).toContainText('processed');
   await page.getByPlaceholder('Type a message...').fill('browser parity');
@@ -99,7 +156,7 @@ test.describe('JS-less form (PRG, DC-22 ③)', () => {
   test('posts, answers 303 with a one-time flash and does not resubmit on reload', async ({
     page,
   }) => {
-    await page.goto('examples/actions');
+    await page.goto('en/examples/actions');
     // Submit with the keyboard and wait for the redirected document (no script runs here).
     const post = async () => {
       const redirected = page.waitForResponse(response =>
@@ -115,7 +172,7 @@ test.describe('JS-less form (PRG, DC-22 ③)', () => {
     await post();
     await expect(page.getByTestId('comments')).toContainText('no script needed');
     await expect(slot(page, 'actions:comments')).toContainText('Posted (flash)');
-    expect(new URL(page.url()).pathname).toMatch(/\/examples\/actions$/);
+    expect(new URL(page.url()).pathname).toMatch(/\/en\/examples\/actions$/);
     await page.reload();
     await expect(slot(page, 'actions:comments')).not.toContainText('Posted (flash)');
     await expect(page.getByTestId('comments').locator('li')).toHaveCount(1);
@@ -125,7 +182,7 @@ test.describe('JS-less form (PRG, DC-22 ③)', () => {
 test('the same form streams with JavaScript; a like runs in parallel with a slow action', async ({
   page,
 }) => {
-  await ready(page, 'examples/actions');
+  await ready(page, 'en/examples/actions');
   const navigations: string[] = [];
   page.on('framenavigated', frame => frame === page.mainFrame() && navigations.push(frame.url()));
   await page.locator('#comment-body').fill('with script');
@@ -156,7 +213,7 @@ test('the same form streams with JavaScript; a like runs in parallel with a slow
 });
 
 test('streaming displays partial, accumulated, removed and restored output', async ({ page }) => {
-  await ready(page, 'examples/streaming');
+  await ready(page, 'en/examples/streaming');
   await page.getByRole('button', { name: 'Run Full Sequence', exact: true }).click();
   await expect(slot(page, 'demo:timeline')).toContainText('changed timeline');
   await expect(slot(page, 'demo:timeline')).toContainText('Accumulate');
@@ -168,7 +225,7 @@ test('streaming displays partial, accumulated, removed and restored output', asy
 });
 
 test('UI patches apply theme, style-only changes, and reset', async ({ page }) => {
-  await ready(page, 'examples/ui-patch');
+  await ready(page, 'en/examples/ui-patch');
   const preview = slot(page, 'uipatch:preview');
   await page.getByRole('button', { name: 'Warning', exact: true }).click();
   await expect(preview).toHaveClass(/tone-warning/);
@@ -182,7 +239,7 @@ test('UI patches apply theme, style-only changes, and reset', async ({ page }) =
 });
 
 test('gallery view transitions show details and return to gallery', async ({ page }) => {
-  await ready(page, 'examples/view-transition');
+  await ready(page, 'en/examples/view-transition');
   await slot(page, 'vt:gallery').getByRole('button').first().click();
   await expect(page.getByRole('button', { name: 'Back to Gallery' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to Gallery' }).click();
@@ -192,7 +249,7 @@ test('gallery view transitions show details and return to gallery', async ({ pag
 test('chat streams, aborts superseded response, and scrolls to latest message', async ({
   page,
 }) => {
-  await ready(page, 'examples/chat');
+  await ready(page, 'en/examples/chat');
   const requests: string[] = [];
   page.on('request', r => {
     if (r.url().endsWith('/transition/chat')) requests.push(r.postData()!);
@@ -214,7 +271,7 @@ test('chat streams, aborts superseded response, and scrolls to latest message', 
 
 test('mobile guide plugin scrolls the active category into view', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await ready(page, 'guide/ui-patch');
+  await ready(page, 'en/guide/ui-patch');
   const active = page.locator('[data-guide-nav-scroll] [data-guide-active="true"]');
   await expect(active).toBeVisible();
   await expect

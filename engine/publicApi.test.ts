@@ -8,6 +8,11 @@ describe('public API split', () => {
     expect(rootApi).toHaveProperty('Boot');
     expect(rootApi).toHaveProperty('prefixPath');
     expect(rootApi).toHaveProperty('getBasePath');
+    // DC-26: images render on the server and in client components alike.
+    expect(rootApi).toHaveProperty('Image');
+    expect(rootApi).toHaveProperty('Picture');
+    expect(rootApi).toHaveProperty('getImage');
+    expect(rootApi).not.toHaveProperty('configureImages');
 
     expect(rootApi).not.toHaveProperty('defineTemplate');
     expect(rootApi).not.toHaveProperty('Island');
@@ -28,6 +33,16 @@ describe('public API split', () => {
     expect(serverApi).toHaveProperty('defineServerComponent');
     expect(serverApi).toHaveProperty('resolveAsset');
     expect(serverApi).toHaveProperty('resolveAssetCss');
+  });
+
+  it('exposes content collections on state-surface/content (server only)', async () => {
+    const contentApi = await import('state-surface/content');
+
+    expect(contentApi).toHaveProperty('defineCollection');
+    expect(contentApi).toHaveProperty('getCollection');
+    expect(contentApi).toHaveProperty('getEntry');
+    expect(contentApi).toHaveProperty('highlight');
+    expect(contentApi).toHaveProperty('defaultComponents');
   });
 
   it('exposes client-only APIs on state-surface/client', async () => {

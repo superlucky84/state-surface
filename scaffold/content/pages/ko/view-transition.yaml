@@ -1,0 +1,21 @@
+title: View Transition 데모
+description:
+  title: View Transition Name 모핑
+  description: 카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. 뒤로가기를 누르면 역방향 모핑이 일어납니다.
+cards:
+  - id: alpha
+    title: Alpha
+    color: indigo
+    description: view-transition-name으로 카드↔상세 뷰 간 모핑 전환을 시연합니다.
+    detail: View Transition API는 브라우저가 DOM 변경 전후 스냅샷을 자동으로 캡처하여 부드러운 애니메이션을 만들어줍니다. view-transition-name이 같은 요소끼리 위치와 크기가 자연스럽게 전환됩니다.
+  - id: beta
+    title: Beta
+    color: emerald
+    description: 프레임워크 수정 없이 CSS와 인라인 스타일만으로 구현됩니다.
+    detail: 'transition이 defineTransition({ viewTransition: true })로 옵트인하면 템플릿은 style={{ viewTransitionName: "이름" }}만 지정하면 되고, 같은 이름의 요소가 모핑됩니다.'
+  - id: gamma
+    title: Gamma
+    color: amber
+    description: 미지원 브라우저에서는 기존처럼 즉시 전환됩니다 (프로그레시브 인핸스먼트).
+    detail: 엔진이 document.startViewTransition 존재 여부를 확인하고, 미지원 브라우저에서는 콜백을 직접 호출합니다. 기능은 동일하게 동작하되 애니메이션만 생략됩니다.
+backLabel: 갤러리로 돌아가기

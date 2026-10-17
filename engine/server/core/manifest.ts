@@ -1,9 +1,10 @@
-import type { PageModule } from '../../shared/routeModule.js';
+import type { PageModule, StaticPath } from '../../shared/routeModule.js';
 import type { SlotMode } from '../../shared/surfaceTree.js';
 import { TRANSITION_NAME, toDefinition, type TransitionDefinition } from '../transition.js';
 import type { StandardSchema } from '../../shared/schema.js';
 import type { PagePlugin } from '../ssrRenderer.js';
-import { checkI18n, type I18nConfig } from '../i18n.js';
+import { checkI18n, isLangPattern, type I18nConfig } from '../i18n.js';
+import type { ImageConfig } from '../../shared/image.js';
 
 /** Vite build manifest entries (keys are project-relative source paths). */
 export type AssetManifest = Record<
@@ -71,11 +72,50 @@ export interface ServerManifest {
   i18n?: I18nConfig;
   /** Public origin (`https://example.com`) for hreflang/canonical links of prerendered pages. */
   site?: string;
+  /** `surface({ images })` (DC-26): widths, formats and remote patterns `/_surface/image` allows. */
+  images?: Partial<ImageConfig>;
 }
 
 /** DC-24 ①: the page option wins over the build default. */
 export function isPrerendered(route: ServerRoute, manifest: Pick<ServerManifest, 'prerender'>) {
   return route.module.prerender ?? manifest.prerender ?? false;
+}
+
+const paramNames = (pattern: string) =>
+  pattern
+    .split('/')
+    .filter(segment => segment.startsWith(':'))
+    .map(segment => segment.slice(1));
+
+/** A `routes/[lang]/…` route with i18n configured: the build fills `lang` (DC-24 ⑤). */
+const fillsLang = (route: ServerRoute, manifest: Pick<ServerManifest, 'i18n'>) =>
+  !!manifest.i18n && isLangPattern(route.pattern);
+
+/**
+ * DC-24 ②⑤: the params a prerendered route is built for. On language routes, entries
+ * without `lang` are built for every locale, and a route whose only param is `lang` needs
+ * no `getStaticPaths()`.
+ */
+export async function staticParams(
+  route: ServerRoute,
+  manifest: Pick<ServerManifest, 'i18n'>
+): Promise<StaticPath[]> {
+  const names = paramNames(route.pattern);
+  if (!names.length) return [{}];
+  const lang = fillsLang(route, manifest);
+  const list = route.module.getStaticPaths
+    ? await route.module.getStaticPaths()
+    : lang && names.length === 1
+      ? [{}]
+      : [];
+  if (!Array.isArray(list))
+    throw new Error('getStaticPaths() must return an array of params objects.');
+  if (!lang) return list;
+  return list.flatMap(params =>
+    params && typeof params === 'object' && !Array.isArray(params) && !('lang' in params)
+      ? manifest.i18n!.locales.map(locale => ({ ...params, lang: locale }))
+      : [params]
+  );
 }
 
 export function defineManifest(input: {
@@ -91,6 +131,7 @@ export function defineManifest(input: {
   prerender?: boolean;
   i18n?: I18nConfig;
   site?: string;
+  images?: Partial<ImageConfig>;
 }): ServerManifest {
   if (input.i18n) checkI18n(input.i18n);
   if (input.site !== undefined && !/^https?:\/\/[^/]+$/.test(input.site))
@@ -114,7 +155,8 @@ export function defineManifest(input: {
     if (
       route.pattern.includes(':') &&
       isPrerendered(route, input) &&
-      typeof route.module.getStaticPaths !== 'function'
+      typeof route.module.getStaticPaths !== 'function' &&
+      !(fillsLang(route, input) && paramNames(route.pattern).length === 1)
     )
       throw new Error(
         `Page ${route.page?.id ?? route.pattern} is prerendered and has dynamic params: ` +

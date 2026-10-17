@@ -7,18 +7,20 @@ import { performance } from 'node:perf_hooks';
 import { startServer } from './server.mjs';
 
 const output = process.argv[2] ?? 'perf/results/latest.json';
+// Stage 7: languages are paths and the home page and guides are prerendered without an in-page
+// action (the KO switch is a link), so they are measured on load only.
 const scenarios = [
-  { path: '/', target: 'page:hero', button: 'KO' },
-  { path: '/guide/quickstart', target: 'guide:content', button: 'KO' },
+  { path: '/en' },
+  { path: '/en/guide/quickstart' },
   {
-    path: '/examples/search',
+    path: '/en/examples/search',
     target: 'search:results',
     button: 'Search',
     input: 'query',
     value: 'streaming',
   },
   {
-    path: '/examples/chat',
+    path: '/en/examples/chat',
     target: 'chat:messages',
     button: 'Send',
     input: 'message',
@@ -129,38 +131,41 @@ try {
         if (!direct.ok) throw new Error(`SSR failed: ${direct.status}`);
         await direct.text();
         const ssrRoundTripMs = performance.now() - directStart;
-        if (scenario.input)
-          await page.locator(`input[name="${scenario.input}"]`).fill(scenario.value);
-        const target = page.locator(`h-state[name="${scenario.target}"]`);
-        if ((await target.count()) !== 1)
-          throw new Error(`Missing action target: ${scenario.target}`);
-        await page.evaluate(name => {
-          const target = document.querySelector(`h-state[name="${name}"]`);
-          let clickedAt;
-          window.__firstPatch = new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-              observer.disconnect();
-              reject(new Error('No DOM patch within 10s'));
-            }, 10000);
-            const observer = new MutationObserver(() => {
-              if (clickedAt === undefined) return;
-              observer.disconnect();
-              clearTimeout(timer);
-              requestAnimationFrame(() => resolve(performance.now() - clickedAt));
+        let firstActionMs = null;
+        if (scenario.button) {
+          if (scenario.input)
+            await page.locator(`input[name="${scenario.input}"]`).fill(scenario.value);
+          const target = page.locator(`h-state[name="${scenario.target}"]`);
+          if ((await target.count()) !== 1)
+            throw new Error(`Missing action target: ${scenario.target}`);
+          await page.evaluate(name => {
+            const target = document.querySelector(`h-state[name="${name}"]`);
+            let clickedAt;
+            window.__firstPatch = new Promise((resolve, reject) => {
+              const timer = setTimeout(() => {
+                observer.disconnect();
+                reject(new Error('No DOM patch within 10s'));
+              }, 10000);
+              const observer = new MutationObserver(() => {
+                if (clickedAt === undefined) return;
+                observer.disconnect();
+                clearTimeout(timer);
+                requestAnimationFrame(() => resolve(performance.now() - clickedAt));
+              });
+              observer.observe(target, { childList: true, subtree: true, characterData: true });
+              document.addEventListener(
+                'click',
+                () => {
+                  clickedAt = performance.now();
+                },
+                { once: true, capture: true }
+              );
             });
-            observer.observe(target, { childList: true, subtree: true, characterData: true });
-            document.addEventListener(
-              'click',
-              () => {
-                clickedAt = performance.now();
-              },
-              { once: true, capture: true }
-            );
-          });
-        }, scenario.target);
-        await page.getByRole('button', { name: scenario.button, exact: true }).click();
-        const firstActionMs = await page.evaluate(() => window.__firstPatch);
-        await page.waitForLoadState('networkidle');
+          }, scenario.target);
+          await page.getByRole('button', { name: scenario.button, exact: true }).click();
+          firstActionMs = await page.evaluate(() => window.__firstPatch);
+          await page.waitForLoadState('networkidle');
+        }
         const metrics = await page.evaluate(() => {
           const nav = performance.getEntriesByType('navigation')[0];
           return {
@@ -195,7 +200,7 @@ try {
           documentNavigationMs: navigationMs,
         });
         console.log(
-          `${scenario.path} ${run + 1}/5: JS gzip=${samples.at(-1).initialJsGzipBytes} first action=${firstActionMs.toFixed(1)}ms`
+          `${scenario.path} ${run + 1}/5: JS gzip=${samples.at(-1).initialJsGzipBytes} first action=${firstActionMs === null ? '-' : `${firstActionMs.toFixed(1)}ms`}`
         );
       } finally {
         await context.close();

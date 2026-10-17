@@ -1,7 +1,7 @@
 import { defineTransition } from 'state-surface/server';
-import { integer, object } from '../shared/schema.js';
+import { integer, object, optional, text } from '../shared/schema.js';
 import { addLikes } from '../shared/actionsStore.server.js';
-import { getLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -11,12 +11,13 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * parallel with a slow playground action; `mode: 'queue'` runs rapid likes one by one.
  */
 export default defineTransition({
-  input: object({ delta: integer({ min: 1, max: 5 }) }),
+  // `lang` is the page language (DC-24 ⑤: languages are URL paths, the page sends it).
+  input: object({ delta: integer({ min: 1, max: 5 }), lang: optional(text()) }),
   targets: ['actions:likes'],
   mode: 'queue',
-  async *handler({ delta }, ctx) {
+  async *handler({ delta, lang }, ctx) {
     await delay(1200);
     addLikes(ctx, delta);
-    yield { type: 'state', states: { 'actions:likes': { lang: getLang(ctx) } } };
+    yield { type: 'state', states: { 'actions:likes': { lang: paramLang({ lang }) } } };
   },
 });

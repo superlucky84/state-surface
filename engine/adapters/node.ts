@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
+import { createImageService } from '../images/service.js';
 import { nodeListener } from './http.js';
 import { installGracefulShutdown } from './gracefulShutdown.js';
 import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
@@ -38,7 +39,12 @@ export function createNodeServer(
 ) {
   checkBasePath(options.manifest.basePath, options.env ?? process.env);
   const adapter = node(options);
-  const handler = createHandler({ readStatic: file => adapter.readStatic(file), ...options });
+  const handler = createHandler({
+    readStatic: file => adapter.readStatic(file),
+    // DC-26: `/_surface/image` resizes allowed remote images (sharp, disk cache).
+    images: createImageService(),
+    ...options,
+  });
   const base = options.basePath ?? options.manifest.basePath ?? '';
   return createServer(
     nodeListener(handler, {

@@ -33,7 +33,9 @@ transition yields StateFrame ─▶ server: validate → request reducer → pro
   - `X-Surface-Build: <buildId>` — must equal the server's build id, else **409** (the browser
     reopens the current URL as a document load).
   - `X-Surface-Page: <pageId>` — the page manifest used to resolve slots (route file path without
-    extension, e.g. `guide/[slug]`); missing or unknown is **400**. It is not an authorization input.
+    extension, e.g. `[lang]/guide/[slug]`); missing or unknown is **400**. It is not an authorization
+    input. The page's language is not sent: pages pass it in the params (`lang`) when the
+    transition needs it.
 - POST validates `Origin` (or `Sec-Fetch-Site` when `Origin` is absent); an allowed-origin list is
   configurable. Unknown request headers are accepted.
 - Response: `application/x-ndjson` when the handler is an async generator (one JSON frame per line,
@@ -308,6 +310,39 @@ the engine intercepts the submit (`method="post"`, same origin, action under
   field errors (development warns).
 - `ctx.flash(name)` reads the flash once on the next page request (the cookie is deleted); a
   flash for another name is left alone. Prerendered pages cannot read it.
+
+## Prerendered Pages and Language Paths
+
+- A prerendered page (`export const prerender = true`, DC-24) is answered after the middleware with
+  the HTML the build wrote: `Content-Type: text/html`, `ETag: "<buildId>"` (an `If-None-Match`
+  with the same value, `W/` ignored, is **304**), `Cache-Control: public, max-age=0,
+must-revalidate`. A dynamic page answers only the params its `getStaticPaths()` listed (404
+  otherwise). Its HTML carries no nonce; engine tags are the same as in a per-request render.
+- With `surface({ i18n })`, `routes/[lang]/…` match only the configured locales. A GET without a
+  language whose path exists under a language answers **302** to `/{lang}{path}{query}` (the
+  `?lang=` value, then the `lang` cookie, then `Accept-Language`, then the default) with
+  `Cache-Control: private, no-store` and `Vary: cookie, accept-language`. `?lang=xx` on a
+  language page sets `lang=xx` (Max-Age one year, Path BASE_PATH) and answers **302** without the
+  parameter; a request with `Purpose`/`Sec-Purpose` `prefetch` gets **204** and no cookie.
+- Language pages write `<link rel="alternate" hreflang>` for every locale and `x-default` (the
+  language-less URL) at the start of the managed head. Prerendered pages use `surface({ site })`
+  as the origin, else root-relative URLs; the language-less copy of the default language adds
+  `<link rel="canonical">`.
+
+## Images
+
+`GET {BASE_PATH}/_surface/image?url=<remote>&w=<width>&f=<webp|avif>` resizes an allowed remote
+image (DC-26). It passes the middleware; the host must match `images.remotePatterns` (else
+**403**), `w` must be one of `images.widths` and `f` an enabled format (else **400**). The server
+fetches without following redirects, accepts only `image/*` up to 20 MB in 10 s, never enlarges,
+and answers `Cache-Control: public, max-age=86400, stale-while-revalidate=604800` (**502** when the
+fetch or the encode fails, `Cache-Control: no-store`). Development also serves
+`?src=<project path>` for imported images. Runtimes without an image service (Workers) answer
+**404**; prerendering replaces these URLs with static files. Imported images are static files
+under `/assets/` and never use this endpoint in production.
+
+`<Image priority>` adds `<link rel="preload" as="image" imagesrcset imagesizes type
+fetchpriority="high">` after the stylesheets of the managed head.
 
 ## Client Router
 

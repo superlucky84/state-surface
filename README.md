@@ -144,7 +144,7 @@ export const chatScroll = definePlugin({
   },
 });
 
-// routes/examples/chat.tsx
+// routes/[lang]/examples/chat.tsx
 export const plugins = [chatScroll];
 ```
 
@@ -320,6 +320,49 @@ load the router chunk.
 - Prefetch `hover` (default) · `tap` · `viewport` · `load` · `false`, a 20-entry 30 s cache emptied
   after actions; Save-Data keeps only `tap`. See [PROTOCOL.md](PROTOCOL.md#client-router).
 
+## Static Pages, Languages and Content
+
+Pages that don't depend on the request are built once; content lives in files, validated at build
+time; images are resized by the build.
+
+```tsx
+// routes/[lang]/guide/[slug].tsx → /en/guide/intro, /ko/guide/intro (prerendered)
+import { getCollection, getEntry } from 'state-surface/content';
+import { Image } from 'state-surface';
+import cover from './_assets/cover.png';
+
+export const prerender = true;
+export const getStaticPaths = async () =>
+  (await getCollection('guides')).map(entry => ({ lang: entry.lang!, slug: entry.id }));
+
+export default async function Page(ctx: SurfaceContext) {
+  const guide = (await getEntry('guides', ctx.params.slug, { lang: ctx.i18n!.lang }))!;
+  return (
+    <Layout title={guide.data.title}>
+      <Image src={cover} alt="" width={960} priority />
+      <guide.Content />
+      <a href={ctx.i18n!.switchHref('ko')}>한국어</a>
+    </Layout>
+  );
+}
+```
+
+- **Prerender** — `export const prerender = true` writes `dist/client/<path>/index.html`; the
+  server still runs middleware before answering with it (ETag/304), and request-only APIs fail the
+  build at the line that used them. A static host can serve `dist/client` alone.
+- **Language paths** — `surface({ i18n: { locales, defaultLocale } })` serves `routes/[lang]/…` as
+  `/en/…`, `/ko/…`; a path without a language redirects (cookie → `Accept-Language` → default),
+  `?lang=` links switch and remember, hreflang links are written for you.
+- **Content collections** — `content/config.ts` declares `defineCollection({ schema, i18n })`;
+  `.md` uses `:::directive` blocks (10 guide blocks, raw HTML blocked), `.mdx` can host islands,
+  `.json`/`.yaml` hold page texts. Schema and parity errors point at `file:line`. Code is
+  highlighted on the server.
+- **Images** — `<Image>` (WebP `srcset`), `<Picture formats={['avif', 'webp']}>` and `getImage()`
+  write `width`/`height`, lazy loading and LCP preloads; remote hosts need `images.remotePatterns`.
+
+See [docs/server-adapters.md](docs/server-adapters.md#prerendered-pages) for serving and static
+hosting.
+
 ## Features
 
 - **Full SSR** — Every page renders complete HTML on the server
@@ -336,21 +379,22 @@ load the router chunk.
 - **View Transition API** — page cross-fade (MPA or router); in-page transitions are opt-in per action
   (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
-- **i18n ready** — Bilingual content driven by cookie + transition
+- **Static pages** — Prerendered pages per language, content collections, optimized images
 - **Sub-path mounting** — `BASE_PATH=/demo pnpm dev`
 
 ## Project Structure
 
 ```
 routes/                  # Pages (routes/**/*.tsx, auto-loaded)
-  index.tsx              #   GET /
-  guide/[slug].tsx       #   Dynamic params: GET /guide/:slug
+  [lang]/index.tsx       #   GET /en, /ko (language paths, surface({ i18n }))
+  [lang]/guide/[slug].tsx #  Dynamic params: GET /en/guide/:slug
   <route>/_components/   #   Slot components (not pages: `_` prefix)
   _shared/               #   Cross-route components
 
 transitions/             # Server-side state generators (path = name: comment/add.ts → "comment/add")
 
 layouts/                 # Layout components (Layout.tsx)
+content/                 # Content collections (config.ts, guides/<lang>/*.md, pages/<lang>/*.yaml)
 shared/                  # Data helpers, i18n utilities
 client/                  # styles.css, plugins/, optional entry.ts (runs on every page)
 
@@ -394,17 +438,22 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 
 ## Environment Variables
 
-| Variable    | Default       | Description                               |
-| ----------- | ------------- | ----------------------------------------- |
-| `PORT`      | `3000`        | Server listen port                        |
-| `BASE_PATH` | _(empty)_     | Mount app under a sub-path (e.g. `/demo`) |
-| `NODE_ENV`  | `development` | `development` / `test` / `production`     |
+| Variable              | Default       | Description                               |
+| --------------------- | ------------- | ----------------------------------------- |
+| `PORT`                | `3000`        | Server listen port                        |
+| `BASE_PATH`           | _(empty)_     | Mount app under a sub-path (e.g. `/demo`) |
+| `NODE_ENV`            | `development` | `development` / `test` / `production`     |
+| `SURFACE_IMAGE_CACHE` | _(temp dir)_  | Disk cache of `/_surface/image` resizes   |
 
 ## API Reference
 
 ```typescript
 // Pages and shared helpers
 import { Slot, Boot, ClientRouter, prefixPath, getBasePath, actionUrl } from 'state-surface';
+import { Image, Picture, getImage } from 'state-surface';
+
+// Content collections (server only)
+import { defineCollection, getCollection, getEntry, highlight } from 'state-surface/content';
 
 // Server
 import {

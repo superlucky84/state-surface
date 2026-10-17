@@ -4,12 +4,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SurfaceBuildError } from './diagnostics.js';
 import type { ServerManifest, ServerRoute } from '../server/core/manifest.js';
 import type { HandlerOptions, SurfaceHandler } from '../server/core/handler.js';
+import type { ImageService } from '../server/core/imageEndpoint.js';
+import { materializeImages } from './images.js';
 
 /** What the prerender bundle (`virtual:state-surface/prerender`) exports. */
 export interface PrerenderBundle {
   manifest: ServerManifest;
   createHandler(options: HandlerOptions): SurfaceHandler;
   isPrerendered(route: ServerRoute, manifest: ServerManifest): boolean;
+  staticParams(
+    route: ServerRoute,
+    manifest: ServerManifest
+  ): Promise<Array<Record<string, string>>>;
 }
 
 export interface PrerenderOptions {
@@ -19,6 +25,10 @@ export interface PrerenderOptions {
   /** Client output directory (`dist/client`): HTML goes to `<path>/index.html`. */
   clientDir: string;
   env?: Record<string, unknown>;
+  /** Resizes remote `<Image>` URLs into static assets (DC-26). */
+  images?: ImageService;
+  /** Build warnings (the plugin logs them). */
+  warn?: (message: string) => void;
 }
 
 export interface PrerenderedPage {
@@ -33,24 +43,30 @@ const SEGMENT = /^[^/\\]+$/;
 const isLangRoute = (pattern: string) => pattern === '/:lang' || pattern.startsWith('/:lang/');
 
 /** URL paths of one prerendered route: the pattern, or its `getStaticPaths()` params. */
-async function pathsOf(route: ServerRoute, file: string) {
+async function pathsOf(bundle: PrerenderBundle, route: ServerRoute, file: string) {
   const names = route.pattern
     .split('/')
     .filter(segment => segment.startsWith(':'))
     .map(segment => segment.slice(1));
   if (!names.length) return [{ params: {}, segments: route.pattern.split('/').filter(Boolean) }];
-  const list = await route.module.getStaticPaths!();
-  if (!Array.isArray(list))
-    throw new SurfaceBuildError('getStaticPaths() must return an array of params objects.', {
-      file,
-    });
+  let list: unknown[];
+  try {
+    list = await bundle.staticParams(route, bundle.manifest);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('getStaticPaths() must'))
+      throw new SurfaceBuildError(error.message, { file });
+    throw error;
+  }
   const seen = new Set<string>();
-  return list.map((params, index) => {
+  const locales =
+    bundle.manifest.i18n && isLangRoute(route.pattern) ? bundle.manifest.i18n.locales : undefined;
+  return list.map((item, index) => {
     const where = `getStaticPaths()[${index}]`;
-    if (!params || typeof params !== 'object' || Array.isArray(params))
+    if (!item || typeof item !== 'object' || Array.isArray(item))
       throw new SurfaceBuildError(`${where} must be a params object like { slug: 'intro' }.`, {
         file,
       });
+    const params = item as Record<string, string>;
     const keys = Object.keys(params).sort();
     if (keys.join() !== [...names].sort().join())
       throw new SurfaceBuildError(
@@ -65,6 +81,11 @@ async function pathsOf(route: ServerRoute, file: string) {
           { file }
         );
     }
+    if (locales && !locales.includes(params.lang))
+      throw new SurfaceBuildError(
+        `${where}.lang "${params.lang}" is not in i18n.locales (${locales.join(', ')}).`,
+        { file }
+      );
     const segments = route.pattern
       .split('/')
       .filter(Boolean)
@@ -135,11 +156,12 @@ export async function prerender(
     const handler = bundle.createHandler({ manifest, prerendering: true });
     const base = manifest.basePath ?? '';
     const pages: PrerenderedPage[] = [];
+    const remoteImages = new Map<string, string>();
     for (const route of routes) {
       const file = route.page ? `routes/${route.page.id}.tsx` : route.pattern;
       let paths: Awaited<ReturnType<typeof pathsOf>>;
       try {
-        paths = await pathsOf(route, file);
+        paths = await pathsOf(bundle, route, file);
       } catch (error) {
         throw await located(error, route.pattern, options);
       }
@@ -159,7 +181,26 @@ export async function prerender(
             `Prerendering ${urlPath} answered ${response.status}: ${(await response.text()).slice(0, 200)}`,
             { file }
           );
-        const html = await response.text();
+        let html = await response.text();
+        // DC-22 ③ with DC-24: a JS-less form redirects back to this page, whose built HTML
+        // cannot show the one-time result (`ctx.flash` needs a request).
+        if (html.includes(`action="${base}/_surface/action/`))
+          options.warn?.(
+            `${file} (${urlPath}) is prerendered and has a JS-less action form: without ` +
+              'JavaScript the result after the redirect cannot be shown (ctx.flash needs a request). ' +
+              'Render the page per request (export const prerender = false) if that matters.'
+          );
+        if (options.images)
+          try {
+            html = await materializeImages(html, {
+              base,
+              clientDir: options.clientDir,
+              service: options.images,
+              done: remoteImages,
+            });
+          } catch (error) {
+            throw await located(error, urlPath, options);
+          }
         const output = path.join(options.clientDir, ...segments, 'index.html');
         await mkdir(path.dirname(output), { recursive: true });
         await writeFile(output, html);

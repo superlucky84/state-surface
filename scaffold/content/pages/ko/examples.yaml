@@ -1,0 +1,29 @@
+title: 예제
+list:
+  title: 예제 둘러보기
+  description: StateSurface의 주요 기능을 직접 체험해보세요.
+  items:
+    - title: 스트리밍 데모
+      description: Full/Partial 프레임, removed 키, 에러 프레임을 실시간으로 체험합니다.
+      href: /examples/streaming
+      color: sky
+    - title: 액션 플레이그라운드
+      description: 버튼 액션, 폼 제출, 스코프드 pending 등 다양한 액션 패턴을 시연합니다.
+      href: /examples/actions
+      color: violet
+    - title: View Transition
+      description: View Transition API로 카드↔상세 뷰 간 부드러운 모핑 전환을 체험합니다.
+      href: /examples/view-transition
+      color: indigo
+    - title: 검색
+      description: 폼 data-action과 pending 상태를 활용한 검색 기능입니다.
+      href: /examples/search
+      color: emerald
+    - title: 챗봇
+      description: Abort previous, 프로그레시브 스트리밍, accumulate 프레임을 보여주는 챗봇입니다.
+      href: /examples/chat
+      color: amber
+    - title: UI Patch
+      description: classAdd/classRemove/cssVars로 템플릿 재렌더 없이 h-state 외형을 변경합니다.
+      href: /examples/ui-patch
+      color: rose

@@ -1,7 +1,7 @@
 import type { SurfaceContext } from 'state-surface/server';
 import { defineTransition } from 'state-surface/server';
 import type { StateFrame } from 'state-surface';
-import { getLang, isValidLang } from '../shared/i18n.js';
+import { paramLang } from '../shared/i18n.js';
 import type { Lang } from '../shared/i18n.js';
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -12,7 +12,7 @@ async function* actionDemo(
 ): AsyncGenerator<StateFrame, void, unknown> {
   const actionType = (params.type as string) ?? 'button';
   const message = (params.message as string) ?? '';
-  const lang: Lang = isValidLang(params.lang) ? params.lang : getLang(ctx);
+  const lang: Lang = paramLang(params);
   params = { ...params, lang };
   const ts = Date.now();
 

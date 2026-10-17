@@ -49,15 +49,15 @@ describe('scanRoutes', () => {
     const patterns = routes.map(r => r.urlPattern);
 
     expect(patterns).toEqual([
-      '/',
-      '/examples',
-      '/examples/actions',
-      '/examples/chat',
-      '/examples/search',
-      '/examples/streaming',
-      '/examples/ui-patch',
-      '/examples/view-transition',
-      '/guide/:slug',
+      '/:lang',
+      '/:lang/examples',
+      '/:lang/examples/actions',
+      '/:lang/examples/chat',
+      '/:lang/examples/search',
+      '/:lang/examples/streaming',
+      '/:lang/examples/ui-patch',
+      '/:lang/examples/view-transition',
+      '/:lang/guide/:slug',
     ]);
     for (const route of routes) expect(route.filePath).toMatch(/\.tsx$/);
   });

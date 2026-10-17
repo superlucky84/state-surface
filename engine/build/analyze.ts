@@ -90,7 +90,8 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     pluginDefinitions: new Map(),
     plugins: [],
   };
-  const parsed = parseSync(file, code);
+  // `.mdx` arrives compiled to JSX (engine/build/mdx.ts).
+  const parsed = parseSync(file, code, file.endsWith('.mdx') ? { lang: 'jsx' } : undefined);
   // Syntax errors are reported by the TypeScript/esbuild transform with better context.
   if (parsed.errors.length) return result;
   const fail = (message: string, offset: number, hint?: string): never => {

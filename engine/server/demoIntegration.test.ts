@@ -57,50 +57,61 @@ async function open(path: string) {
 }
 
 describe('server stream → browser apply', () => {
-  it('guide-load replaces the loading skeleton with the sections', async () => {
-    const { surface, text } = await open('/guide/surface');
-    expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).not.toBeNull();
-    expect(await surface.transition('guide-load', { slug: 'surface', lang: 'en' })).toEqual({
-      ok: true,
-    });
-    expect(document.querySelector('h-state[name="guide:content"] .animate-pulse')).toBeNull();
-    expect(
-      document.querySelectorAll('h-state[name="guide:content"] section').length
-    ).toBeGreaterThan(1);
+  it('guide page arrives with its sections and static toc, without a boot transition', async () => {
+    const { text, requests } = await open('/en/guide/surface');
+    expect(readBootstrap(document).boot).toBeUndefined();
+    expect(document.querySelector('h-state[name="guide:content"]')).toBeNull();
+    expect(document.querySelector('.animate-pulse')).toBeNull();
+    expect(document.querySelectorAll('article.guide-article section').length).toBeGreaterThan(1);
+    expect(document.querySelector('article.guide-article .token.keyword')).not.toBeNull();
     expect(text('guide:toc')).toContain('Surface');
+    // Nothing runs on load: the HTML is the guide.
+    expect(requests).toEqual([]);
   });
 
-  it('search updates input and results; static header markup stays a server slot', async () => {
-    const { surface, text } = await open('/examples/search');
+  it('search updates input and results; the static header markup stays', async () => {
+    const { surface, text } = await open('/en/examples/search');
+    const header = document.querySelector('h-state[name="page:header"]')!;
+    const headerHtml = header.innerHTML;
     expect(text('search:results')).toBe('');
-    expect(await surface.transition('search', { query: 'streaming' })).toEqual({ ok: true });
+    expect(await surface.transition('search', { query: 'streaming', lang: 'en' })).toEqual({
+      ok: true,
+    });
     expect(text('search:results')).toContain('Streaming Demo');
+    expect(document.querySelector('h-state[name="page:header"]')).toBe(header);
+    expect(header.innerHTML).toBe(headerHtml);
     expect(
-      (document.querySelector('h-state[name="search:input"] input') as HTMLInputElement).value
+      (
+        document.querySelector(
+          'h-state[name="search:input"] input[name="query"]'
+        ) as HTMLInputElement
+      ).value
     ).toBe('streaming');
   });
 
   it('streaming demo removes and restores output and shows the error slot', async () => {
-    const { surface, text } = await open('/examples/streaming');
-    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toEqual({
+    const { surface, text } = await open('/en/examples/streaming');
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence', lang: 'en' })).toEqual({
       ok: true,
     });
     expect(text('demo:output')).toContain('restored');
     expect(text('demo:timeline')).toContain('Accumulate');
-    expect(await surface.transition('stream-demo', { mode: 'error-demo' })).toMatchObject({
+    expect(
+      await surface.transition('stream-demo', { mode: 'error-demo', lang: 'en' })
+    ).toMatchObject({
       ok: false,
       error: { kind: 'server' },
     });
     expect(text('system:error')).toContain('demonstration error');
     // The next request's baseline clears the error slot.
-    expect(await surface.transition('stream-demo', { mode: 'full-sequence' })).toEqual({
+    expect(await surface.transition('stream-demo', { mode: 'full-sequence', lang: 'en' })).toEqual({
       ok: true,
     });
     expect(text('system:error')).toBe('');
   }, 15000);
 
   it('ui-patch demo applies and resets the slot UI patch', async () => {
-    const { surface } = await open('/examples/ui-patch');
+    const { surface } = await open('/en/examples/ui-patch');
     const preview = () => document.querySelector('h-state[name="uipatch:preview"]') as HTMLElement;
     await surface.transition('ui-patch-demo', { action: 'theme', theme: 'warning' });
     expect(preview().classList.contains('tone-warning')).toBe(true);
@@ -112,8 +123,8 @@ describe('server stream → browser apply', () => {
 });
 
 describe('home route surface independence', () => {
-  it('GET / renders home slots only (no cross-page leakage)', async () => {
-    const res = await request(app).get('/');
+  it('GET /en renders home slots only (no cross-page leakage)', async () => {
+    const res = await request(app).get('/en');
     expect(res.status).toBe(200);
     expect(res.text).toContain('name="page:hero"');
     expect(res.text).not.toContain('name="guide:content"');

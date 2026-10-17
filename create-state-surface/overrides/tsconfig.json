@@ -19,6 +19,7 @@
     "routes",
     "transitions",
     "layouts",
+    "content",
     "testing",
     ".state-surface/*.d.ts"
   ],
