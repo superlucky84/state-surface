@@ -864,7 +864,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                     |
 | 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B    |
 | 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B       |
-| 6    | 2026-10-17 | 이 단계 커밋, 기준 `6aff8a6`             | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B |
+| 6    | 2026-10-17 | `9c806c2`, 기준 `6aff8a6`                | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B |
 
 ### 단계 0 실행 상세
 
@@ -1102,4 +1102,4 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   포함)과 prerender 액션 폼 빌드 경고는 단계 7에서 처리한다. Lithent 빈 텍스트 hydration은 업스트림 보강 후보다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
-  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`.
+  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`.
