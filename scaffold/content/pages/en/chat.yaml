@@ -1,6 +1,0 @@
-title: Chatbot Demo
-welcomeText: Send a message to start the conversation. Ask about Surface, Template, Transition, Action, Streaming, Hydration, or Abort!
-input:
-  placeholder: Type a message...
-  submitLabel: Send
-  hint: Sending a new message cancels any in-progress response (abort previous policy).

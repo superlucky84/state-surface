@@ -1,0 +1,13 @@
+/*
+ * Component-scoped CSS: the class names are hashed per file. Tailwind utilities need the app
+ * stylesheet as a reference for @apply.
+ */
+@reference "../../client/styles.css";
+
+.greeting {
+  @apply rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm;
+}
+
+.greeting strong {
+  @apply text-indigo-600;
+}

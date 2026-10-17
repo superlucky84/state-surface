@@ -1,6 +1,6 @@
 {
   "name": "create-state-surface",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Scaffold a new StateSurface project",
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "files": [
     "bin",
+    "lib",
     "README.md"
   ],
   "publishConfig": {

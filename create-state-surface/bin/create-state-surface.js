@@ -3,7 +3,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
+import {
+  ADAPTERS,
+  TEMPLATES,
+  CreateError,
+  adapterChoices,
+  createProject,
+  isValidProjectName,
+} from '../lib/create.js';
 
 const REPO = 'superlucky84/state-surface';
 const BRANCH = 'main';
@@ -13,15 +22,22 @@ function printHelp() {
   console.log(`create-state-surface
 
 Usage:
-  create-state-surface <project-name>
+  create-state-surface <project-name> [--template minimal|demo] [--adapter <name>]
+
+Options:
+  --template, -t   minimal (default): one page with static markup, a server slot,
+                   a client island and a transition. demo: the showcase site.
+  --adapter, -a    ${ADAPTERS.join(' | ')} (asked when omitted; default node)
+  --source <dir>   Use templates from a local state-surface checkout instead of GitHub
+  --no-git         Skip git init
+
+Environment:
+  STATE_SURFACE_VERSION   state-surface dependency (default ^0.1.0; a file: path works)
 
 Example:
-  npx create-state-surface my-app
+  npx create-state-surface my-app --template demo --adapter node
 
-Note:
-  Use this CLI for new projects only.
-  Existing projects should be updated with:
-    pnpm up state-surface
+Existing projects are updated with: pnpm up state-surface
 `);
 }
 
@@ -30,126 +46,115 @@ function fail(message) {
   process.exit(1);
 }
 
-function isValidProjectName(value) {
-  return /^[a-z0-9][a-z0-9-_]*$/i.test(value);
+function parseArgs(argv) {
+  const options = { git: true };
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const value = () => {
+      const next = argv[++i];
+      if (!next || next.startsWith('-')) fail(`${arg} needs a value.`);
+      return next;
+    };
+    if (arg === '--help' || arg === '-h') options.help = true;
+    else if (arg === '--template' || arg === '-t') options.template = value();
+    else if (arg.startsWith('--template=')) options.template = arg.slice(11);
+    else if (arg === '--adapter' || arg === '-a') options.adapter = value();
+    else if (arg.startsWith('--adapter=')) options.adapter = arg.slice(10);
+    else if (arg === '--source') options.source = value();
+    else if (arg === '--no-git') options.git = false;
+    else if (arg.startsWith('-')) fail(`Unknown option ${arg}.`);
+    else positional.push(arg);
+  }
+  options.project = positional[0];
+  return options;
 }
 
-const args = process.argv.slice(2);
-if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+async function promptAdapter(source) {
+  const choices = adapterChoices(source);
+  console.log('Server runtime:');
+  choices.forEach((choice, i) => console.log(`  ${i + 1}) ${choice.label}`));
+  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await readline.question(`Choose 1-${choices.length} [1]: `)).trim();
+    if (!answer) return choices[0].name;
+    const picked = choices[Number(answer) - 1] ?? choices.find(choice => choice.name === answer);
+    if (!picked) fail(`Unknown adapter "${answer}".`);
+    return picked.name;
+  } finally {
+    readline.close();
+  }
+}
+
+/** The templates: a local checkout, or the repository tarball from GitHub. */
+async function templateSource(local, cleanup) {
+  if (local) return path.resolve(local);
+  console.log('Downloading templates from GitHub...');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'create-state-surface-'));
+  cleanup.push(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const response = await fetch(TARBALL_URL, { redirect: 'follow' });
+  if (!response.ok) fail(`Failed to download templates: ${response.status} ${response.statusText}`);
+  const tarball = path.join(tmpDir, 'repo.tar.gz');
+  fs.writeFileSync(tarball, Buffer.from(await response.arrayBuffer()));
+  const extractDir = path.join(tmpDir, 'extracted');
+  fs.mkdirSync(extractDir);
+  execFileSync('tar', ['xzf', tarball, '-C', extractDir], { stdio: 'pipe' });
+  // GitHub tarballs have one root folder (e.g. "superlucky84-state-surface-abc1234").
+  const entries = fs.readdirSync(extractDir);
+  if (entries.length !== 1) fail('Unexpected tarball structure: expected one root directory.');
+  return path.join(extractDir, entries[0]);
+}
+
+const options = parseArgs(process.argv.slice(2));
+if (options.help || !options.project) {
   printHelp();
-  process.exit(args.length === 0 ? 1 : 0);
+  process.exit(options.help ? 0 : 1);
 }
-
-const projectArg = args[0];
-if (projectArg.startsWith('-')) {
-  fail(`Invalid project name "${projectArg}".`);
-}
-
-const projectName = path.basename(projectArg);
-if (!isValidProjectName(projectName)) {
+const name = path.basename(options.project);
+if (!isValidProjectName(name))
   fail(
     'Project name must start with a letter or number and may include letters, numbers, "-" or "_".'
   );
-}
+const template = options.template ?? 'minimal';
+if (!TEMPLATES.includes(template))
+  fail(`Unknown template "${template}" (${TEMPLATES.join(', ')}).`);
+if (options.adapter && !ADAPTERS.includes(options.adapter))
+  fail(`Unknown adapter "${options.adapter}" (${ADAPTERS.join(', ')}).`);
+const targetDir = path.resolve(process.cwd(), options.project);
+if (fs.existsSync(targetDir)) fail(`Target directory already exists: ${targetDir}`);
 
-const cwd = process.cwd();
-const targetDir = path.resolve(cwd, projectArg);
-if (fs.existsSync(targetDir)) {
-  fail(`Target directory already exists: ${targetDir}`);
-}
-
-// Download and extract scaffold/ from GitHub tarball
-console.log('Downloading template from GitHub...');
-
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'create-state-surface-'));
-const tarball = path.join(tmpDir, 'repo.tar.gz');
-const extractDir = path.join(tmpDir, 'extracted');
-
+const cleanup = [];
 try {
-  // Download tarball
-  const res = await fetch(TARBALL_URL, { redirect: 'follow' });
-  if (!res.ok) {
-    fail(`Failed to download template: ${res.status} ${res.statusText}`);
-  }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(tarball, buffer);
-
-  // Extract entire tarball to temp, then copy scaffold/ to target
-  fs.mkdirSync(extractDir, { recursive: true });
-  execSync(`tar xzf "${tarball}" -C "${extractDir}"`, { stdio: 'pipe' });
-
-  // GitHub tarball has a single root dir (e.g. "superlucky84-state-surface-abc1234")
-  const entries = fs.readdirSync(extractDir);
-  if (entries.length !== 1) {
-    fail('Unexpected tarball structure: expected a single root directory.');
-  }
-  const scaffoldSrc = path.join(extractDir, entries[0], 'scaffold');
-  if (!fs.existsSync(scaffoldSrc)) {
-    fail('scaffold/ directory not found in the downloaded template.');
-  }
-
-  fs.mkdirSync(targetDir, { recursive: true });
-  fs.cpSync(scaffoldSrc, targetDir, { recursive: true });
-} catch (err) {
-  // Clean up on failure
-  fs.rmSync(targetDir, { recursive: true, force: true });
-  if (err.message?.includes('create-state-surface')) throw err;
-  fail(`Failed to extract template: ${err.message}`);
+  const source = await templateSource(
+    options.source ?? process.env.CREATE_STATE_SURFACE_SOURCE,
+    cleanup
+  );
+  const adapter =
+    options.adapter ??
+    (process.stdin.isTTY && process.stdout.isTTY ? await promptAdapter(source) : 'node');
+  const result = createProject({
+    targetDir,
+    name,
+    template,
+    adapter,
+    source,
+    version: process.env.STATE_SURFACE_VERSION ?? '^0.1.0',
+    git: options.git,
+  });
+  console.log(`Project created (${template} template, ${adapter} adapter).`);
+  console.log();
+  console.log(`  Location: ${result.targetDir}`);
+  console.log();
+  console.log('Next steps:');
+  console.log(`  cd ${options.project}`);
+  console.log('  pnpm install');
+  console.log('  pnpm dev');
+  console.log();
+  console.log('Update existing apps with: pnpm up state-surface');
+  if (options.git && !result.gitInitialized) console.log('Git init was skipped (git unavailable).');
+} catch (error) {
+  if (error instanceof CreateError) fail(error.message);
+  fail(`Failed to create the project: ${error.message}`);
 } finally {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
-}
-
-// Apply package.json template substitution
-const packageTemplatePath = path.join(targetDir, 'package.json.template');
-if (!fs.existsSync(packageTemplatePath)) {
-  fail('package.json.template is missing in scaffold.');
-}
-
-const rawPackageTemplate = fs.readFileSync(packageTemplatePath, 'utf8');
-const runtimeVersion = process.env.STATE_SURFACE_VERSION ?? '^0.1.0';
-const packageJson = rawPackageTemplate
-  .replaceAll('__PROJECT_NAME__', projectName)
-  .replaceAll('__PROJECT_DESCRIPTION__', `${projectName} built with StateSurface`)
-  .replaceAll('__STATE_SURFACE_VERSION__', runtimeVersion);
-
-fs.writeFileSync(path.join(targetDir, 'package.json'), packageJson);
-fs.rmSync(packageTemplatePath);
-
-// Rename dotfiles (npm strips leading-dot files from tarballs)
-for (const [from, to] of [
-  ['gitignore', '.gitignore'],
-  ['npmrc', '.npmrc'],
-  ['env.example', '.env.example'],
-]) {
-  const fromPath = path.join(targetDir, from);
-  if (fs.existsSync(fromPath)) {
-    fs.renameSync(fromPath, path.join(targetDir, to));
-  }
-}
-
-// Copy .env.example to .env so the app runs out of the box
-const envExample = path.join(targetDir, '.env.example');
-const envFile = path.join(targetDir, '.env');
-if (fs.existsSync(envExample) && !fs.existsSync(envFile)) {
-  fs.copyFileSync(envExample, envFile);
-}
-
-const gitResult = spawnSync('git', ['init'], {
-  cwd: targetDir,
-  stdio: 'ignore',
-});
-const gitInitialized = gitResult.status === 0;
-
-console.log('Project created successfully.');
-console.log();
-console.log(`  Location: ${targetDir}`);
-console.log();
-console.log('Next steps:');
-console.log(`  cd ${projectArg}`);
-console.log('  pnpm install');
-console.log('  pnpm dev');
-console.log();
-console.log('Update existing apps with: pnpm up state-surface');
-if (!gitInitialized) {
-  console.log('Git init was skipped (git command unavailable).');
+  for (const run of cleanup) run();
 }

@@ -1,88 +1,69 @@
 # create-state-surface
 
-Scaffold a new [StateSurface](https://github.com/superlucky84/state-surface) project in seconds.
+Scaffold a new [StateSurface](https://github.com/superlucky84/state-surface) project.
 
 ## Usage
 
 ```bash
-npx create-state-surface my-app
+npx create-state-surface my-app            # minimal starter, asks for the server runtime
+npx create-state-surface my-app --template demo --adapter node
 cd my-app
 pnpm install
-pnpm dev
+pnpm dev                                   # http://localhost:3000
 ```
 
-Open `http://localhost:3000` — your app is running with full SSR, NDJSON streaming, and live action binding.
+## Templates
 
-## What You Get
-
-The generated project comes with a complete working app:
+| Template            | What you get                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minimal` (default) | One page with static markup, a server slot (`home:greeting`, with a CSS Module), a client island and one transition; a Vitest test for both. |
+| `demo`              | The showcase site: guides from content collections, examples (streaming, actions, chat, search, View Transitions, UI patches), i18n paths.   |
 
 ```
-my-app/
-  server.ts                # Node server entry (production build manifest)
-  routes/
-    index.tsx              # Home page (hero, concepts, features)
-    guide/[slug].tsx       # Dynamic guide pages with TOC
-    examples/
-      streaming.tsx        # Full/partial/accumulate frame demo
-      actions.tsx          # Declarative action playground
-      chat.tsx             # Streaming chatbot with abort
-      search.tsx           # Form submission + pending state
-      view-transition.tsx  # View Transition API morphing
-      ui-patch.tsx         # CSS class/variable patching
-    _shared/               # Cross-route components & transitions
-  layouts/Layout.tsx       # Document shell with shared slots
-  shared/                  # Data helpers, i18n utilities
-  client/                  # Tailwind CSS entry + plugins
-  tsconfig.json
-  vite.config.ts
-  vitest.config.ts
+my-app/                      # minimal
+  routes/index.tsx           # the page: static markup + <Slot mode="server"> + client:visible island
+  routes/_components/        # Greeting.tsx (+ Greeting.module.css), Counter.tsx
+  transitions/greet.ts       # data-action="greet" → new state for home:greeting
+  layouts/Layout.tsx         # document shell, system:error slot, <ClientRouter />
+  client/styles.css          # Tailwind entry
+  tests/home.test.ts         # page and transition through the request handler
+  server.ts                  # server entry of the chosen adapter
+  vite.config.ts             # surface({ adapter }) + Tailwind
 ```
-
-Every route includes its own `templates/` (TSX) and `transitions/` (async generators) — all auto-registered by the framework.
 
 ## Options
 
-```bash
-npx create-state-surface <project-name>
-npx create-state-surface --help
-```
+| Option                  | Description                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `<project-name>`        | Directory of the new project (letters, numbers, `-`, `_`)                          |
+| `--template`, `-t`      | `minimal` (default) or `demo`                                                      |
+| `--adapter`, `-a`       | `node` (default), `express`, `bun`, `deno` or `cloudflare`; asked when omitted     |
+| `--source <dir>`        | Use the templates of a local state-surface checkout instead of downloading them    |
+| `--no-git`              | Skip `git init`                                                                    |
+| `STATE_SURFACE_VERSION` | Environment: the `state-surface` dependency (default `^0.1.0`; `file:` paths work) |
 
-| Argument         | Description                                   |
-| ---------------- | --------------------------------------------- |
-| `<project-name>` | Directory name for the new project (required) |
+The adapter sets `server.ts`, the adapter in `vite.config.ts` and the `start` script (Bun, Deno),
+adds `express` for Express, and `wrangler.jsonc` with `deploy` for Cloudflare Workers.
 
-Project names must start with a letter or number and may include letters, numbers, `-`, or `_`.
+## How it works
 
-## What Happens Under the Hood
+Templates live in the StateSurface repository under `create-state-surface/templates/`
+(`base/`, `minimal/`, `demo/`, `adapters/<name>/`); the demo template uses the repository's own
+showcase files. The CLI downloads the repository tarball (or reads `--source`), copies the base,
+template and adapter files, fills in `package.json` and initializes git. CI creates the apps,
+installs the packed engine, builds, tests and starts them (`pnpm test:scaffold`).
 
-1. Downloads the latest scaffold template from the StateSurface repository
-2. Substitutes project name and runtime version into `package.json`
-3. Renames dotfiles (`.gitignore`, `.npmrc`)
-4. Initializes a git repository
-
-No global dependencies. No configuration prompts. One command, ready to develop.
-
-## After Scaffolding
-
-```bash
-pnpm dev                   # Start dev server with HMR
-pnpm build                 # Production build
-pnpm start                 # Run production server
-pnpm test                  # Run tests (Vitest)
-pnpm format                # Format with Prettier
-```
-
-## Updating the Runtime
-
-The CLI is for **new projects only**. To update an existing project's framework runtime:
+## After scaffolding
 
 ```bash
-pnpm up state-surface
-pnpm test && pnpm build
+pnpm dev            # dev server with HMR
+pnpm check          # build analysis + tsc, no bundle
+pnpm test           # Vitest
+pnpm build          # production build
+pnpm start          # production server
 ```
 
-Do not re-run `create-state-surface` on an existing project — it will not overwrite, and your customizations live in user-space files that the runtime upgrade respects.
+The CLI is for new projects only. Update an existing app with `pnpm up state-surface`.
 
 ## Requirements
 

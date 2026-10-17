@@ -1,0 +1,33 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "description": "__PROJECT_DESCRIPTION__",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js --host 0.0.0.0 --port 3000",
+    "build": "vite build && vite build --ssr server.ts --outDir dist --emptyOutDir false",
+    "start": "NODE_ENV=production node --env-file-if-exists=.env dist/server.js",
+    "check": "state-surface check",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "lithent": "^1.25.1",
+    "state-surface": "__STATE_SURFACE_VERSION__"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^25.2.1",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  }
+}

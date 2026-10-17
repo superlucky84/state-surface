@@ -1,0 +1,11 @@
+{
+  "label": "Cloudflare Workers",
+  "package": {
+    "scripts": {
+      "dev:worker": "wrangler dev",
+      "start": "wrangler dev",
+      "deploy": "pnpm build && wrangler deploy"
+    },
+    "devDependencies": { "wrangler": "4.151.0" }
+  }
+}

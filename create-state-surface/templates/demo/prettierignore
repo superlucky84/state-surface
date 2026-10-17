@@ -1,0 +1,6 @@
+# Generated files
+pnpm-lock.yaml
+# Guide Markdown uses :::directive blocks that Prettier would re-indent.
+content/**/*.md
+# Hand-aligned global stylesheet.
+client/styles.css

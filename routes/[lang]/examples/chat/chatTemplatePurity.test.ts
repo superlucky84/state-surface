@@ -6,9 +6,6 @@ const TEMPLATE_FILES = [
   'routes/[lang]/examples/chat/_components/chatMessages.tsx',
   'routes/[lang]/examples/chat/_components/chatCurrent.tsx',
   'routes/[lang]/examples/chat/_components/chatTyping.tsx',
-  'scaffold/routes/[lang]/examples/chat/_components/chatMessages.tsx',
-  'scaffold/routes/[lang]/examples/chat/_components/chatCurrent.tsx',
-  'scaffold/routes/[lang]/examples/chat/_components/chatTyping.tsx',
 ];
 
 const FORBIDDEN_PATTERNS: RegExp[] = [

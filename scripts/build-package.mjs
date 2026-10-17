@@ -5,7 +5,15 @@
  * repository everything resolves to engine/*.ts through the `state-surface-source` condition.
  */
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

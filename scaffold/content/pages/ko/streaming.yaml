@@ -1,5 +1,0 @@
-title: 스트리밍 데모
-controls:
-  description: 버튼을 클릭하여 다양한 프레임 유형을 시연하는 transition을 실행하세요. 타임라인과 출력이 실시간으로 업데이트됩니다.
-  runLabel: 전체 시퀀스 실행
-  errorLabel: 에러 프레임 발생

@@ -1,0 +1,8 @@
+{
+  "label": "Deno",
+  "package": {
+    "scripts": {
+      "start": "NODE_ENV=production deno run --allow-net --allow-read --allow-env --allow-sys --allow-ffi dist/server.js"
+    }
+  }
+}

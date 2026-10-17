@@ -1,0 +1,6 @@
+{
+  "description": "The StateSurface showcase site: guides, examples, i18n, content collections.",
+  "include": ["client", "shared", "routes", "transitions", "layouts", "content"],
+  "exclude": ["*.test.ts", "*.test.tsx"],
+  "strip": { "client/styles.css": "'../engine/" }
+}

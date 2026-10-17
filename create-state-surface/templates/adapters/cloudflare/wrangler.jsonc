@@ -1,0 +1,14 @@
+{
+  "name": "__PROJECT_NAME__",
+  "main": "dist/server.js",
+  "compatibility_date": "2025-10-15",
+  // Request.signal for client aborts of transition streams.
+  "compatibility_flags": ["enable_request_signal"],
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    // HTML (prerendered pages included) is answered by the worker after the middleware.
+    "run_worker_first": true,
+    "html_handling": "none",
+  },
+}

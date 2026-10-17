@@ -1,4 +1,0 @@
-title: Actions Playground
-likes:
-  title: Component actions and concurrency
-  description: 'The like button is a client island using useAction(renew, "like"). Its targets do not overlap the playground, so it runs in parallel with a slow action above, and mode: "queue" processes rapid clicks in order.'

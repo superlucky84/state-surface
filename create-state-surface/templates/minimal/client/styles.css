@@ -1,0 +1,2 @@
+/* Linked on every page by the engine. Tailwind finds the classes in routes/ and layouts/. */
+@import 'tailwindcss';

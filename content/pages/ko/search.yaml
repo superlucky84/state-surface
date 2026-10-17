@@ -1,6 +1,6 @@
 title: 검색
 input:
-  placeholder: "예: 스트리밍, 액션, 하이드레이션..."
+  placeholder: '예: 스트리밍, 액션, 하이드레이션...'
   label: StateSurface 기능과 개념 검색
   buttonLabel: 검색
   hint: Form data-action이 검색 transition을 트리거합니다. 결과는 NDJSON 프레임으로 스트리밍됩니다.

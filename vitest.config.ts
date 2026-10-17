@@ -8,6 +8,6 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
     },
-    exclude: ['node_modules', 'dist', 'scaffold/**', 'e2e/**'],
+    exclude: ['node_modules', 'dist', 'e2e/**', 'create-state-surface/templates/**'],
   },
 });

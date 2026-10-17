@@ -1,5 +1,0 @@
-title: Streaming Demo
-controls:
-  description: Click a button to fire a transition that demonstrates different frame types. Watch the timeline and output update in real time.
-  runLabel: Run Full Sequence
-  errorLabel: Trigger Error Frame

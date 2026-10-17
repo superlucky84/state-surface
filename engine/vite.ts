@@ -226,6 +226,10 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           : {}),
         ssr: {
           noExternal: ['lithent', 'state-surface'],
+          // Workers run the server bundle as a web worker module.
+          ...(adapter?.name === 'cloudflare' && user.ssr?.target === undefined
+            ? { target: 'webworker' as const }
+            : {}),
           ...(EXT === '.ts'
             ? { resolve: { conditions: [SOURCE_CONDITION, ...defaultServerConditions] } }
             : {}),
@@ -301,7 +305,10 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
       if (error || config.command !== 'build' || !isClient(this)) return;
       const leaks = [...this.getModuleIds()]
         .filter(isServerOnly)
-        .map(id => ({ id, chain: importChain(this, id, config.root).join(' → ') }))
+        .flatMap(id => {
+          const chain = importChain(this, id, config.root);
+          return chain ? [{ id, chain: chain.join(' → ') }] : [];
+        })
         .sort((a, b) => (a.chain < b.chain ? -1 : 1));
       const chains = leaks.map(leak => leak.chain);
       // The location is the import of the first chain's server-only module.
@@ -855,8 +862,16 @@ async function writeActionTypes(
   await writeFile(file, content);
 }
 
-/** Shortest importer path from an entry to `id`, as project-relative names. */
-function importChain(context: Rollup.PluginContext, id: string, root: string): string[] {
+/**
+ * Shortest importer path from an entry to `id`, as project-relative names. Undefined when no
+ * entry reaches `id`: modules loaded only to be inspected (the CommonJS check loads `.js`
+ * files the analyzer resolves) are not in the bundle.
+ */
+function importChain(
+  context: Rollup.PluginContext,
+  id: string,
+  root: string
+): string[] | undefined {
   const label = (module: string) =>
     SERVER_ONLY_MARKERS.includes(module)
       ? 'state-surface/server-only'
@@ -872,15 +887,16 @@ function importChain(context: Rollup.PluginContext, id: string, root: string): s
     const current = queue.shift()!;
     const info = context.getModuleInfo(current);
     const importers = [...(info?.importers ?? []), ...(info?.dynamicImporters ?? [])];
-    if (info?.isEntry || !importers.length) entry = current;
+    if (info?.isEntry) entry = current;
     for (const importer of importers)
       if (!previous.has(importer)) {
         previous.set(importer, current);
         queue.push(importer);
       }
   }
+  if (!entry) return undefined;
   const chain: string[] = [];
-  for (let at: string | undefined = entry ?? id; at; at = previous.get(at)) chain.push(label(at));
+  for (let at: string | undefined = entry; at; at = previous.get(at)) chain.push(label(at));
   // Start at the island/plugin module: loader → islands map is engine plumbing.
   const start = chain.findIndex(name => name === ISLANDS || name === PLUGINS);
   return start >= 0 && start < chain.length - 1 ? chain.slice(start + 1) : chain;

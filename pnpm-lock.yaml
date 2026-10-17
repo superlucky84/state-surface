@@ -11,6 +11,9 @@ importers:
       '@mdx-js/mdx':
         specifier: 3.1.1
         version: 3.1.1
+      idiomorph:
+        specifier: 0.7.4
+        version: 0.7.4
       lithent:
         specifier: ^1.25.1
         version: 1.25.1
@@ -84,9 +87,6 @@ importers:
       happy-dom:
         specifier: ^20.5.0
         version: 20.5.0
-      idiomorph:
-        specifier: 0.7.4
-        version: 0.7.4
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
