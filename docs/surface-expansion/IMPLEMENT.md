@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 3 완료 — 모드 정규화·컴포넌트별 동적 청크·요청별 엔트리 선택·서버 전용 보호·페이지별 플러그인. 다음은 단계 4
+상태: 단계 9 완료 — 악성 입력·프레임 퍼즈·경쟁·자원·병렬 SSR·한도 경계 스위트와 찾은 결함 수정. 다음은 단계 10
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -866,15 +866,42 @@ DESIGN 10.7~10.9.
 
 #### 작업
 
-- [ ] 프레임 퍼즈: 무작위 순서·누락 delta·중복·깨진 JSON·EOF·한도 경계·잘못된 op 조합을 서버 validator와 브라우저
-      런타임에 각각 넣어 잘못 적용되지 않음을 확인.
-- [ ] 악성 입력 모음: 속성 breakout, `javascript:`·`data:` URL, 이벤트 속성, rich AST 우회, `cssVars` 주입, `</script>`·
+- [x] 프레임 퍼즈: 무작위 순서·누락 delta·중복·깨진 JSON·EOF·한도 경계·잘못된 op 조합을 서버 validator와 브라우저
+      런타임에 각각 넣어 잘못 적용되지 않음을 확인. → `engine/hardening/serverFrameFuzz.test.ts`(실제 핸들러, 공유 reducer 접두
+      상태와 대조)·`browserFrameFuzz.test.ts`(상태표 oracle, 무작위 바이트 청크).
+- [x] 악성 입력 모음: 속성 breakout, `javascript:`·`data:` URL, 이벤트 속성, rich AST 우회, `cssVars` 주입, `</script>`·
       U+2028, `_redirect` 우회(`//`·`/\`·스킴·인코딩), flash 변조·재사용, 지연 슬롯 토큰 변조·다른 빌드 재사용.
-- [ ] 경쟁: 지연 로드 vs 프레임, 동시 액션(targets 겹침·생략·queue), 취소 타이밍, 이동 중 스트림, persist 중 액션,
-      지연 슬롯 vs transition, 409 재로드 중 조작.
-- [ ] 자원: 라우터 100회 이동, 장시간 스트림 메모리, 옵저버·플러그인 cleanup.
-- [ ] 병렬 SSR 부하: 동시 요청에서 요청 간 데이터 유출 0.
-- [ ] 한도·타임아웃 경계값(80% 경고, 초과 시 종료)과 Workers 요청 시간 한도 문서화 검증.
+      → `malicious.test.ts`(렌더링: SSR·브라우저 가드), `tokens.test.ts`(redirect·flash·토큰), modes e2e 가드 시나리오.
+- [x] 경쟁: 지연 로드 vs 프레임, 동시 액션(targets 겹침·생략·queue), 취소 타이밍, 이동 중 스트림, persist 중 액션,
+      지연 슬롯 vs transition, 409 재로드 중 조작. → `races.test.ts`(취소 5시점, 409 중 조작, 무작위 동시 액션 100회);
+      지연 슬롯·페이지 수명(이동·persist)은 기존 `stateSurface.test.ts`·라우터 e2e가 덮는다.
+- [x] 자원: 라우터 100회 이동, 장시간 스트림 메모리, 옵저버·플러그인 cleanup. → `resources.test.ts`(페이지 100회 수명·
+      2만 프레임 스트림), modes e2e 200회 이동·morph 미디어 문서 수.
+- [x] 병렬 SSR 부하: 동시 요청에서 요청 간 데이터 유출 0. → `parallelSsr.test.ts`(페이지·지연 슬롯·transition 각 200 동시).
+- [x] 한도·타임아웃 경계값(80% 경고, 초과 시 종료)과 Workers 요청 시간 한도 문서화 검증. → `limits.test.ts`,
+      [docs/server-adapters.md](../server-adapters.md#request-time-on-workers).
+
+#### 계획 조정 (2026-10-17)
+
+- 스위트는 `engine/hardening/`에 모았다. 퍼즈는 시드 PRNG(mulberry32, `fuzz.ts`)라 실패가 시드를 출력하고
+  `FUZZ_SEED=<seed>`로 재현, `FUZZ_SCALE=<n>`으로 넓힌다. 기본 실행은 서버 600·브라우저 400·경쟁 100 시퀀스이고 이번에
+  서버 3만·브라우저 1만·경쟁 1천으로 넓혀 확인했다. oracle은 공유 reducer(`applyFrame`)와 PROTOCOL 상태표를 테스트 안에 따로
+  쓴 모델이며, 서버 HTML coalesce 때문에 오류로 끝난 스트림은 "보인 상태가 reducer 접두 상태 중 하나"로 판정한다.
+- 퍼즈가 잡는지 확인하려고 각 수정 전 코드에서 스위트가 실패함을 확인했다(UI 교체 결함은 SSR 기본 class와 애니메이션 프레임
+  사이 청크 지연을 생성기에 넣은 뒤 잡혔다).
+- strict/rich의 브라우저 쪽 보장이 없었다: client 컴포넌트는 frame props를 브라우저에서 렌더하고 Lithent는 `href`·대문자
+  `ONCLICK`·`srcdoc`·`innerHTML`을 그대로 DOM에 쓴다. `engine/client/domGuard.ts`(MutationObserver, 서버와 같은
+  `unsafeAttribute` 규칙)를 lithentBridge에 붙였다. Chromium에서 가드 없이 실행되던 `iframe src=javascript:`·`ONCLICK`·
+  `img onerror`·`details ontoggle`·`srcdoc`이 microtask 가드로 모두 막힘을 확인했다. 대상은 client 슬롯과 슬롯 안 island이고,
+  bootstrap·`islands` 메타의 `capability: 'unsafe'`면 제외, 페이지 island(`$N`)는 앱 마크업이라 제외한다.
+- unsafe는 script만 무력화하므로 raw HTML의 이벤트 속성·`javascript:` URL은 남는다(DOMPurify류 정화는 DESIGN 8.1에서 배제).
+  PROTOCOL·DESIGN에 "신뢰할 수 없는 HTML은 `sandbox="iframe"`"을 명시했다.
+- Workers 요청 시간: Cloudflare는 wall-clock이 아니라 CPU 시간(Free 10 ms, Paid 기본 30 s·최대 5분 `limits.cpu_ms`)을
+  제한하므로 엔진 `limits.timeout`(5분)·`idleTimeout`(30 s)과 함께 adapter 가이드에 적고 문서·기본값 일치를 테스트한다.
+- 단계 6에서 넘긴 idiomorph 파싱의 media 문서 보유: idiomorph는 부분 HTML을 DOMParser 문서의 `<template>`으로 파싱해 media가
+  inert 템플릿 문서에 들어간다. `<audio>`·`<video>`가 있는 morph 슬롯을 30회 morph해도 `Documents`가 1 → 1이라 수정이
+  필요 없다(modes e2e로 고정).
+- Lithent의 `<style>`·`<textarea>` 내용 `<`·`>` 이스케이프(CSS `>` 결합자 깨짐)는 보안 문제가 아니라 업스트림 후보로 남긴다.
 
 **검증 ID**: V-08, V-10, V-13, V-20(hardening 판정).
 
@@ -958,6 +985,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 6    | 2026-10-17 | `9c806c2`, 기준 `6aff8a6`                | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B  |
 | 7    | 2026-10-17 | `97ca338`, 기준 `c1258ea`                | 45 / 590 통과          | 5 runtime × 14 적합성(prerender 서빙·이미지 엔드포인트 추가), 의미 비교 14 + stream 1(언어 경로), 루트 E2E 12 + spike 5 및 /demo 12, modes E2E 12, 전체 tsc 0  | 홈 초기 JS gzip 11,016 B, 가이드 11,668 B(Prism 제거), CLS 0, core 107,733 B |
 | 8    | 2026-10-17 | `f8c01fe`·`b32331a`·`00fb1ac`, 기준 `1a54f46` | 51 / 639 통과 | 진단 fixture 34 스냅샷·dev 오버레이, 5 runtime × 14 적합성 + app dev/prod 각 14, scaffold minimal·demo·Express 설치·빌드·테스트·check·기동, 루트·/demo E2E 각 12 + spike 5, modes E2E 13, 전체 tsc 0 | 홈 초기 JS gzip 11,280 B(로더 6,573 + 라우터 4,707), 패키지 tarball 459 KB, core 107,934 B |
+| 9    | 2026-10-17 | `a3898b5`, 기준 `fe7c43c` | 59 / 744 통과 | 퍼즈 서버 3만·브라우저 1만·경쟁 1천 시퀀스(기본 600·400·100), 악성 입력 테스트 77개·병렬 SSR 200×3, 5 runtime × 14 적합성 + app dev/prod 각 14, 루트·/demo E2E 각 12 + spike 5, modes E2E 15, 전체 tsc 0 | 결함 13건 수정(회귀 테스트 포함), 홈 초기 JS gzip 11,314 B, 채팅 26,147 B(가드 포함 브리지 1,925 B), core 109,313 B |
 
 ### 단계 0 실행 상세
 
@@ -1265,15 +1293,57 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions의 새 `scaffold` 잡·`pnpm check`, npm 레지스트리 배포와 GitHub tarball에서의
   생성(`--source` 없이), Bun·Deno·Workers 생성 앱의 기동, 실제 오류 추적 서비스로의 소스맵 업로드는 관측하지 않았다.
 
+### 단계 9 실행 상세 (2026-10-17)
+
+- 스위트(`engine/hardening/`, 기본 실행 수 초): `malicious.test.ts`(URL 페이로드 11종 × URL 속성 11곳, 인코딩 스킴, 속성
+  이름·값·텍스트 breakout, 대소문자 이벤트 속성, `srcdoc`, SVG animate, rich Markdown 우회 9종, raw HTML·주석·코드 펜스 언어,
+  브라우저 가드: 마운트·업데이트·로컬 재렌더·제외 대상, bootstrap 메타, `__SURFACE__` 6종, UI 패치 주입 16종),
+  `tokens.test.ts`(`_redirect` 13종·인코딩·Referer, flash 변조 9종·만료·액션별 1회 읽기, 지연 토큰 바이트 반전·잘림·flash 값
+  재사용·다른 빌드/컴포넌트/형태), `serverFrameFuzz.test.ts`, `browserFrameFuzz.test.ts`, `races.test.ts`, `parallelSsr.test.ts`,
+  `resources.test.ts`, `limits.test.ts`(html·ops·NDJSON 줄·응답·본문·flash 경계, idle·요청 타임아웃, 브라우저 줄 한도, 문서 기본값).
+- 서버 퍼즈: 무작위 작성 프레임(full·partial·accumulate·중복·누락 delta·`changed`/`removed` 겹침·잘못된 UI·reset·정크·
+  프로토타입 키·한도 크기)과 targets 3종을 실제 핸들러로 보내, 응답을 브라우저처럼 적용한 결과를 공유 reducer 접두 상태와
+  비교한다: 잘 짜인 스트림, targets·페이지 밖 op 없음, 모드별 op 종류, `done`이면 모든 프레임이 유효하고 최종 상태·UI가 정확,
+  `error`면 보인 상태가 어떤 접두 상태와 같음.
+- 브라우저 퍼즈: 무작위 NDJSON(reset 없는 첫 patch·중복·done 뒤 줄·깨진 JSON·EOF·알 수 없는 op·모드 불일치·static 슬롯 op·
+  잘못된 UI)을 UTF-8 중간까지 무작위로 자른 청크로 흘리고 애니메이션 프레임을 끼워, 결과 `ok`·DOM(SSR class·변수가 있는 호스트
+  포함)이 PROTOCOL 상태표 모델과 같은지 본다.
+- 경쟁: 취소 5시점(응답 전·헤더 후·첫 프레임 flush 전·후·done 후), 409 중 조작, 무작위 동시 액션(겹침·분리·targets 생략·queue,
+  done·error·지연)에서 "나중에 시작한 겹치는 요청 뒤에 이전 요청이 적용되지 않음(이미 끝난 요청의 마지막 op는 예외)·요청별
+  op 순서·queue 순서·pending 해제·모든 요청 종료"를 검사한다.
+- 병렬 SSR: 미들웨어·페이지 함수·서버 컴포넌트 `load`·transition이 무작위로 기다리는 200개 동시 페이지 요청, 그 지연 슬롯
+  200개, transition 200개에서 응답마다 자기 사용자 표식만 있고 nonce 200개가 모두 다르며 쿠키·`__SURFACE__` props·토큰 내용이
+  자기 것이다. 표식은 base64url·hex 밖 문자(`.`)를 넣어 토큰·nonce와 우연히 겹치지 않게 했다.
+- 자원: 페이지 100회 수명(load·visible·media 활성화, 가드, 플러그인 attach/onPage) 뒤 IntersectionObserver·MutationObserver 0,
+  인스턴스 0, attach 수 = cleanup 수, onPage signal 100회 abort. 브라우저 2만 merge patch 뒤 요청·dirty 0과 최종 텍스트,
+  서버 2만 accumulate 프레임이 선형 시간·프레임당 고정 크기. 실브라우저는 modes e2e 200회 이동(기존)과 morph 미디어 문서 수.
+- 찾은 결함(모두 회귀 테스트): ① 대소문자 섞인 이벤트 속성이 SSR에 출력 ② `srcdoc` 출력(같은 출처 raw HTML) ③ `<object data
+  codebase>`·SVG `<animate>`/`<set>`의 `href` 값 미검사 ④ client 컴포넌트의 브라우저 렌더에 속성 규칙 없음(실 Chromium e2e
+  포함) ⑤ `//`로 시작하는 Referer 경로로 다른 호스트 리다이렉트 ⑥ flash 값 무기한 재사용 ⑦ `cssVars`의 `image-set(`·`src(`
+  URL ⑧ full 프레임에서 제거된 슬롯의 UI를 서버가 기억해 같은 patch 객체를 다시 보내면 ui op 누락 ⑨ 객체가 아닌 슬롯 상태가
+  브라우저가 거부하는 props op로 나감 ⑩ 깨진 NDJSON 줄을 건너뛰고 뒤 delta를 계속 적용 ⑪ static 슬롯의 `remove`·`ui` op 적용
+  ⑫ 새 UI patch가 이전 patch를 되돌리지 않아 SSR class·변수가 사라지고 coalesce 여부에 따라 결과가 다름 ⑬ 409 뒤에도 진행 중
+  요청이 적용되고 새 액션이 다시 전송·재로드 반복. 테스트 하네스 쪽 문제(happy-dom이 속성값의 `&lt;`를 디코드하지 않음,
+  queue 요청이 마지막 done 라운드 뒤에 fetch)는 결함이 아니어서 테스트에서 처리했다.
+- 검증: Vitest 59개 파일/744개, 전체 tsc 0, typecheck:server, format:check, `pnpm check`, build(prerender 36페이지),
+  루트 E2E 12 + spike 5와 `/demo` 같은 수, `pnpm test:modes` 15(가드·morph 미디어 추가), `pnpm test:parity` 문서 14 + stream 1,
+  Node·Express·Bun·Deno·workerd 적합성 각 14, `pnpm test:conformance:app` dev 14·prod 14, 5개 어댑터 앱 빌드, core guard
+  109,313 B.
+- 크기(gzip level 9, `perf/measure.mjs` 중앙값): 홈 11,314 B(단계 8 11,280 B)·가이드 11,966 B·검색 22,280 B·채팅 26,147 B
+  (단계 8 25,383 B, 증가분은 브리지 청크의 DOM 가드와 런타임의 상태표 보강), 네 페이지 CLS 0.
+- 이번 실행은 클라우드 로컬 머신 결과다. Firefox·Safari에서의 가드 타이밍, Cloudflare 실제 배포의 CPU 한도 동작, 장시간(수 시간)
+  스트림의 실브라우저 힙 추이는 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4·5·6·7·8. IC-01~IC-09 결정.
-- **다음**: 단계 9(Test Hardening). IC-10은 단계 10에서 결정한다.
-- **블로커**: 없음. 로더 gzip 6,573 B(2KB 목표)와 라우터 4,707 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
-  보유 여부는 단계 9에서 확인한다. Lithent 빈 텍스트 hydration과 SSR의 `undefined` 속성 출력은 업스트림 보강 후보다. hidden 소스맵
-  파일은 어댑터가 서빙을 막지 않으므로 업로드 후 삭제가 배포 절차에 필요하다.
+- **완료**: 단계 0·1·2·3·4·5·6·7·8·9. IC-01~IC-09 결정.
+- **다음**: 단계 10(Integration Test). IC-10은 단계 10에서 결정한다.
+- **블로커**: 없음. 로더 gzip 6,608 B(2KB 목표)와 라우터 4,706 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
+  보유는 없음을 확인했다(단계 9). Lithent 빈 텍스트 hydration, SSR의 `undefined` 속성 출력, `<style>`·`<textarea>` 내용의
+  `<`·`>` 이스케이프는 업스트림 보강 후보다. unsafe capability는 script만 무력화하므로 신뢰할 수 없는 HTML은 `sandbox="iframe"`이
+  필요하다. hidden 소스맵 파일은 어댑터가 서빙을 막지 않으므로 업로드 후 삭제가 배포 절차에 필요하다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
   단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`, 단계 7 Entry `c1258ea`,
   단계 7 중간(prerender·i18n) `6839eb5`, 단계 7 `97ca338`, 단계 8 Entry `1a54f46`, 단계 8 `f8c01fe`·`b32331a`·
-  `00fb1ac`.
+  `00fb1ac`, 단계 9 Entry `fe7c43c`, 단계 9 `a3898b5`.
