@@ -43,8 +43,15 @@ export class PluginRelay implements PluginEvents {
       const handle = requestIdleCallback(() => void this.start(root), { timeout: 2000 });
       this.cancel = () => cancelIdleCallback?.(handle);
     } else {
-      const handle = setTimeout(() => void this.start(root), 1);
-      this.cancel = () => clearTimeout(handle);
+      // DC-04: without requestIdleCallback, idle is 200 ms after the load event.
+      let handle: ReturnType<typeof setTimeout> | undefined;
+      const afterLoad = () => (handle = setTimeout(() => void this.start(root), 200));
+      if (document.readyState === 'complete') afterLoad();
+      else addEventListener('load', afterLoad, { once: true });
+      this.cancel = () => {
+        removeEventListener('load', afterLoad);
+        clearTimeout(handle);
+      };
     }
   }
 
