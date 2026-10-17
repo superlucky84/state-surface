@@ -5,7 +5,7 @@ import { renderToString } from 'lithent/ssr';
 import { renderPage } from './ssrRenderer.js';
 import { defineServerComponent } from './serverComponent.js';
 import { createContext, type SurfaceContext } from './core/context.js';
-import { Boot, Island, Slot } from '../shared/surfaceTree.js';
+import { Boot, ClientRouter, Island, Slot } from '../shared/surfaceTree.js';
 import type { PageModule } from '../shared/routeModule.js';
 
 // The build plugin compiles `<Slot name="x"><C {...p} /></Slot>` and `<C client:idle />` into
@@ -139,14 +139,14 @@ describe('document assembly', () => {
       }
     );
     expect(html).toBe(
-      '<!doctype html><html lang="en"><head><!--ss:head--><title>Test</title>' +
-        '<link rel="stylesheet" href="/assets/app.css">' +
-        '<link rel="modulepreload" href="/assets/title.js">' +
+      '<!doctype html><html lang="en"><head><!--ss:head--><title data-ss="">Test</title>' +
+        '<link rel="stylesheet" href="/assets/app.css" data-ss>' +
+        `<link rel="modulepreload" href="/assets/title.js" nonce="${ctx.nonce}" data-ss>` +
         '<script id="__SURFACE__" type="application/json">{"buildId":"b1","pageId":"index","basePath":"",' +
         '"slots":[{"id":"title","mode":"client","component":"Title.tsx#default","props":{"text":"Hello"}}],' +
         '"plugins":[{"id":"p.ts#scroll","load":"idle"}]}</script>' +
-        `<script type="module" src="/assets/app.js" nonce="${ctx.nonce}"></script>` +
-        `<script type="module" src="/assets/loader.js" nonce="${ctx.nonce}"></script>` +
+        `<script type="module" src="/assets/app.js" nonce="${ctx.nonce}" data-ss></script>` +
+        `<script type="module" src="/assets/loader.js" nonce="${ctx.nonce}" data-ss></script>` +
         '<!--/ss:head--></head><body><!--ss:body-->' +
         '<h-state name="title"><h1>Hello</h1></h-state>' +
         '<!--/ss:body--></body></html>'
@@ -351,6 +351,83 @@ describe('slots', () => {
       }
     );
     expect(json(plain, '__SURFACE__')).toBeUndefined();
+  });
+
+  it('marks persisted slots, islands and elements and rejects duplicates (DC-19)', async () => {
+    const html = await renderPage(
+      page(() =>
+        documentOf(
+          slot({ name: 'chat:widget', 'transition:persist': true }, island(Title, { text: 'hi' })),
+          island(Counter, { count: 1, 'client:idle': true, 'transition:persist': 'player' }),
+          el('iframe', { src: '/map', 'transition:persist': 'map' })
+        )
+      ),
+      context()
+    );
+    expect(html).toContain('<h-state name="chat:widget" data-surface-persist="chat:widget">');
+    expect(html).toContain('<h-island data-island="$0" data-surface-persist="player"');
+    expect(html).toContain('<iframe src="/map" data-surface-persist="map"></iframe>');
+    expect(slotsOf(html)['chat:widget']).toMatchObject({ persist: 'chat:widget' });
+    expect(slotsOf(html).$0).toMatchObject({ persist: 'player', props: { count: 1 } });
+    const twice = () =>
+      renderPage(
+        page(() =>
+          documentOf(
+            el('video', { 'transition:persist': 'intro' }),
+            el('iframe', { 'transition:persist': 'intro' })
+          )
+        ),
+        context()
+      );
+    await expect(twice()).rejects.toThrow('persist ID "intro" is used more than once');
+    expect(() =>
+      slot({ name: 'x', mode: 'server', 'transition:persist': true }, island(Title, { text: '' }))
+    ).toThrow('needs a client slot');
+    expect(() =>
+      island(Counter, { count: 1, 'client:load': true, 'transition:persist': true })
+    ).toThrow('needs a name');
+  });
+
+  it('sends <ClientRouter> options and writes Speculation Rules only without the router', async () => {
+    const routed = await renderPage(
+      page(() =>
+        el(
+          'html',
+          {},
+          el('head', {}, el(ClientRouter, { prefetch: 'viewport', dataLayer: true })),
+          el('body', {}, el('a', { href: '/x', 'data-prefetch': 'load' }, 'x'))
+        )
+      ),
+      context()
+    );
+    expect(json(routed, '__SURFACE__').router).toEqual({ prefetch: 'viewport', dataLayer: true });
+    expect(routed).not.toContain('speculationrules');
+    const plain = await renderPage(
+      page(() =>
+        documentOf(
+          el('a', { href: '/a', 'data-prefetch': 'hover' }, 'a'),
+          el('a', { href: '/b', 'data-prefetch': 'false' }, 'b')
+        )
+      ),
+      context()
+    );
+    expect(plain).not.toContain('__SURFACE__');
+    const rules = JSON.parse(
+      plain.match(/<script type="speculationrules"[^>]*>(.*?)<\/script>/)![1]
+    );
+    expect(rules.prefetch).toEqual([
+      {
+        source: 'document',
+        where: {
+          and: [
+            { selector_matches: 'a[data-prefetch="hover"]' },
+            { not: { selector_matches: '[data-surface-reload]' } },
+          ],
+        },
+        eagerness: 'moderate',
+      },
+    ]);
+    expect(() => el(ClientRouter, { prefetch: 'always' })).toThrow('prefetch must be');
   });
 
   it('awaits server loads in parallel and renders their data without client state', async () => {

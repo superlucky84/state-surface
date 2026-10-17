@@ -264,6 +264,8 @@ One JSON script per page (written only when the page needs the engine or has an 
 - `defer` holds the sealed token of a deferred server slot (below).
 - `resetKey` (client slots and islands): prop names; a new value remounts the instance.
 - `actions`: targets and `queue` of the transitions that declare them (others overlap everything).
+- `router` (only on pages that render `<ClientRouter />`): its options, see Client Router below.
+- `persist` / `persistProps` (client slots and islands): the persist ID and the keep-props flag.
 - Page responses carry `X-Surface-Build`; a page whose chunk failed twice compares it with its
   `buildId` and reloads on the next interaction when they differ.
 
@@ -306,3 +308,77 @@ the engine intercepts the submit (`method="post"`, same origin, action under
   field errors (development warns).
 - `ctx.flash(name)` reads the flash once on the next page request (the cookie is deleted); a
   flash for another name is left alone. Prerendered pages cannot read it.
+
+## Client Router
+
+`<ClientRouter prefetch transition dataLayer cacheSize cacheTtl />` in the layout head (once per page,
+page or layout markup only) makes links between router pages client navigations (DC-18). It renders
+nothing; the page gets `router` in its bootstrap and the loader imports the router chunk. Pages
+without it never load the chunk.
+
+| Option                   | Values                                                       | Default    |
+| ------------------------ | ------------------------------------------------------------ | ---------- |
+| `prefetch`               | `hover` · `tap` · `viewport` · `load` · `false`              | `hover`    |
+| `transition`             | `fade` (root View Transition) · `none`                       | `fade`     |
+| `dataLayer`              | push `{ event: 'surface.page_view', page_path, page_title }` | off        |
+| `cacheSize` / `cacheTtl` | prefetch cache entries / ms                                  | 20 / 30000 |
+
+**Interception.** Same-origin `<a href>` inside BASE_PATH and `method="get"` forms (submitter
+`formmethod`/`formaction`/`formtarget` respected; the query is the form data). The browser keeps
+`data-action` elements, POST forms, `target` other than `_self`, `download`, modifier keys or other
+buttons, hash-only changes, and anything inside `[data-surface-reload]`. `navigate(url, { replace })`
+from `state-surface/client` uses the router when the page has one, else `location`.
+
+**Pipeline.** Events on `document`, `detail = { from, to, direction, trigger, signal }`
+(`trigger`: `link` · `form` · `popstate` · `api` · `load`; `direction`: `forward` · `back` · `replace`):
+
+1. `surface:before-preparation` (cancelable: the router does nothing; the listener takes over) →
+   the previous navigation aborts, actions abort unless all their targets persist,
+   `<html data-surface-navigating>`.
+2. `GET` with `Accept: text/html` (a prefetched entry is used once; back/forward always refetch).
+3. Document load instead when: the fetch fails, the response is not HTML, it redirected to another
+   origin, the next page has no router, or its `buildId` differs. A router page's 4xx/5xx HTML is
+   swapped and its URL shown.
+4. `surface:after-preparation` → new stylesheets load first (3 s cap) → `surface:before-swap`
+   (`detail.swap` can be replaced) → swap inside one View Transition (skipped for
+   `transition="none"`, reduced motion or no API) → `surface:after-swap` → the next page starts
+   (plugins, components, deferred slots, `<Boot>`) → `surface:page-load` (also on document loads).
+
+**Swap.** Only the marker regions change:
+
+- `<html>`/`<body>` attributes: the previous page's layout attributes leave, the next page's apply;
+  attributes and class tokens added by others stay.
+- Head (`<!--ss:head-->` … `<!--/ss:head-->`): every element the engine rendered carries `data-ss`
+  (plus `#__SURFACE__`); only those are merged. Stylesheets, module preloads and `script[src]` are
+  kept by URL, other owned nodes (title, meta, inline scripts, the bootstrap) are replaced. Nodes
+  without `data-ss` — a tag manager's inserts while the head was parsed — stay.
+- Body (`<!--ss:body-->` … `<!--/ss:body-->`): the new content goes in beside the old, persisted
+  elements move into it (`moveBefore`, `insertBefore` fallback), the old content leaves. Nodes after
+  the end marker stay.
+- Scripts: `src` scripts run once per URL per document; inline scripts run only with
+  `data-surface-rerun`; re-run scripts get this document's nonce (`modulepreload` links carry the
+  nonce too, for `'strict-dynamic'` CSP).
+- History `state.__surface = { index, scroll }`, `scrollRestoration = 'manual'`; new pages scroll to
+  the hash target or the top, back/forward restore the saved position. Focus stays inside a
+  persisted element, else goes to `[autofocus]`, the hash target or `<main>` (`tabindex="-1"`); an
+  `aria-live` region announces the title.
+
+**Persist (DC-19).** `transition:persist="id"` on elements and islands, `transition:persist` on
+client Slots (the slot name is the ID), `transition:persist-props` to keep the previous props. SSR
+writes `data-surface-persist="id"`; IDs follow the slot name rule, are unique per page and are
+allowed in page or layout markup only (not inside a Slot). Server and static slots cannot persist,
+islands need an explicit name (build errors). The current and next element pair by ID when the tag
+and the componentId match (else not kept, development warns); a kept island keeps its instance and
+receives the next page's props unless `persist-props`, a changed `resetKey` remounts it, and plugins
+get `update` on persisted slots. The next page's placeholder never enters the document.
+
+**Prefetch (DC-20).** Strategy per link: `data-prefetch="hover|tap|viewport|load|false"`, else the
+router option. `hover` waits 65 ms on pointer or focus, `tap` fires on `pointerdown` (also for
+hover links and touch), `viewport` and `load` use the activation scheduler. Requests send
+`Purpose: prefetch` (`Sec-Purpose` cannot be set from `fetch`). The cache is per tab, keyed by URL
+without hash, LRU `cacheSize`, TTL `cacheTtl`, single use, emptied when an action ends. The parsed
+page's `modulepreload` and stylesheet URLs are hinted ahead. Save-Data or 2G keeps only `tap`. Pages
+without the router get a `<script type="speculationrules">` for their `data-prefetch` links
+(`hover` → moderate, `tap` → conservative, `viewport` → eager, `load` → immediate; links in
+`[data-surface-reload]` excluded); engine pages on browsers without Speculation Rules add
+`<link rel="prefetch">` for `viewport`/`load` links.

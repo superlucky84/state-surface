@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 StateSurface is a **state-layout mapping runtime** — a production-ready framework where the server owns state and the client owns DOM projection. It is **not** an SPA framework, component system, or template language.
 
-- Page navigation is **MPA** (full page loads)
+- Page navigation is **MPA** (full page loads); a layout that renders `<ClientRouter />` swaps the next page's
+  server HTML instead (opt-in router chunk, `transition:persist` elements survive)
 - In-page updates come from **NDJSON streams** over HTTP POST: transitions yield state frames, the server
   reduces them per request and sends per-slot ops (server slots get HTML, client slots get props)
 - `<h-state name="...">` custom elements are fixed DOM anchors and hydration boundaries
@@ -66,9 +67,9 @@ BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
 
 ```
 engine/              # Framework core — users should not edit these files
-  index.ts           # 'state-surface': Slot, Boot, prefixPath, getBasePath, actionUrl, protocol types
+  index.ts           # 'state-surface': Slot, Boot, ClientRouter, prefixPath, getBasePath, actionUrl, protocol types
   server.ts          # 'state-surface/server': createHandler, defineTransition, TransitionError, defineServerComponent
-  client.ts          # 'state-surface/client': definePlugin, useAction, ActionError
+  client.ts          # 'state-surface/client': definePlugin, useAction, navigate, ActionError
   vite.ts            # 'state-surface/vite': surface() plugin (manifest with page manifests/buildId, islands, transform)
   rich.ts            # 'state-surface/rich': Markdown renderer for capability="rich" (mdast → hast allowlist)
   build/
@@ -91,7 +92,10 @@ engine/              # Framework core — users should not edit these files
   client/
     loader.ts        # Engine entry chunk (only on pages that need the engine) → start.ts
     start.ts         # Reads bootstrap, schedules components/plugins, loads the runtime, captures early actions,
-                     #   chunk failure → build check → reload on next interaction
+                     #   chunk failure → build check → reload on next interaction; PageController (page lifetime)
+    bootstrap.ts     # readBootstrap() (loader and router)
+    router.ts        # Router chunk (pages with <ClientRouter>): link/GET form interception, surface:* events,
+                     #   head/body marker swap, persist moveBefore, scripts, history/scroll/focus, prefetch
     scheduler.ts     # Activation timing: load / idle / visible / media
     componentHost.ts # Client slots & islands: lazy chunks (1 retry), activation on pointerdown/focusin/keydown,
                      #   hydrate/render/update, dormant latest props, reset/resetKey remount
@@ -239,11 +243,18 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   keep the latest props and hydrate the SSR snapshot first. `resetKey` (Slot prop) remounts on a new key value.
   Lithent hydration cannot fill an empty SSR text node later: render `null`, not `''`, for empty text.
 - Entry selection: the engine loader script is written only when the page renders client components, `data-action`,
-  `<Boot>`, deferred slots or plugins; `client:load` chunks, the action runtime and the morph chunk get
+  `<Boot>`, deferred slots, plugins or `<ClientRouter>`; `client:load` chunks, the action runtime and the morph chunk get
   `modulepreload`, rendered components' chunk CSS is linked. `client/entry.ts` (if present) runs on every page.
 - Server-only code: `import 'state-surface/server-only'`, `*.server.ts(x)` and `node:*` reachable from a client
   component fail the client build with the import chain.
-- One bootstrap `<script id="__SURFACE__">`: `{ buildId, pageId, basePath, slots, boot, plugins, actions }`. Direct islands
+- Client router (DC-18~20): `<ClientRouter prefetch transition dataLayer />` in the layout head. Same-origin links
+  and GET forms fetch the next page; only the `<!--ss:head-->`/`<!--ss:body-->` regions change (head elements the
+  engine rendered carry `data-ss`; others, like tag-manager inserts, stay). Other builds, router-less pages,
+  non-HTML and network failures load as documents. `transition:persist="id"` (elements, islands; client Slots by
+  name) keeps nodes and instances across pages (`transition:persist-props` keeps old props); page/layout markup
+  only. Runtime pieces split document vs page lifetime (`leavePage`/`mountPage`). Chromium keeps a DOMParser
+  document alive while it owns `<audio>`/`<video>`: the router adopts them out of parsed pages.
+- One bootstrap `<script id="__SURFACE__">`: `{ buildId, pageId, basePath, slots, boot, plugins, actions, router }`. Direct islands
   `<C client:idle />` render as `<h-island data-island="$N">` (`<slot>$N` inside a slot) with their props in
   `slots`; children are a static fragment. `<Boot transition params />` records an auto-run transition in `boot`.
 - The Vite plugin (`enforce: 'pre'`) transforms Slot children/islands into `Island` descriptors so Lithent does not
@@ -285,7 +296,7 @@ with `data-pending` until it ends and `data-has-result` after its first result (
 | `/examples/search`          | `search:input`, `search:results`                                         | Form `data-action`, pending state, `swap="morph"` input                                   |
 | `/examples/chat`            | `chat:messages`, `chat:input`, `chat:typing`, `chat:current`             | Abort previous, server history store, client `merge` streaming                            |
 
-All pages share `page:header` and `system:error` via `layouts/Layout.tsx`.
+All pages share `page:header`, `system:error` and `<ClientRouter />` (client navigation) via `layouts/Layout.tsx`.
 
 ## Reference Projects
 
@@ -329,7 +340,8 @@ CSS-only — defined in `client/styles.css`.
 
 ### View Transition API
 
-- MPA cross-fade: `@view-transition { navigation: auto; }` in `client/styles.css`
+- MPA cross-fade: `@view-transition { navigation: auto; }` in `client/styles.css`; router navigations cross-fade the
+  root in one View Transition (`<ClientRouter transition="none" />` or reduced motion → immediate)
 - In-page updates apply immediately by default (DC-06); opt in per action (`viewTransition: true` on
   `defineTransition`, sent as `X-Surface-View-Transition`, or `data-view-transition` on the action element) or
   per slot (`<Slot viewTransition>`, first appearance included). One transition per action, on its first patch;

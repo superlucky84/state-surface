@@ -687,6 +687,7 @@ function createDocumentTags(document: DocumentConfig) {
     const eager = usage.components.some(component => component.preload);
     if (usage.actions) add(engine.runtime, true);
     if (usage.morph && engine.morph) add(engine.morph, true);
+    if (usage.router && engine.router) add(engine.router, true);
     if (usage.components.length) add(engine.bridge, eager);
     for (const component of usage.components)
       add(

@@ -1,4 +1,4 @@
-import { Slot } from 'state-surface';
+import { ClientRouter, Slot } from 'state-surface';
 import PageHeader, { type HeaderProps } from '../routes/_shared/components/pageHeader.js';
 import SystemError from '../routes/_shared/components/systemError.js';
 
@@ -14,7 +14,8 @@ export interface LayoutProps {
 
 /**
  * Shared document shell. Every page renders `page:header` and the `system:error` slot,
- * which stays empty until an error frame fills it.
+ * which stays empty until an error frame fills it. `<ClientRouter />` makes links between
+ * these pages client navigations.
  */
 export default function Layout(
   { header, title = 'StateSurface', lang = 'en', variant = 'page' }: LayoutProps,
@@ -27,6 +28,8 @@ export default function Layout(
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{title}</title>
+        {/* Client navigation between pages of this layout (DC-18); prefetch on hover. */}
+        <ClientRouter />
       </head>
       <body
         class={

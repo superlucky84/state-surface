@@ -13,7 +13,7 @@
 
 ---
 
-StateSurface is a **state-layout mapping runtime** for the web. Pages load as real MPA HTML. In-page updates stream through `<h-state>` anchors via NDJSON — no SPA router, no client-side state management, no virtual DOM diffing on your side.
+StateSurface is a **state-layout mapping runtime** for the web. Pages are real MPA HTML (an opt-in router swaps that server HTML between pages). In-page updates stream through `<h-state>` anchors via NDJSON — no client-side state management, no virtual DOM diffing on your side.
 
 ```
 User action → POST /transition/:name → Server yields state frames → request reducer
@@ -291,6 +291,35 @@ must be full.
 { "type": "state", "accumulate": true, "states": { "chat:current": { "text": " world" } } }
 ```
 
+## Client Navigation (opt-in)
+
+Put `<ClientRouter />` in the layout head and links between those pages fetch the next page's HTML
+and swap the engine-managed regions — no document load, no client routes. Pages without it never
+load the router chunk.
+
+```tsx
+<head>
+  <title>{title}</title>
+  <ClientRouter prefetch="hover" />
+</head>
+<body>
+  <iframe src="/map" transition:persist="map" />            {/* stays loaded across pages */}
+  <Player client:load transition:persist="player" />        {/* keeps its local state */}
+  <a href="/docs" data-prefetch="viewport">Docs</a>
+  <a href="/logout" data-surface-reload>Log out</a>          {/* always a document load */}
+</body>
+```
+
+- Same-origin links and GET forms navigate; actions, POST forms, `target`, `download`, modifier
+  keys and hash links stay with the browser. Other builds, router-less pages and network failures
+  fall back to a document load.
+- `surface:before-preparation` (cancelable) → `after-preparation` → `before-swap` → `after-swap` →
+  `page-load` events on `document`; `navigate(url)` from `state-surface/client`.
+- Head nodes the engine did not render (tag managers) and body nodes outside the markers are kept;
+  `<ClientRouter dataLayer />` pushes `surface.page_view` on every page.
+- Prefetch `hover` (default) · `tap` · `viewport` · `load` · `false`, a 20-entry 30 s cache emptied
+  after actions; Save-Data keeps only `tap`. See [PROTOCOL.md](PROTOCOL.md#client-router).
+
 ## Features
 
 - **Full SSR** — Every page renders complete HTML on the server
@@ -302,7 +331,9 @@ must be full.
 - **Per-slot hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
 - **File-based routing** — `.tsx` pages from `routes/`, transitions from `transitions/` (path = name)
 - **Progressive forms** — `actionUrl()` forms work without JavaScript (PRG + signed one-time flash)
-- **View Transition API** — MPA cross-fade; in-page transitions are opt-in per action
+- **Opt-in client router** — `<ClientRouter />` swaps server HTML between pages, keeps
+  `transition:persist` iframes, media and islands, prefetches on hover
+- **View Transition API** — page cross-fade (MPA or router); in-page transitions are opt-in per action
   (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
 - **i18n ready** — Bilingual content driven by cookie + transition
@@ -373,7 +404,7 @@ BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 
 ```typescript
 // Pages and shared helpers
-import { Slot, Boot, prefixPath, getBasePath, actionUrl } from 'state-surface';
+import { Slot, Boot, ClientRouter, prefixPath, getBasePath, actionUrl } from 'state-surface';
 
 // Server
 import {
@@ -386,7 +417,7 @@ import {
 import { serve } from 'state-surface/adapters/node';
 
 // Client plugins and component actions (the engine entry itself is generated)
-import { definePlugin, useAction } from 'state-surface/client';
+import { definePlugin, useAction, navigate } from 'state-surface/client';
 ```
 
 ```typescript
@@ -399,7 +430,12 @@ import type {
   Flash,
   Middleware,
 } from 'state-surface/server';
-import type { PluginDefinition, ActionHandle, ActionResult } from 'state-surface/client';
+import type {
+  PluginDefinition,
+  ActionHandle,
+  ActionResult,
+  NavigationDetail,
+} from 'state-surface/client';
 ```
 
 ## Tech Stack

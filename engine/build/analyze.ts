@@ -274,6 +274,25 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
           attr.start,
           'The server directive is server:defer.'
         );
+      if (namespace === 'transition') {
+        if (directive !== 'persist' && directive !== 'persist-props')
+          fail(
+            `${where}: unknown directive "${name}".`,
+            attr.start,
+            'Use transition:persist="name" or transition:persist-props.'
+          );
+        if (directive === 'persist' && attr.value !== null) {
+          const id = literal(attr);
+          if (id === undefined || !SLOT_NAME.test(id))
+            fail(
+              `${where}: transition:persist needs a string literal name matching [a-z0-9-]+(:[a-z0-9-]+)*.`,
+              attr.start
+            );
+          persistNames(id!, attr.start);
+        }
+        if (directive === 'persist-props' && attr.value !== null)
+          fail(`${where}: ${name} does not take a value.`, attr.start);
+      }
       if (namespace === 'client') {
         if (!(CLIENT_DIRECTIVES as readonly string[]).includes(directive))
           fail(
@@ -335,6 +354,14 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     });
   };
 
+  // DC-19 ①: persist IDs are unique per page; literal duplicates in one module fail here.
+  const persistSeen = new Set<string>();
+  const persistNames = (id: string, offset: number) => {
+    if (persistSeen.has(id)) fail(`persist ID "${id}" is used more than once.`, offset);
+    persistSeen.add(id);
+  };
+  const persistOf = (element: any) =>
+    element.openingElement.attributes.find((attr: any) => attrName(attr) === 'transition:persist');
   const booleanAttr = (attr: any, where: string): boolean => {
     if (attr.value === null) return true;
     const expression =
@@ -399,11 +426,28 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
     if (!SLOT_NAME.test(name!))
       fail(`Slot name "${name}" must match [a-z0-9-]+(:[a-z0-9-]+)*.`, element.start);
     const where = `<Slot name="${name}">`;
+    const persist = persistOf(element);
+    if (persist && persist.value !== null)
+      fail(
+        `${where}: a client Slot persists under its name; write transition:persist without a value.`,
+        persist.start
+      );
     const directives = directivesOf(element, where);
     const client = directives.some(d => d.startsWith('client:'));
     if (mode && mode !== 'client' && client)
       fail(`${where}: mode="${mode}" cannot be combined with client directives.`, element.start);
     const normalized = (mode ?? (client ? 'client' : 'static')) as SlotFacts['mode'];
+    if (persist) {
+      if (normalized !== 'client')
+        fail(
+          `${where}: transition:persist needs a client slot.`,
+          persist.start,
+          'Server and static slots are rendered again for every page, so they cannot persist (DC-19).'
+        );
+      persistNames(name!, persist.start);
+    }
+    if (directives.includes('transition:persist-props') && !persist)
+      fail(`${where}: transition:persist-props needs transition:persist.`, element.start);
     if (options.swap && normalized !== 'server')
       fail(`${where}: \`swap\` applies to mode="server" slots.`, element.start);
     if (options.defer && normalized !== 'server')
@@ -503,6 +547,26 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
       const hasDirective = node.openingElement.attributes.some((attr: any) =>
         attrName(attr)?.startsWith('client:')
       );
+      const persist = persistOf(node);
+      const transitions = node.openingElement.attributes.some((attr: any) =>
+        attrName(attr)?.startsWith('transition:')
+      );
+      if (transitions && !hasDirective) {
+        if (name.type === 'JSXIdentifier' && isComponentTag(name))
+          fail(
+            `<${name.name}>: transition:persist applies to client islands, client Slots and HTML elements.`,
+            persist.start,
+            'Add a client directive to make the component an island.'
+          );
+        directivesOf(node, `<${name.name ?? 'element'}>`);
+        if (!persist)
+          fail(`<${name.name}>: transition:persist-props needs transition:persist.`, node.start);
+        if (persist.value === null)
+          fail(
+            `<${name.name}>: transition:persist on an element needs a name (transition:persist="intro").`,
+            persist.start
+          );
+      }
       if (hasDirective) {
         if (name.type === 'JSXIdentifier' && !isComponentTag(name))
           fail(
@@ -511,6 +575,19 @@ export function analyzeModule(code: string, file: string): ModuleAnalysis {
           );
         const binding = componentBinding(name, node.start, 'A client island');
         directivesOf(node, `<${name.name}>`);
+        if (persist?.value === null)
+          fail(
+            `<${name.name}>: transition:persist on an island needs a name (transition:persist="player").`,
+            persist.start,
+            'Automatic island ids differ per page, so the pair would silently not match (DC-19).'
+          );
+        if (
+          node.openingElement.attributes.some(
+            (attr: any) => attrName(attr) === 'transition:persist-props'
+          ) &&
+          !persist
+        )
+          fail(`<${name.name}>: transition:persist-props needs transition:persist.`, node.start);
         if (depth.island)
           fail(`<${name.name}>: islands cannot be nested inside island children.`, node.start);
         recordIsland(node, 'island', binding);

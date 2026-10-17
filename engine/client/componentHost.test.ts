@@ -400,4 +400,55 @@ describe('ComponentHost', () => {
     expect(panel.querySelector('.label')!.textContent).toBe('b');
     expect(components.keepIsland('panel$1', { ...next, props: { start: 1, id: 'y' } })).toBe(false);
   });
+
+  it('keeps persisted instances across a page change and disposes the rest (DC-19)', async () => {
+    document.body.innerHTML =
+      '<h-island data-island="$0" style="display:contents"><div class="counter"><button type="button">1</button><span class="label">a</span></div></h-island>' +
+      '<h-island data-island="$1" style="display:contents"><div class="counter"><button type="button">5</button><span class="label"></span></div></h-island>';
+    const { host: components } = host({ 'Counter.tsx#default': Counter });
+    components.scan(document, [
+      {
+        id: '$0',
+        mode: 'client',
+        component: 'Counter.tsx#default',
+        props: { start: 1, label: 'a' },
+        persist: 'player',
+      },
+      { id: '$1', mode: 'client', component: 'Counter.tsx#default', props: { start: 5 } },
+    ]);
+    await flush();
+    const kept = document.querySelector('h-island[data-island="$0"]')!;
+    kept.querySelector('button')!.click();
+    await flush();
+    expect(kept.querySelector('button')!.textContent).toBe('2');
+    // Next page: the player is island $3 there; the other island is gone.
+    const next = {
+      id: '$3',
+      mode: 'client' as const,
+      component: 'Counter.tsx#default',
+      props: { start: 1, label: 'b' },
+      persist: 'player',
+    };
+    components.leavePage(new Map([['$0', { key: '$3', meta: next }]]));
+    expect(components.has('$1')).toBe(false);
+    expect(kept.getAttribute('data-island')).toBe('$3');
+    document.body.replaceChildren(kept);
+    components.scan(document, [next]);
+    await flush();
+    // Local state kept, new page props applied (DC-19 ②).
+    expect(kept.querySelector('button')!.textContent).toBe('2');
+    expect(kept.querySelector('.label')!.textContent).toBe('b');
+    expect(components.stats).toMatchObject({ instances: 1, active: 1 });
+    // transition:persist-props keeps the previous props.
+    const sticky = {
+      ...next,
+      id: '$0',
+      props: { start: 1, label: 'c' },
+      persistProps: true as const,
+    };
+    components.leavePage(new Map([['$3', { key: '$0', meta: sticky }]]));
+    components.scan(document, [sticky]);
+    await flush();
+    expect(kept.querySelector('.label')!.textContent).toBe('b');
+  });
 });

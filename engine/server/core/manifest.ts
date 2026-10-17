@@ -12,12 +12,12 @@ export type AssetManifest = Record<
 /**
  * Project-relative source paths (leading `/`) of the engine-managed head tags, resolved
  * through the asset manifest: global styles, the optional app entry (`client/entry.ts`)
- * and the engine chunks (loader entry, action runtime, Lithent bridge, morph).
+ * and the engine chunks (loader entry, action runtime, Lithent bridge, morph, router).
  */
 export interface DocumentConfig {
   styles?: string[];
   appEntry?: string;
-  engine?: { loader: string; runtime: string; bridge: string; morph?: string };
+  engine?: { loader: string; runtime: string; bridge: string; morph?: string; router?: string };
 }
 
 export type { StandardSchema };

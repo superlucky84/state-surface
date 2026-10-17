@@ -3,9 +3,10 @@ import components from 'virtual:state-surface/islands';
 import plugins from 'virtual:state-surface/plugins';
 import { setBasePath } from '../shared/basePath.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
-import { ComponentHost } from './componentHost.js';
+import { ComponentHost, type PersistTarget } from './componentHost.js';
 import { PluginHost, type PluginDefinition } from './pluginHost.js';
 import { actionTarget, readAction, type ActionInvocation } from './actionEvents.js';
+import { readBootstrap } from './bootstrap.js';
 import { provideRuntime } from './runtimeAccess.js';
 import type { StateSurface } from './stateSurface.js';
 
@@ -18,31 +19,50 @@ function runAction(surface: StateSurface, invocation: ActionInvocation) {
   });
 }
 
-/** `<script id="__SURFACE__">`, the single bootstrap JSON (DESIGN 6.2). */
-export function readBootstrap(root: Document = document): SurfaceBootstrap {
-  const text = root.getElementById('__SURFACE__')?.textContent;
-  const value = text ? (JSON.parse(text) as SurfaceBootstrap) : undefined;
-  return { buildId: '', pageId: '', basePath: '', ...value };
+/** Where persisted DOM, client slots and instances continue on the next page (DC-19). */
+export interface PersistPlan {
+  /** Element pairs the router moves: current node → its placeholder in the next document. */
+  elements: Array<{ id: string; current: Element; next: Element }>;
+  /** Client slot names that persist (actions targeting only these keep running). */
+  slots: Set<string>;
+  /** Component instances: current key → key and metadata on the next page. */
+  instances: Map<string, PersistTarget>;
+}
+
+/** The loader's page lifecycle as the router sees it (DC-18, runtime lifetime split). */
+export interface PageController {
+  readonly bootstrap: SurfaceBootstrap;
+  /** A navigation starts: abort actions that cannot survive it (any non-persisted target). */
+  navigationStart(): void;
+  /** Before the DOM swap: dispose what does not persist. */
+  leavePage(plan: PersistPlan): void;
+  /** After the DOM swap: start the next page (plugins, components, actions, `<Boot>`). */
+  enterPage(next: SurfaceBootstrap, plan: PersistPlan): void;
+  /** Called when an action ends (the router empties its prefetch cache). */
+  onActionEnd(listener: () => void): void;
 }
 
 /**
  * Engine entry (DESIGN 5.1). The server writes this script only when the page uses client
- * components, actions, `<Boot>`, deferred slots or plugins. It schedules component
- * activation and plugins and loads the action runtime when the page needs it (or when a
- * component calls `useAction`); a `data-action` click or submit before the runtime is
- * ready is snapshotted at event time and run once it loaded (DC-04 ⑦). A chunk that fails
- * after its retry checks the deployment: a new build reloads the page on the next
+ * components, actions, `<Boot>`, deferred slots, plugins or the router. It schedules
+ * component activation and plugins and loads the action runtime when the page needs it (or
+ * when a component calls `useAction`); a `data-action` click or submit before the runtime
+ * is ready is snapshotted at event time and run once it loaded (DC-04 ⑦). A chunk that
+ * fails after its retry checks the deployment: a new build reloads the page on the next
  * interaction (DC-04 ③).
+ *
+ * Lifetimes (DC-18): the loader, listeners, plugin modules and the action runtime live for
+ * the document; slots, instances, plugin entries and `<Boot>` live for a page. The router
+ * chunk (pages with `<ClientRouter>`) drives `leavePage`/`enterPage` on client navigation.
  */
 export function startLoader(root: Document = document) {
-  const bootstrap = readBootstrap(root);
+  let bootstrap = readBootstrap(root);
   setBasePath(bootstrap.basePath);
   const debug = new URLSearchParams(location.search).get('debug') === '1';
   const report = (error: unknown, detail: Record<string, unknown>) => {
     if (debug) console.error('[StateSurface]', detail, error);
     (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
   };
-  const slots = bootstrap.slots ?? [];
 
   let checked = false;
   const checkBuild = () => {
@@ -71,26 +91,24 @@ export function startLoader(root: Document = document) {
     report,
     onChunkError: checkBuild,
   });
-  // Static and server slots are displayed as soon as the document is.
-  for (const meta of slots) {
-    if (meta.mode === 'client' || meta.id.includes('$') || meta.defer) continue;
-    const el = root.querySelector<HTMLElement>(`h-state[name="${CSS.escape(meta.id)}"]`);
-    if (el?.childNodes.length) pluginHost.displayedSlot(meta.id, el, meta.mode);
-  }
+  const actionEnd: Array<() => void> = [];
 
   let runtime: Promise<StateSurface> | undefined;
-  let ready = false;
+  let surface: StateSurface | undefined;
   const startRuntime = () =>
     (runtime ??= import('./runtime.js').then(
       module => {
-        const surface = module.startRuntime({
+        // The page may have changed while the chunk loaded: start with the current one.
+        surface = module.startRuntime({
           bootstrap,
           host,
           plugins: pluginHost,
           debug,
           report,
+          onAction: event => {
+            if (event.phase === 'end') for (const listener of actionEnd) listener();
+          },
         });
-        ready = true;
         root.removeEventListener('click', capture);
         root.removeEventListener('submit', capture);
         return surface;
@@ -105,7 +123,7 @@ export function startLoader(root: Document = document) {
   provideRuntime(startRuntime);
   // Bubble phase: a component handler that called preventDefault() keeps the event.
   const capture = (event: Event) => {
-    if (ready) return;
+    if (surface) return;
     const element = actionTarget(event);
     if (!element) return;
     event.preventDefault();
@@ -118,14 +136,73 @@ export function startLoader(root: Document = document) {
   };
   root.addEventListener('click', capture);
   root.addEventListener('submit', capture);
-  host.scan(root, slots);
+
+  /** Page lifetime: display static/server slots, activate components, start plugins. */
+  const mountPage = (persisted: ReadonlySet<string> = new Set()) => {
+    const slots = bootstrap.slots ?? [];
+    for (const meta of slots) {
+      if (meta.mode === 'client' || meta.id.includes('$') || meta.defer) continue;
+      const el = root.querySelector<HTMLElement>(`h-state[name="${CSS.escape(meta.id)}"]`);
+      if (el?.childNodes.length) pluginHost.displayedSlot(meta.id, el, meta.mode);
+    }
+    host.scan(root, slots);
+    if (surface) {
+      surface.mountPage(bootstrap, persisted, root);
+      surface.startPage(bootstrap.boot);
+    } else if (
+      !runtime &&
+      (root.querySelector('[data-action], form[action*="/_surface/action/"]') ||
+        bootstrap.boot?.length ||
+        slots.some(meta => meta.defer) ||
+        debug)
+    )
+      void startRuntime().catch(() => {});
+    // Without the router, Speculation Rules prefetch the opted-in links (DC-20 ③); browsers
+    // without them get <link rel="prefetch"> for the eager strategies.
+    if (!bootstrap.router && !HTMLScriptElement.supports?.('speculationrules'))
+      for (const link of Array.from(
+        root.querySelectorAll<HTMLAnchorElement>(
+          'a[data-prefetch="viewport"][href], a[data-prefetch="load"][href]'
+        )
+      )) {
+        const hint = root.createElement('link');
+        hint.rel = 'prefetch';
+        hint.href = link.href;
+        root.head.append(hint);
+      }
+  };
   pluginHost.start(root);
-  if (
-    root.querySelector('[data-action], form[action*="/_surface/action/"]') ||
-    bootstrap.boot?.length ||
-    slots.some(meta => meta.defer) ||
-    debug
-  )
-    void startRuntime().catch(() => {});
-  return { host, plugins: pluginHost, runtime: () => runtime };
+  mountPage();
+
+  const controller: PageController = {
+    get bootstrap() {
+      return bootstrap;
+    },
+    navigationStart() {
+      const persisted = (bootstrap.slots ?? []).flatMap(meta =>
+        meta.persist && !meta.id.includes('$') ? [meta.id] : []
+      );
+      surface?.leavePage(new Set(persisted));
+    },
+    leavePage(plan) {
+      surface?.leavePage(plan.slots);
+      pluginHost.leavePage(plan.slots);
+      host.leavePage(plan.instances);
+    },
+    enterPage(next, plan) {
+      bootstrap = next;
+      setBasePath(next.basePath);
+      pluginHost.mountPage(next.plugins ?? [], root);
+      mountPage(plan.slots);
+    },
+    onActionEnd(listener) {
+      actionEnd.push(listener);
+    },
+  };
+  if (bootstrap.router)
+    void import('./router.js').then(
+      module => module.startRouter(controller, root),
+      error => report(error, { kind: 'chunk', chunk: 'router' })
+    );
+  return { host, plugins: pluginHost, runtime: () => runtime, controller };
 }

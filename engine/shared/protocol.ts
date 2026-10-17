@@ -8,6 +8,8 @@
  *   browser executes in order without interpreting merge rules. Engine-internal.
  */
 
+import type { RouterOptions } from './surfaceTree.js';
+
 // ── Authoring layer ──
 
 export type UiPatch = {
@@ -49,6 +51,9 @@ export interface IslandMeta {
   only?: true;
   /** DC-05: prop names whose values identify the instance across morph. */
   resetKey?: string[];
+  /** DC-19: persist ID kept across client navigation; `persistProps` keeps the old props. */
+  persist?: string;
+  persistProps?: true;
 }
 
 export type HtmlOp = { slot: string; html: string; islands?: IslandMeta[] };
@@ -101,6 +106,9 @@ export interface SlotMeta {
   only?: true;
   /** Client slots and islands (DC-05): prop names whose values identify the instance. */
   resetKey?: string[];
+  /** Client slots and islands (DC-19): persist ID across client navigation. */
+  persist?: string;
+  persistProps?: true;
   /** Server slots: `morph` (default `replace`). */
   swap?: 'morph';
   viewTransition?: true;
@@ -129,6 +137,8 @@ export interface SurfaceBootstrap {
   plugins?: PluginMeta[];
   /** Transitions without an entry overlap every slot (DC-30). */
   actions?: Record<string, ActionMeta>;
+  /** `<ClientRouter>` options (DC-18); absent on pages without the router. */
+  router?: RouterOptions;
 }
 
 // ── Validation ──

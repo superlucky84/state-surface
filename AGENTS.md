@@ -10,7 +10,9 @@ The runtime core lives in `engine/`:
 - `engine/server/projection.ts` and `transitionResponse.ts` for the request reducer and slot projection
   (authoring frames → per-slot `html`/`props`/`merge`/`remove`/`ui` ops).
 - `engine/client/` for the browser runtime: loader, component host (activation, retry, resetKey), action
-  runtime (target-aware concurrency, per-request pending, `useAction`), patch apply pipeline, morph chunk.
+  runtime (target-aware concurrency, per-request pending, `useAction`), patch apply pipeline, morph chunk,
+  and the opt-in router chunk (`router.ts`: server HTML swap between `ss:head`/`ss:body` markers, persist,
+  prefetch). Runtime pieces are split into document lifetime and page lifetime (`leavePage`/`mountPage`).
 - `engine/server/flash.ts` and the `/_surface/action/<name>` endpoint for JS-less form submissions (PRG).
 - `engine/shared/` for the two-layer protocol, NDJSON parsing, capability helpers, and shared contracts.
 

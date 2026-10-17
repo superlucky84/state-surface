@@ -182,6 +182,82 @@ export class StateSurface {
     this.trace = options.trace;
   }
 
+  /**
+   * Client navigation starts (DC-18/DC-19): abort every request except those whose declared
+   * targets all persist. Requests without targets overlap every slot and are aborted (DC-30).
+   */
+  leavePage(persisted: ReadonlySet<string> = new Set()) {
+    for (const request of this.requests)
+      if (!request.targets?.every(slot => persisted.has(slot))) this.abort(request);
+    this.options.dom.leavePage(persisted);
+  }
+
+  /** Page work after `mountPage`: morph chunk, deferred slots, then `<Boot>` in order. */
+  startPage(boot: ReadonlyArray<{ transition: string; params: Record<string, unknown> }> = []) {
+    if ([...this.metas.values()].some(meta => meta.swap === 'morph'))
+      void this.options.dom.preloadMorph();
+    void this.loadDeferred();
+    // <Boot> runs through the same concurrency rules as actions: one without targets aborts
+    // the others (DC-30).
+    const actions = this.options.actions ?? {};
+    if (
+      this.options.development &&
+      boot.length > 1 &&
+      boot.some(
+        entry => !Object.hasOwn(actions, entry.transition) || !actions[entry.transition].targets
+      )
+    )
+      console.warn(
+        '[StateSurface] several <Boot> transitions run on this page and at least one declares ' +
+          'no targets, so they abort each other. Declare targets to run them in parallel.'
+      );
+    for (const entry of boot) void this.transition(entry.transition, entry.params);
+  }
+
+  /**
+   * The next page is in the document: read its slots, anchors and SSR props. Persisted
+   * slots keep their pending marks, revision and (with `persistProps`) their props.
+   */
+  mountPage(
+    bootstrap: Pick<SurfaceBootstrap, 'buildId' | 'pageId' | 'basePath' | 'slots' | 'actions'>,
+    persisted: ReadonlySet<string> = new Set(),
+    root: ParentNode = document
+  ) {
+    this.leavePage(persisted);
+    const slots = bootstrap.slots ?? [];
+    this.options = {
+      ...this.options,
+      bootstrap: {
+        buildId: bootstrap.buildId,
+        pageId: bootstrap.pageId,
+        basePath: bootstrap.basePath,
+      },
+      slots,
+      actions: bootstrap.actions,
+    };
+    const props = this.props;
+    this.metas = new Map(slots.filter(meta => !meta.id.includes('$')).map(m => [m.id, m]));
+    this.props = new Map();
+    for (const meta of this.metas.values()) {
+      if (meta.mode !== 'client') continue;
+      const keep = persisted.has(meta.id) && (meta.persistProps || meta.props === undefined);
+      const value = keep ? props.get(meta.id) : meta.props;
+      if (value !== undefined) this.props.set(meta.id, value);
+    }
+    for (const name of [...this.revisions.keys()])
+      if (!persisted.has(name)) this.revisions.delete(name);
+    this.errorShown = undefined;
+    const previous = this.anchors;
+    this.anchors = new Map();
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>('h-state[name]')))
+      this.anchors.set(el.getAttribute('name')!, el);
+    // Marks of kept requests stay on their (moved) anchors; marks on replaced DOM are gone.
+    const same = (name: string) => this.anchors.get(name) === previous.get(name);
+    for (const counts of [this.pendingCount, this.resultCount])
+      for (const name of [...counts.keys()]) if (!same(name)) counts.delete(name);
+    for (const request of this.requests) request.pending = request.pending.filter(same);
+  }
+
   /** Client slot props as last applied (dev overlay). */
   get activeStates(): Record<string, unknown> {
     return Object.fromEntries(this.props);
@@ -654,6 +730,7 @@ export class StateSurface {
   }
 
   private count(counts: Map<string, number>, name: string, attribute: string, delta: 1 | -1) {
+    if (delta < 0 && !counts.has(name)) return;
     const next = (counts.get(name) ?? 0) + delta;
     const el = this.anchors.get(name);
     if (next > 0) {

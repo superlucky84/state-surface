@@ -402,6 +402,73 @@ describe('action concurrency (DC-11, DC-30)', () => {
   });
 });
 
+describe('page lifetime (DC-18, DC-19)', () => {
+  it('keeps requests whose targets all persist across a page change and aborts the rest', async () => {
+    const opened: Array<{ url: string; stream: ReturnType<typeof controlledStream> }> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const stream = controlledStream();
+      init.signal?.addEventListener('abort', () => stream.close());
+      opened.push({ url, stream });
+      return stream.response;
+    });
+    const context = setup({
+      slots: [
+        { id: 'chat', mode: 'client', component: 'text#default', persist: 'chat' },
+        { id: 'list', mode: 'server' },
+      ],
+    });
+    const surface = new StateSurface({
+      ...(context.surface as unknown as { options: ConstructorParameters<typeof StateSurface>[0] })
+        .options,
+      actions: { reply: { targets: ['chat'] }, search: { targets: ['list'] } },
+    });
+    surface.discoverAnchors();
+    const chat = context.slot('chat');
+    // Undeclared targets overlap everything, so the first action is aborted by the next one.
+    const other = surface.transition('anything');
+    const reply = surface.transition('reply');
+    const search = surface.transition('search');
+    expect(await other).toEqual({ ok: false, aborted: true });
+    await flush();
+    opened
+      .find(entry => entry.url.endsWith('/reply'))!
+      .stream.send({
+        type: 'patch',
+        reset: true,
+        ops: [{ slot: 'chat', props: { text: 'Hel' } }],
+      });
+    await flush();
+    // Navigation: only the chat slot persists (the router moved the same element).
+    surface.leavePage(new Set(['chat']));
+    expect(await search).toEqual({ ok: false, aborted: true });
+    document.body.innerHTML = '<h-state name="other"></h-state>';
+    document.body.prepend(chat);
+    surface.mountPage(
+      {
+        buildId: 'b1',
+        pageId: 'next',
+        basePath: '/base',
+        slots: [
+          { id: 'chat', mode: 'client', component: 'text#default', persist: 'chat' },
+          { id: 'other', mode: 'server' },
+        ],
+        actions: { reply: { targets: ['chat'] } },
+      },
+      new Set(['chat'])
+    );
+    expect(chat.hasAttribute('data-pending')).toBe(true);
+    opened
+      .find(entry => entry.url.endsWith('/reply'))!
+      .stream.send({ type: 'patch', ops: [{ slot: 'chat', merge: { text: 'lo' } }] });
+    opened.find(entry => entry.url.endsWith('/reply'))!.stream.send({ type: 'done' });
+    expect(await reply).toEqual({ ok: true });
+    await flush();
+    expect(chat.textContent).toBe('Hello');
+    expect(chat.hasAttribute('data-pending')).toBe(false);
+    expect(surface.running).toEqual([]);
+  });
+});
+
 describe('pending (DESIGN 7장)', () => {
   it('keeps data-pending until the request ends and marks data-has-result after the first result', async () => {
     const stream = controlledStream();

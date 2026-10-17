@@ -21,6 +21,7 @@ const ENGINE_CLIENT = {
   runtime: path.join(ENGINE_DIR, 'client/runtime.ts'),
   bridge: path.join(ENGINE_DIR, 'client/lithentBridge.ts'),
   morph: path.join(ENGINE_DIR, 'client/morph.ts'),
+  router: path.join(ENGINE_DIR, 'client/router.ts'),
 };
 const SERVER_ONLY_MARKERS = [
   path.join(ENGINE_DIR, 'serverOnly.ts'),
@@ -206,6 +207,7 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           runtime: documentPath(ENGINE_CLIENT.runtime),
           bridge: documentPath(ENGINE_CLIENT.bridge),
           morph: documentPath(ENGINE_CLIENT.morph),
+          router: documentPath(ENGINE_CLIENT.router),
         },
       };
       let assets = {};

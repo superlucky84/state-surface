@@ -10,7 +10,7 @@ import { createDemo, surfaceHeaders } from '../../testing/server.js';
 import { StateSurface } from '../client/stateSurface.js';
 import { ComponentHost } from '../client/componentHost.js';
 import { SlotDom } from '../client/slotDom.js';
-import { readBootstrap } from '../client/start.js';
+import { readBootstrap } from '../client/bootstrap.js';
 
 let app: any;
 beforeAll(async () => {

@@ -26,7 +26,9 @@ export async function scenarios(origin, runtime) {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('x-middleware'), 'after');
     const html = await response.text();
-    assert.ok(html.startsWith('<!doctype html><html><head><!--ss:head--><title>Fixture</title>'));
+    assert.ok(
+      html.startsWith('<!doctype html><html><head><!--ss:head--><title data-ss="">Fixture</title>')
+    );
     assert.ok(html.includes('<!--/ss:head--></head><body><!--ss:body-->'));
     assert.ok(html.endsWith('<!--/ss:body--></body></html>'));
     assert.ok(html.includes('<p>Hello</p>'));
@@ -40,7 +42,7 @@ export async function scenarios(origin, runtime) {
     assert.equal(props.cookie, 'ko');
     assert.match(props.nonce, /^[a-f0-9]{36}$/);
     const entry = html.match(
-      /<script type="module" src="([^"]+)" nonce="([^"]+)"><\/script><!--\/ss:head-->/
+      /<script type="module" src="([^"]+)" nonce="([^"]+)" data-ss><\/script><!--\/ss:head-->/
     );
     assert.ok(entry && entry[1].endsWith('/assets/probe-12345678.js'));
     assert.equal(entry[2], props.nonce);

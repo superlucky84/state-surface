@@ -38,6 +38,14 @@ interface Instance {
   /** Latest data received before the component became active. */
   pending?: { op: 'render' | 'update'; data: unknown };
   cancel?: () => void;
+  /** Persisted across a client navigation: the next page's metadata (DC-19). */
+  carry?: SlotMeta | IslandMeta;
+}
+
+/** Where a persisted instance continues on the next page (DC-19). */
+export interface PersistTarget {
+  key: string;
+  meta: SlotMeta | IslandMeta;
 }
 
 const signatureOf = (component: string, props: unknown) =>
@@ -132,7 +140,10 @@ export class ComponentHost {
     meta: Omit<IslandMeta, 'props'> & { props?: Record<string, unknown> }
   ) {
     const existing = this.instances.get(key);
-    if (existing) return existing;
+    if (existing) {
+      if (existing.carry) this.carryOver(existing);
+      return existing;
+    }
     const instance: Instance = {
       key,
       kind,
@@ -345,6 +356,51 @@ export class ComponentHost {
     instance.snapshot = undefined;
     instance.generation++;
     if (instance.status === 'loading') instance.status = 'dormant';
+  }
+
+  /**
+   * Client navigation (DC-18/DC-19): dispose every instance except persisted ones, which move
+   * to their key on the next page. Their DOM is moved by the router; `scan` of the next page
+   * then applies its props (unless `persistProps`) with the usual resetKey rule.
+   */
+  leavePage(persisted: ReadonlyMap<string, PersistTarget> = new Map()) {
+    const kept = new Map<string, Instance>();
+    for (const [key, instance] of this.instances) {
+      const target = persisted.get(key);
+      if (!target) {
+        this.reset(instance);
+        instance.status = 'failed'; // never activates again
+        continue;
+      }
+      instance.key = target.key;
+      instance.carry = target.meta;
+      if (instance.kind === 'island') instance.el.setAttribute('data-island', target.key);
+      kept.set(target.key, instance);
+    }
+    this.instances = kept;
+  }
+
+  private carryOver(instance: Instance) {
+    const meta = instance.carry!;
+    instance.carry = undefined;
+    if (meta.persistProps || meta.props === undefined) return;
+    instance.resetKey = meta.resetKey;
+    if (instance.kind === 'island') instance.signature = signatureOf(meta.component!, meta.props);
+    this.setProps(instance.key, instance.el, meta.props, meta as SlotMeta);
+  }
+
+  /** Instance counts by status (dev overlay, leak tests). */
+  get stats() {
+    const stats = {
+      instances: this.instances.size,
+      active: 0,
+      dormant: 0,
+      modules: this.modules.size,
+    };
+    for (const instance of this.instances.values())
+      if (instance.status === 'active') stats.active++;
+      else if (instance.status === 'dormant') stats.dormant++;
+    return stats;
   }
 
   /** Dispose islands inside `container` (server HTML replaced or removed, DC-08). */

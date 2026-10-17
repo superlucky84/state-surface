@@ -69,6 +69,8 @@ the first yield. `defineTransition({ input, targets, handler })` validates param
 Standard Schema and declares the slots it changes (actions with disjoint targets run in
 parallel). `<form method="post" action={actionUrl(name)}>` works without JavaScript; the page
 reads the result with `ctx.flash(name)`. The build writes `.state-surface/actions.d.ts` so
-`useAction(renew, name)` from `state-surface/client` is typed. Vite's surface plugin generates the registry for development and
+`useAction(renew, name)` from `state-surface/client` is typed. `<ClientRouter />` in the layout head
+turns links between its pages into client navigations (server HTML swap, `transition:persist`
+elements and islands survive, hover prefetch); `data-surface-reload` opts a link out. Vite's surface plugin generates the registry for development and
 production. To embed in Express, install the optional express peer and mount
 `surface({ manifest })` before body-parsing middleware.

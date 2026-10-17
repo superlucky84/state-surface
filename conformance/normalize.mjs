@@ -62,6 +62,8 @@ export function normalizeDocument(html) {
     if (node.nodeType !== 1) return undefined;
     const attributes = Array.from(node.attributes)
       .filter(attr => attr.name !== 'data-component')
+      // Stage 6: head elements the engine owns carry `data-ss` (client router head merge).
+      .filter(attr => attr.name !== 'data-ss')
       // Stage 4: the chat input id lets server HTML replacement restore focus (DESIGN 4.3).
       .filter(attr => !(attr.name === 'id' && attr.value === 'chat-message'))
       .map(attr => [attr.name, attr.value])

@@ -140,4 +140,9 @@ export class SlotDom {
   uiOf(slot: string) {
     return this.ui.get(slot);
   }
+
+  /** Client navigation: UI patches of replaced slots are gone with their DOM. */
+  leavePage(persisted: ReadonlySet<string> = new Set()) {
+    for (const slot of [...this.ui.keys()]) if (!persisted.has(slot)) this.ui.delete(slot);
+  }
 }

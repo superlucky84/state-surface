@@ -6,8 +6,15 @@
  */
 
 // Page tree
-export { Slot, Boot } from './shared/surfaceTree.js';
-export type { SlotProps, BootProps, SlotMode, Capability } from './shared/surfaceTree.js';
+export { Slot, Boot, ClientRouter } from './shared/surfaceTree.js';
+export type {
+  SlotProps,
+  BootProps,
+  SlotMode,
+  Capability,
+  ClientRouterProps,
+  PrefetchStrategy,
+} from './shared/surfaceTree.js';
 
 // Base path
 export { prefixPath, getBasePath } from './shared/basePath.js';

@@ -117,4 +117,48 @@ describe('PluginHost', () => {
   it('requires a plugin name', () => {
     expect(() => definePlugin({} as PluginDefinition)).toThrow('needs a `name`');
   });
+
+  it('cleans up replaced slots, keeps persisted ones and runs onPage once per page (DC-18)', async () => {
+    const els = slots('chat', 'body');
+    const calls: string[] = [];
+    const signals: AbortSignal[] = [];
+    const plugin = definePlugin({
+      name: 'track',
+      attach(_el, info) {
+        calls.push(`attach:${info.slot}`);
+        return () => calls.push(`cleanup:${info.slot}`);
+      },
+      update(_el, info) {
+        calls.push(`update:${info.slot}`);
+      },
+      onPage(page) {
+        signals.push(page.signal);
+        calls.push('page');
+      },
+    });
+    const loader = vi.fn(async () => plugin);
+    const host = new PluginHost([{ id: 'p#track', load: 'load' }], { 'p#track': loader });
+    host.displayedSlot('chat', els.chat, 'client');
+    host.displayedSlot('body', els.body, 'server');
+    host.start();
+    await flush();
+    expect(calls).toEqual(['page', 'attach:chat', 'attach:body']);
+    calls.length = 0;
+    host.leavePage(new Set(['chat']));
+    expect(calls).toEqual(['cleanup:body']);
+    expect(signals[0].aborted).toBe(true);
+    calls.length = 0;
+    host.mountPage([{ id: 'p#track', load: 'load' }]);
+    host.displayedSlot('next', document.createElement('h-state'), 'server');
+    await flush();
+    // The module loads once; the persisted slot is updated, the new one attached.
+    expect(loader).toHaveBeenCalledOnce();
+    expect(calls).toEqual(['page', 'update:chat', 'attach:next']);
+    // A page that does not declare the plugin cleans up its persisted attachment.
+    calls.length = 0;
+    host.leavePage(new Set(['chat']));
+    host.mountPage([]);
+    expect(calls).toEqual(['cleanup:next', 'cleanup:chat']);
+    expect(host.stats).toMatchObject({ plugins: 0, modules: 1 });
+  });
 });

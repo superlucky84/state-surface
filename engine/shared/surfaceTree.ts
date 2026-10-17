@@ -27,6 +27,10 @@ export interface ComponentDescriptor {
   directives: Directives;
   fallback?: unknown;
   resetKey?: string | string[];
+  /** `transition:persist="id"` on a direct island (DC-19). */
+  persist?: string;
+  /** `transition:persist-props`: keep the previous props when the island persists. */
+  persistProps?: true;
   children: WDom[];
 }
 
@@ -63,6 +67,9 @@ export interface SlotMarker {
   /** Accepts frames from `ctx.external()`, validated by `schema` (DESIGN 8.1). */
   external?: boolean;
   schema?: unknown;
+  /** `transition:persist` on a client Slot: the slot name is the persist ID (DC-19). */
+  persist?: true;
+  persistProps?: true;
 }
 
 export interface IslandMarker extends ComponentDescriptor {
@@ -76,7 +83,28 @@ export interface BootMarker {
   params: Record<string, unknown>;
 }
 
-export type SurfaceMarker = SlotMarker | IslandMarker | BootMarker;
+/** Client navigation strategies for links (DC-20). */
+export type PrefetchStrategy = 'hover' | 'tap' | 'viewport' | 'load';
+
+/** `<ClientRouter>` options, sent to the browser in `__SURFACE__.router` (DC-18). */
+export interface RouterOptions {
+  /** Default link prefetch (`hover`); `false` turns automatic prefetch off. */
+  prefetch?: PrefetchStrategy | false;
+  /** `none` swaps without the root cross-fade View Transition. */
+  transition?: 'fade' | 'none';
+  /** Also `dataLayer.push({ event: 'surface.page_view' })` on every page load. */
+  dataLayer?: boolean;
+  /** Prefetch cache entries (default 20) and lifetime in ms (default 30000). */
+  cacheSize?: number;
+  cacheTtl?: number;
+}
+
+export interface RouterMarker {
+  kind: 'router';
+  options: RouterOptions;
+}
+
+export type SurfaceMarker = SlotMarker | IslandMarker | BootMarker | RouterMarker;
 
 export class SurfaceError extends Error {
   constructor(message: string) {
@@ -144,7 +172,16 @@ function splitDirectives(props: Record<string, unknown>, where: string) {
       throw new SurfaceError(`${where}: unknown directive "${key}".`);
     if (namespace === 'server' && directive !== 'defer')
       throw new SurfaceError(`${where}: unknown directive "${key}".`);
-    if (key === 'client:media' ? typeof value !== 'string' || !value : value !== true)
+    if (namespace === 'transition' && directive !== 'persist' && directive !== 'persist-props')
+      throw new SurfaceError(
+        `${where}: unknown directive "${key}". Use transition:persist or transition:persist-props.`
+      );
+    if (key === 'transition:persist') {
+      if (value !== true && (typeof value !== 'string' || !SLOT_NAME.test(value)))
+        throw new SurfaceError(
+          `${where}: transition:persist needs a name matching [a-z0-9-]+(:[a-z0-9-]+)*.`
+        );
+    } else if (key === 'client:media' ? typeof value !== 'string' || !value : value !== true)
       throw new SurfaceError(
         key === 'client:media'
           ? `${where}: client:media needs a media query string.`
@@ -283,6 +320,19 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
     throw new SurfaceError(`${where}: sandbox="iframe" needs capability="unsafe".`);
   if (rest.external && rest.schema === undefined)
     throw new SurfaceError(`${where}: an external slot needs a Standard Schema \`schema\`.`);
+  const persist = directives['transition:persist'];
+  if (persist !== undefined) {
+    if (persist !== true)
+      throw new SurfaceError(
+        `${where}: a client Slot persists under its name; write transition:persist without a value.`
+      );
+    if (mode !== 'client')
+      throw new SurfaceError(
+        `${where}: transition:persist needs a client slot (server and static slots are rendered again for every page).`
+      );
+  }
+  if (directives['transition:persist-props'] && persist === undefined)
+    throw new SurfaceError(`${where}: transition:persist-props needs transition:persist.`);
 
   const content = meaningful(children);
   let child: ComponentDescriptor;
@@ -334,6 +384,8 @@ export function Slot(props: SlotProps, children: WDom[] = []): WDom {
     defer,
     ...(typeof rest.cache === 'string' ? { cache: rest.cache } : {}),
     ...(rest.external ? { external: true, schema: rest.schema } : {}),
+    ...(persist ? { persist: true as const } : {}),
+    ...(directives['transition:persist-props'] ? { persistProps: true as const } : {}),
   });
 }
 
@@ -362,8 +414,52 @@ export function Island(props: Record<string, unknown>, children: WDom[] = []): W
       throw new SurfaceError(`<${__ssId}>: islands need a client directive.`);
     descriptor.fallback = fallback;
     descriptor.resetKey = resetKey as string | string[] | undefined;
+    const persist = directives['transition:persist'];
+    // DC-19 ①: automatic ids differ per page, so a persisted island needs an explicit name.
+    if (persist === true)
+      throw new SurfaceError(
+        `<${__ssId}>: transition:persist on an island needs a name (transition:persist="player").`
+      );
+    if (persist) descriptor.persist = persist;
+    if (directives['transition:persist-props']) {
+      if (!persist)
+        throw new SurfaceError(`<${__ssId}>: transition:persist-props needs transition:persist.`);
+      descriptor.persistProps = true;
+    }
   }
   return marker(descriptor);
+}
+
+/** `<ClientRouter />` props (DC-18): put it in the layout head. */
+export interface ClientRouterProps extends RouterOptions {}
+
+const PREFETCH = new Set(['hover', 'tap', 'viewport', 'load']);
+
+/**
+ * Opt-in client router (DC-18). Renders nothing; pages that render it navigate between each
+ * other without document loads, and only they load the router chunk.
+ */
+export function ClientRouter(props: ClientRouterProps = {}): WDom {
+  const where = '<ClientRouter>';
+  const options: RouterOptions = {};
+  for (const [key, value] of Object.entries(props ?? {})) {
+    if (value === undefined || key === 'children') continue;
+    if (key === 'prefetch') {
+      if (value !== false && !PREFETCH.has(value as string))
+        throw new SurfaceError(`${where}: prefetch must be hover, tap, viewport, load or false.`);
+      options.prefetch = value as RouterOptions['prefetch'];
+    } else if (key === 'transition') {
+      if (value !== 'fade' && value !== 'none')
+        throw new SurfaceError(`${where}: transition must be "fade" or "none".`);
+      options.transition = value;
+    } else if (key === 'dataLayer') options.dataLayer = value === true;
+    else if (key === 'cacheSize' || key === 'cacheTtl') {
+      if (!Number.isInteger(value) || (value as number) < 0)
+        throw new SurfaceError(`${where}: ${key} must be a nonnegative integer.`);
+      options[key] = value as number;
+    } else throw new SurfaceError(`${where}: unknown option "${key}".`);
+  }
+  return marker({ kind: 'router', options });
 }
 
 export interface BootProps<Name extends string = ActionName> {
@@ -456,6 +552,10 @@ declare global {
       'client:visible'?: boolean;
       'client:media'?: string;
       'client:only'?: boolean;
+      /** Keep this island (named) or client Slot (true) across client navigation (DC-19). */
+      'transition:persist'?: string | boolean;
+      /** With transition:persist: keep the previous props instead of the new page's. */
+      'transition:persist-props'?: boolean;
     }
     /** Components run synchronously; a Promise-returning component would render nothing. */
     type ElementType = string | ((props: any, children?: any) => Renderable);

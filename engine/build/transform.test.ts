@@ -192,6 +192,46 @@ describe('build diagnostics', () => {
       'cannot contain islands',
     ],
     [
+      'unnamed island persist',
+      'import Title from \'../components/Title\';\nexport default () => <Title text="" client:load transition:persist />;',
+      'needs a name',
+    ],
+    [
+      'invalid persist name',
+      'import Title from \'../components/Title\';\nexport default () => <Title text="" client:load transition:persist="Bad Name" />;',
+      'needs a string literal name',
+    ],
+    [
+      'duplicate persist name',
+      'import Title from \'../components/Title\';\nexport default () => <div><Title text="" client:load transition:persist="player" /><video transition:persist="player" /></div>;',
+      'persist ID "player" is used more than once',
+    ],
+    [
+      'persisted server slot',
+      'import { Slot } from \'state-surface\';\nimport Title from \'../components/Title\';\nexport default () => <Slot name="a" mode="server" transition:persist><Title text="" /></Slot>;',
+      'transition:persist needs a client slot',
+    ],
+    [
+      'named Slot persist',
+      'import { Slot } from \'state-surface\';\nimport Title from \'../components/Title\';\nexport default () => <Slot name="a" client:load transition:persist="b"><Title text="" /></Slot>;',
+      'persists under its name',
+    ],
+    [
+      'persist on a plain component',
+      'import Title from \'../components/Title\';\nexport default () => <Title text="" transition:persist="t" />;',
+      'applies to client islands, client Slots and HTML elements',
+    ],
+    [
+      'unnamed element persist',
+      'export default () => <video transition:persist />;',
+      'needs a name (transition:persist="intro")',
+    ],
+    [
+      'unknown transition directive',
+      'export default () => <video transition:keep="a" />;',
+      'unknown directive "transition:keep"',
+    ],
+    [
       'Slot inside island children',
       'import { Slot } from \'state-surface\';\nimport Title from \'../components/Title\';\nexport default () => <Title text="" client:load><Slot name="a"><Title text="" /></Slot></Title>;',
       'cannot be used inside island children',

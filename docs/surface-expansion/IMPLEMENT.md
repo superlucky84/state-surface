@@ -585,40 +585,70 @@ DESIGN 5.2·5.3·7장·10.5·2.5.
 
 #### 작업
 
-- [ ] runtime 수명 분리: 문서 수명(라우터·액션 위임·로더·플러그인 등록)과 페이지 수명(`mount(page)`·`dispose()`).
+- [x] runtime 수명 분리: 문서 수명(라우터·액션 위임·로더·플러그인 등록)과 페이지 수명(`mount(page)`·`dispose()`).
       `document` 리스너는 한 번만 등록한다.
-- [ ] `<ClientRouter prefetch transition />`: 렌더한 페이지에서만 라우터 청크를 로드한다.
-- [ ] 가로채기: 같은 origin·BASE_PATH `<a>`와 `method="get"` 폼. 제외: `data-action`·POST 폼, `target`·`download`·
+- [x] `<ClientRouter prefetch transition />`: 렌더한 페이지에서만 라우터 청크를 로드한다.
+- [x] 가로채기: 같은 origin·BASE_PATH `<a>`와 `method="get"` 폼. 제외: `data-action`·POST 폼, `target`·`download`·
       수정 키, 해시만 바뀌는 링크, `data-surface-reload`.
-- [ ] 이동 파이프라인: `surface:before-preparation`(취소 가능) → `after-preparation` → `before-swap`(교체 함수 대체) →
+- [x] 이동 파이프라인: `surface:before-preparation`(취소 가능) → `after-preparation` → `before-swap`(교체 함수 대체) →
       `after-swap` → `page-load`(문서 로드에서도 발생), payload `{ from, to, direction, trigger, signal }`, `navigate()`.
-- [ ] 이동 시 이전 이동 fetch와 진행 중 transition abort(대상이 모두 persist인 액션만 유지, targets 생략 액션은 abort).
-- [ ] fallback: 네트워크 실패·비 HTML·build ID 불일치·라우터 없는 페이지·다른 origin 리다이렉트는 문서 로드. 라우터
+- [x] 이동 시 이전 이동 fetch와 진행 중 transition abort(대상이 모두 persist인 액션만 유지, targets 생략 액션은 abort).
+- [x] fallback: 네트워크 실패·비 HTML·build ID 불일치·라우터 없는 페이지·다른 origin 리다이렉트는 문서 로드. 라우터
       레이아웃의 4xx·5xx HTML은 교체하고 URL 갱신.
-- [ ] swap: head 마커 병합(title·meta 교체, stylesheet·modulepreload URL 기준 유지·추가, 새 CSS 로드 후 교체),
+- [x] swap: head 마커 병합(title·meta 교체, stylesheet·modulepreload URL 기준 유지·추가, 새 CSS 로드 후 교체),
       body 마커 사이 교체, persist 연결 유지 이동(새 콘텐츠 삽입 → `moveBefore` → 이전 콘텐츠 제거), module script 1회·
       inline은 `data-surface-rerun`만, `__SURFACE__` 다시 읽기, 새 페이지의 `<Boot>`·지연 슬롯 실행.
-- [ ] history·scroll(`scrollRestoration = 'manual'`, `history.state`)·hash·포커스(`<main>`)·title live region announce,
+- [x] history·scroll(`scrollRestoration = 'manual'`, `history.state`)·hash·포커스(`<main>`)·title live region announce,
       BFCache 복귀 충돌 없음.
-- [ ] 이동 전환(DC-06): 기본 루트 크로스페이드, `transition="none"`, reduced motion·미지원 시 즉시 교체.
-- [ ] persist(DC-19): 이름 규칙·중복·이름 없는 직접 지시자 persist 빌드 오류, server 슬롯 persist 빌드 오류,
+- [x] 이동 전환(DC-06): 기본 루트 크로스페이드, `transition="none"`, reduced motion·미지원 시 즉시 교체.
+- [x] persist(DC-19): 이름 규칙·중복·이름 없는 직접 지시자 persist 빌드 오류, server 슬롯 persist 빌드 오류,
       componentId 불일치 dev 경고, 새 props 반영·`transition:persist-props`·resetKey, 플러그인 `update`.
-- [ ] prefetch(DC-20): hover(65ms)·tap·viewport·load, 링크별 `data-prefetch`, 캐시 20개 LRU·TTL 30초·1회 사용·액션 완료 시
+- [x] prefetch(DC-20): hover(65ms)·tap·viewport·load, 링크별 `data-prefetch`, 캐시 20개 LRU·TTL 30초·1회 사용·액션 완료 시
       전체 비움, `Sec-Purpose: prefetch`, Save-Data·2G 이하 tap만, 라우터 없는 페이지는 Speculation Rules prefetch(미지원
       `<link rel="prefetch">`), back/forward는 최신 HTML 재요청.
-- [ ] 서드파티 공존(8.2·8.3): 마커 밖 노드 보존, `surface:page-load`와 옵션 `dataLayer.push({ event: 'surface.page_view' })`,
+- [x] 서드파티 공존(8.2·8.3): 마커 밖 노드 보존, `surface:page-load`와 옵션 `dataLayer.push({ event: 'surface.page_view' })`,
       `history.pushState`·`replaceState`·`fetch`를 호출 시점에 전역에서 조회.
-- [ ] 플러그인 훅의 라우터 시점(교체 전 cleanup, persist 요소 `update`).
-- [ ] 데모 레이아웃에 `<ClientRouter />`를 둔다. 정적 0바이트 측정은 라우터 없는 fixture 페이지로 한다(V-01).
+- [x] 플러그인 훅의 라우터 시점(교체 전 cleanup, persist 요소 `update`).
+- [x] 데모 레이아웃에 `<ClientRouter />`를 둔다. 정적 0바이트 측정은 라우터 없는 fixture 페이지로 한다(V-01).
 
 #### Baseline 테스트
 
-- [ ] e2e: 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 같음.
-- [ ] e2e: 100회 이동 후 리스너·Lithent 인스턴스·옵저버·플러그인 수 불변, heap 수렴.
-- [ ] e2e: persist iframe·video·입력 포커스·선택 범위 유지(iframe 재로드 없음), 짝 없는 요소 cleanup.
+- [x] e2e: 링크·GET 폼·뒤로/앞으로 이동 후 DOM·state·boot·action이 문서 로드와 같음.
+- [x] e2e: 100회 이동 후 리스너·Lithent 인스턴스·옵저버·플러그인 수 불변, heap 수렴.
+- [x] e2e: persist iframe·video·입력 포커스·선택 범위 유지(iframe 재로드 없음), 짝 없는 요소 cleanup.
       단계 0 Chromium spike에서 선택 범위 초기화를 확인했으므로 명시적 snapshot/복원을 포함한다.
-- [ ] e2e: GTM식 fixture(head·body 동적 script·iframe 주입) 20회 이동 후 노드 보존, page_view 20회, CSP 위반 0.
-- [ ] 단위: 전역 API 캐시 금지(나중에 래핑한 `fetch`·`history`가 호출됨).
+- [x] e2e: GTM식 fixture(head·body 동적 script·iframe 주입) 20회 이동 후 노드 보존, page_view 20회, CSP 위반 0.
+- [x] 단위: 전역 API 캐시 금지(나중에 래핑한 `fetch`·`history`가 호출됨).
+
+#### 계획 조정 (2026-10-17)
+
+- 수명 분리: 로더가 `PageController { bootstrap, navigationStart, leavePage(plan), enterPage(next, plan), onActionEnd }`를
+  라우터에 넘긴다. `ComponentHost`·`PluginHost`·`StateSurface`·`SlotDom`은 `leavePage`/`mountPage`를 갖고, 플러그인 모듈·
+  액션 위임·라우터 리스너는 문서 수명으로 한 번만 등록한다. `__SURFACE__` 읽기는 `engine/client/bootstrap.ts`로 옮겨
+  로더와 라우터가 함께 쓴다. viewport·load prefetch는 활성화 스케줄러(`visible`·`idle`)를 재사용한다.
+- `<ClientRouter>`: `prefetch`·`transition`(`fade`·`none`)·`dataLayer`·`cacheSize`·`cacheTtl`. 페이지·레이아웃 마크업에
+  한 번만 둔다. bootstrap `router`가 있을 때만 로더가 라우터 청크를 import한다. `navigate(url, { replace })`를
+  `state-surface/client`에 공개했다(라우터가 없으면 `location`).
+- head 소유 표시: 태그 매니저가 head 파싱 중 삽입한 노드는 `<!--/ss:head-->` 앞, 즉 마커 안에 들어간다. 엔진이 렌더한
+  head 요소에 `data-ss`를 붙이고(`__SURFACE__`는 id로 구분) 병합은 그 노드만 다룬다. 의미 비교는 `data-ss`를 허용 차이로
+  뺐다. `modulepreload`에도 nonce를 붙인다(`'strict-dynamic'` CSP에서 라우터가 미리 청크를 받으므로).
+- `<html>`·`<body>` 속성 동기화: 레이아웃 속성(언어, 채팅 페이지 `class`)이 페이지마다 달라 이전 페이지 값 제거 → 다음
+  페이지 값 적용, 다른 코드가 붙인 속성·class 토큰은 유지로 정했다.
+- prefetch 헤더는 `Purpose: prefetch`다. `Sec-` 접두사는 `fetch()`가 설정할 수 없는 금지 헤더다.
+- `surface:before-preparation` 취소는 "라우터가 아무것도 하지 않음"이다(링크 기본 동작은 이미 막혔으므로 리스너가 이어받는다).
+  문서 로드의 첫 `surface:page-load`는 `trigger: 'load'`, `from` 없음이다. 이동 중 `<html data-surface-navigating>`.
+- persist: 슬롯 안 persist는 SSR 오류(슬롯 내용은 transition이 바꾸므로 페이지·레이아웃 마크업만). 다음 페이지 placeholder는
+  파싱한 문서 안에서 주석 앵커로 바꾼 뒤 본문을 옮긴다. 연결되면 `<iframe>`·`<audio>`·`<img>` placeholder가 로드를 시작했다.
+- Chromium(141)은 DOMParser 문서가 `<audio>`/`<video>`를 가지면 분리 후에도 문서를 해제하지 않았다(30회 파싱 → 문서 30개,
+  `src` 제거·`load()`로도 해제 안 됨, 메인 문서로 adopt하면 해제). 라우터는 사용·버림·캐시 제거 시 media를 메인 문서로
+  옮긴다. idiomorph의 morph 파싱도 같은 영향을 받을 수 있어 단계 9 hardening 항목으로 남긴다.
+- 라우터 없는 페이지의 Speculation Rules 대체(`<link rel="prefetch">`)는 엔진을 싣는 페이지에서만 동작한다(순수 static
+  페이지는 엔진 JS 0바이트를 유지하므로 Speculation Rules만).
+- 어댑터는 `/assets/`만 정적 서빙하므로 fixture 정적 파일은 `public/assets/`에 둔다. modes fixture 서버 엔트리는
+  CSP 미들웨어(`script-src 'nonce-…' 'strict-dynamic'`)를 둔 `server/main.ts`로 바꿨다.
+- 라우터 gzip 4,626 B로 DESIGN 예산 4KB를 넘는다(공통 헬퍼 재사용·병합으로 4.9KB에서 줄임). 로더 2KB처럼 단계 8 패키징에서
+  다시 측정한다. BFCache 복귀는 headless Chromium이 BFCache를 끄므로(`BackForwardCacheDisabledForDelegate`) 실측하지 못했다.
+  `pageshow`·`unload` 리스너를 쓰지 않아 BFCache를 막지 않으며, 문서 로드로 돌아온 경우 다음 이동이 라우터로 이어지는 것은 E2E로 확인했다.
 
 **검증 ID**: V-19, V-20, V-21, V-22, V-30.
 
@@ -826,14 +856,15 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 ### 실행 기록
 
-| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                                                                                                      | 비고                                                                       |
-| ---- | ---------- | ---------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정                                                                                    | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md) |
-| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                                                                              | IC-07 결정; portable core/type guard 통과                                  |
-| 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                           |
-| 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                    |
-| 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B   |
-| 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B      |
+| 단계 | 날짜       | 커밋                                     | `pnpm test`(파일/개수) | 측정·판정                                                                                                                                                      | 비고                                                                        |
+| ---- | ---------- | ---------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 0    | 2026-10-15 | 측정 `94e4046`, 접두사 수정 `3b556e5`    | 34 / 458 통과          | 루트 E2E 9 + spike 4, `/demo` E2E 9 통과; 초기 JS gzip 28,147 B, 5회×2 측정                                                                                    | [측정 결과](../../perf/baseline-summary.md), [spike](../../perf/spikes.md)  |
+| 1    | 2026-10-15 | 단계 종료 커밋(Git 기록), 기준 `611b37e` | 35 / 459 통과          | 5 runtime × 8 적합성, SSR 9 + stream 2 정확 비교, 루트 E2E 9 + spike 4 및 /demo 9                                                                              | IC-07 결정; portable core/type guard 통과                                   |
+| 2    | 2026-10-16 | `7f59296`, 기준 `c82b92c`                | 35 / 480 통과          | 단계 1 의미 비교 SSR 20(en·ko) + stream 3, 5 runtime × 8 적합성, 루트 E2E 9 + spike 5 및 /demo 9                                                               | IC-01~04 결정; 전체 tsc 40 → 5(기존 테스트 타입)                            |
+| 3    | 2026-10-16 | `5c8f024`, 기준 `5a659cd`                | 37 / 498 통과          | modes E2E 4(엔진 JS 0·Lithent 배제·visible 지연·플러그인) + sentinel·경로 체인, 의미 비교 20 + stream 3, 5 runtime × 9 적합성, 루트 E2E 9 + spike 5 및 /demo 9 | 홈 초기 JS gzip 16,807 B(단계 0 28,147 B), 로더 4,818 B                     |
+| 4    | 2026-10-16 | `4e184bf`, 기준 `07bb893`                | 36 / 567 통과          | 5 runtime × 11 적합성(지연 슬롯·pageId·409 추가), 의미 비교 20 + stream 3(슬롯 단위 op 형태), 루트 E2E 9 + spike 5 및 /demo 9, modes E2E 4, 전체 tsc 0         | 홈 초기 JS gzip 10,448 B(단계 0 28,147 B), 런타임 6,018 B, morph 3,525 B    |
+| 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B       |
+| 6    | 2026-10-17 | 이 단계 커밋, 기준 `6aff8a6`             | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B |
 
 ### 단계 0 실행 상세
 
@@ -1021,14 +1052,54 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   (DC-04 ⑥)는 미달이며 단계 8 패키징에서 다시 측정한다.
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과와 Bun 1.3.0 고정 버전, 수동·실기기 검증은 관측하지 않았다.
 
+### 단계 6 실행 상세 (2026-10-17)
+
+- 수명 분리: 로더 `start.ts`가 페이지 컨트롤러를 만들고, `ComponentHost`(persist 인스턴스 이월·키 변경·props 갱신 또는
+  `persist-props` 유지), `PluginHost`(문서 수명 모듈 + 페이지 수명 entry·`onPage` signal·attach, persist 슬롯은 `update`),
+  `StateSurface`(대상이 모두 persist인 요청만 유지, 메타·props·revision·anchor 재설정, `startPage`로 morph·지연 슬롯·boot),
+  `SlotDom`(교체된 슬롯 UI 패치 제거)을 페이지 단위로 내리고 올린다.
+- 빌드·SSR: `transition:persist`·`transition:persist-props` 지시자 진단(이름 규칙, 모듈 내 중복, 이름 없는 아일랜드, server·
+  static 슬롯, 아일랜드 아닌 컴포넌트, persist 없는 persist-props), SSR `data-surface-persist`·bootstrap `persist`·페이지 중복
+  검사, `<ClientRouter>` 마커·옵션 검사·bootstrap `router`, 라우터 없는 페이지의 `data-prefetch` Speculation Rules, head
+  `data-ss`, modulepreload nonce.
+- 라우터 청크(`engine/client/router.ts`): 링크·GET 폼 가로채기와 제외 규칙, `surface:*` 다섯 이벤트, fetch·fallback, CSS 선로드,
+  head 병합(URL 키·소유 노드만)·body 마커 교체·`moveBefore` persist(포커스·선택 복원), script 정책·nonce, history·scroll·hash·
+  focus·live region, 루트 View Transition, prefetch(hover 65ms·tap·viewport·load, LRU·TTL·1회·액션 후 비움, Save-Data·2G),
+  `dataLayer` page_view, 전역 `history`·`fetch`·`location` 호출 시점 조회, `stop()`.
+- 실브라우저에서 찾은 결함 3건: ① 태그 매니저가 head 파싱 중 넣은 노드가 마커 안에 있어 첫 이동에서 지워짐(`data-ss` 소유
+  표시로 해결), ② persist placeholder가 잠깐 연결되어 iframe·media가 로드를 시작하고 `region()`이 일반 주석을 건너뛰어 이전
+  페이지 주석이 남음(주석 앵커·주석 포함으로 해결, 단위 테스트가 회귀를 잡는지 수정 전 코드로 확인), ③ Chromium이 media를 가진
+  DOMParser 문서를 해제하지 않아 이동마다 문서·노드가 쌓임(200회 이동에서 문서 3 → 8, 노드 245 → 1,148; media adopt 후 3·245
+  고정). 테스트 쪽 오류 2건(Playwright `click()`이 제출 버튼으로 스크롤해 저장 위치가 0, CDP `queryObjects` 결과가 노드를 붙잡아
+  누수처럼 보임)은 원인을 확인하고 측정 방법을 고쳤다.
+- 데모: `layouts/Layout.tsx`에 `<ClientRouter />`. production·dev 서버에서 홈 → examples → actions(액션·`useAction`) → 뒤로·앞으로 →
+  가이드(boot·Prism) → 채팅(body class 동기화)을 문서 로드 없이 이동했다(명시적 `goto` 2회만 문서 요청, 오류 0).
+- modes fixture: 라우터 레이아웃(GTM식 인라인·외부 script·iframe 주입, CSP 위반 카운터, `dataLayer`), persist iframe·audio·입력·
+  Counter 아일랜드, server 슬롯·`data-action`·`<Boot>` 페이지, 짝 없는 페이지, GET 검색 폼, 라우터 없는 페이지, CSP 서버 엔트리.
+- 검증: Vitest 40개 파일/643개(새 `router.test.ts` 20개: 파이프라인 순서·head/body 병합·persist 동일성·제외 규칙·GET/POST 폼·취소·
+  fallback·오류 페이지·moveBefore 선택 복원·뒤로 scroll·전역 API·dataLayer·persistPlan·placeholder 미연결·media 해제·prefetch 전략/
+  캐시/Save-Data/viewport·load, 그 밖 persist 진단 8, SSR persist·라우터, 수명 분리 단위), format:check, build, typecheck:server,
+  전체 tsc 0. `pnpm test:parity` 20개 문서 + transition 3개, 루트 E2E 11 + spike 5, `/demo` 11. `pnpm test:modes` 10:
+  ① 라우터 이동·GET 폼·뒤로·앞으로 결과가 새 문서 로드와 같음(body 마커 영역·소유 head·title·lang·bootstrap 비교, `<main>` tabindex만
+  정규화), boot·액션 실행, hover prefetch 1회 후 캐시 사용 ② 뒤로 scroll 복원, 포커스 `<main>`, title announce, 라우터 없는 페이지
+  문서 로드, 문서 로드로 돌아온 항목에서 라우터 재개 ③ persist iframe 재로드 없음·같은 노드, audio 재생 유지(`moveBefore`),
+  입력 포커스·선택 [1,3] 유지, Counter 로컬 상태 유지, 짝 없는 페이지에서 해제 후 새 인스턴스 ④ 6회 예열 후 99회씩 두 번 이동:
+  JSEventListeners 28·Documents 3·Nodes 245·관찰자·플러그인 attach·link 수 불변, 두 번째 99회 heap 증가 < 250KB(측정 76~95KB,
+  fixture `dataLayer` 항목만 증가) ⑤ GTM식 노드 20회 이동 후 같은 노드 유지, 인라인·외부 script 1회 실행, page_view 21회(로드 1 +
+  이동 20), CSP 위반 0. Node·Express·Bun 1.4.2·Deno 2.5.4·workerd 적합성 각 12개와 5개 어댑터 앱 빌드 통과, portable core 94,725 B.
+- 크기(gzip level 9, 실제 로드된 JS 합): 홈 18,484 B(로더 6,414 + 런타임 7,288 + 라우터 4,626 + actionError 156)·가이드 28,031 B·
+  검색 21,998 B·채팅 25,296 B·스트리밍 18,484 B·actions 25,703 B. 단계 5 대비 홈 +5,965 B는 라우터 청크와 페이지 수명 분리·
+  speculation 대체(로더 +909 B)·`startPage`/`leavePage`(런타임 +430 B)다. 순수 static 페이지 엔진 JS 0바이트는 유지했다(modes `/`).
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions 결과, Chromium 외 브라우저(`moveBefore` 미지원 Safari의 `insertBefore`
+  fallback 포함), 실제 GTM 계정, BFCache 복귀, 수동·실기기 검증은 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4·5. IC-01~IC-04·IC-06~IC-09 결정.
-- **다음**: 단계 6(라우터·persist·prefetch)과 단계 7(콘텐츠·이미지·prerender)은 병렬 진행 가능. IC-05·IC-10은 단계 8·10에서
-  결정한다.
-- **블로커**: 없음. persist 선택 범위 보존은 단계 6에서 반드시 보완한다. 데모 가이드 본문의 구 API 설명(`__UI__`·`__STATE__`·
-  `defineTransition('name', fn)` 포함)과 prerender 액션 폼 빌드 경고는 단계 7에서 처리한다. Lithent 빈 텍스트 hydration은
-  업스트림 보강 후보다.
+- **완료**: 단계 0·1·2·3·4·5·6. IC-01~IC-04·IC-06~IC-09 결정.
+- **다음**: 단계 7(콘텐츠·이미지·prerender). 단계 6·7이 끝나면 단계 8. IC-05·IC-10은 단계 8·10에서 결정한다.
+- **블로커**: 없음. 라우터 gzip 4KB 예산 초과(4,626 B)와 로더 2KB 목표는 단계 8 패키징에서 다시 측정한다. idiomorph 파싱의
+  media 문서 보유 여부는 단계 9에서 확인한다. 데모 가이드 본문의 구 API 설명(`__UI__`·`__STATE__`·`defineTransition('name', fn)`
+  포함)과 prerender 액션 폼 빌드 경고는 단계 7에서 처리한다. Lithent 빈 텍스트 hydration은 업스트림 보강 후보다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
-  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`.
+  단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`.

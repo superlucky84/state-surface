@@ -29,7 +29,7 @@ await build({
   root: app,
   configFile: path.join(app, 'vite.config.ts'),
   build: {
-    ssr: 'virtual:state-surface/entry',
+    ssr: path.join(app, 'server/main.ts'),
     outDir: 'dist',
     emptyOutDir: false,
     rollupOptions: { output: { entryFileNames: 'server.mjs' } },

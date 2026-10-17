@@ -4,6 +4,7 @@ import type { WDom } from 'lithent';
 import type { SurfaceContext } from './core/context.js';
 import type { PageModule } from '../shared/routeModule.js';
 import {
+  SLOT_NAME,
   SurfaceError,
   assertJsonValue,
   readMarker,
@@ -11,6 +12,8 @@ import {
   type BootMarker,
   type Capability,
   type IslandMarker,
+  type RouterMarker,
+  type RouterOptions,
   type SlotMarker,
 } from '../shared/surfaceTree.js';
 import type { ActionMeta, IslandMeta, PluginMeta, SlotMeta } from '../shared/protocol.js';
@@ -33,6 +36,8 @@ export interface PageUsage {
   plugins: PagePlugin[];
   /** A `swap="morph"` slot was rendered: preload the morph chunk. */
   morph: boolean;
+  /** `<ClientRouter>` was rendered: load the router chunk (DC-18). */
+  router: boolean;
   /** False for static pages: no engine script and no bootstrap JSON. */
   engine: boolean;
 }
@@ -100,6 +105,12 @@ interface RenderState {
   marks?: Record<'headStart' | 'headEnd' | 'bodyStart' | 'bodyEnd', WDom>;
   morph: boolean;
   defer: boolean;
+  /** `<ClientRouter>` options (page SSR only). */
+  router?: RouterOptions;
+  /** Persist IDs rendered on this page (DC-19: unique per page). */
+  persist: Set<string>;
+  /** `data-prefetch` strategies of links (Speculation Rules on pages without the router). */
+  prefetch: Set<string>;
 }
 
 /** Nodes the engine creates itself (island children wrapper, transport template). */
@@ -140,6 +151,8 @@ function newState(ctx: SurfaceContext): RenderState {
     structure: { html: 0, head: 0, body: 0 },
     morph: false,
     defer: false,
+    persist: new Set(),
+    prefetch: new Set(),
   };
 }
 
@@ -231,12 +244,13 @@ export async function renderPage(
     actions: state.actions || boot.length > 0 || state.defer,
     plugins,
     morph: state.morph,
+    router: !!state.router,
     engine: false,
   };
-  usage.engine = usage.components.length > 0 || usage.actions || plugins.length > 0;
+  usage.engine = usage.components.length > 0 || usage.actions || plugins.length > 0 || usage.router;
   const tags = options.tags?.(usage) ?? { styles: [], preload: [] };
   const script = (src: string) =>
-    `<script type="module" src="${escapeAttr(src)}" nonce="${ctx.nonce}"></script>`;
+    `<script type="module" src="${escapeAttr(src)}" nonce="${ctx.nonce}" data-ss></script>`;
   // An app entry on an engine-less page still learns the build, page and base path.
   const bootstrap =
     usage.engine || tags.appEntry
@@ -251,12 +265,24 @@ export async function renderPage(
           ...(usage.engine && options.actions && Object.keys(options.actions).length
             ? { actions: options.actions }
             : {}),
+          ...(state.router ? { router: state.router } : {}),
         })
+      : '';
+  // DC-20 ③: without the router, links opt into browser prefetch through Speculation Rules.
+  const speculation =
+    !state.router && state.prefetch.size
+      ? `<script type="speculationrules" nonce="${ctx.nonce}" data-ss>${speculationRules(state.prefetch)}</script>`
       : '';
   // Order (DESIGN 4.4): CSS → modulepreload → __SURFACE__ → app entry → engine entry.
   const managed =
-    tags.styles.map(href => `<link rel="stylesheet" href="${escapeAttr(href)}">`).join('') +
-    tags.preload.map(href => `<link rel="modulepreload" href="${escapeAttr(href)}">`).join('') +
+    tags.styles.map(href => `<link rel="stylesheet" href="${escapeAttr(href)}" data-ss>`).join('') +
+    // Preloads fetch scripts: a nonce-based CSP checks them like the scripts (DESIGN 8.2).
+    tags.preload
+      .map(
+        href => `<link rel="modulepreload" href="${escapeAttr(href)}" nonce="${ctx.nonce}" data-ss>`
+      )
+      .join('') +
+    speculation +
     bootstrap +
     (tags.appEntry ? script(tags.appEntry) : '') +
     (usage.engine && tags.engineEntry ? script(tags.engineEntry) : '');
@@ -340,6 +366,7 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
   if (marker) {
     if (marker.kind === 'slot') return projectSlot(marker, scope, state);
     if (marker.kind === 'island') return projectIsland(marker, scope, state);
+    if (marker.kind === 'router') return projectRouter(marker, scope, state);
     return projectBoot(marker, scope, state);
   }
   if ((node as { [RICH]?: true })[RICH] && scope.capability === 'strict')
@@ -355,8 +382,13 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
     for (const key of ['action', 'formaction'])
       if (typeof node.props[key] === 'string' && node.props[key].includes('/_surface/action/'))
         state.actions = true;
+    const prefetch = node.props['data-prefetch'];
+    if (tag === 'a' && typeof prefetch === 'string' && PREFETCH_STRATEGIES.has(prefetch))
+      state.prefetch.add(prefetch);
     if (scope.capability && !(node as { [ENGINE_NODE]?: true })[ENGINE_NODE])
       current = applyCapability(node, scope);
+    if ('transition:persist' in node.props || 'transition:persist-props' in node.props)
+      current = persistElement(current, scope, state);
   }
   const children = current.children ?? [];
   for (const child of children)
@@ -375,10 +407,26 @@ function project(node: WDom, scope: Scope, state: RenderState): WDom {
     return result;
   });
   if (tag === 'head' && state.marks)
-    return { ...current, children: [state.marks.headStart, ...next, state.marks.headEnd] };
+    return {
+      ...current,
+      children: [state.marks.headStart, ...(next.map(owned) as WDom[]), state.marks.headEnd],
+    };
   if (tag === 'body' && state.marks)
     return { ...current, children: [state.marks.bodyStart, ...next, state.marks.bodyEnd] };
   return changed ? { ...current, children: next } : current;
+}
+
+/**
+ * DESIGN 8.2: head elements the server rendered carry `data-ss`. Scripts that run while the
+ * head is parsed (tag managers) insert their nodes before the not yet parsed end marker, so
+ * the router replaces only marked nodes and keeps everything else.
+ */
+function owned(node: unknown): unknown {
+  if (!isNode(node)) return node;
+  if (node.type === 'e' && node.props)
+    return { ...node, props: { ...node.props, 'data-ss': '' } as never };
+  if (node.children?.length) return { ...node, children: node.children.map(owned) as never };
+  return node;
 }
 
 /**
@@ -447,6 +495,11 @@ function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom
   const { child } = marker;
   const meta: SlotMeta = { id: marker.name, mode: marker.mode };
   if (marker.viewTransition) meta.viewTransition = true;
+  if (marker.persist) {
+    claimPersist(state, marker.name, where);
+    meta.persist = marker.name;
+    if (marker.persistProps) meta.persistProps = true;
+  }
   if (marker.resetKey !== undefined) {
     // DC-05: only a client instance has local state to reset.
     if (marker.mode !== 'client')
@@ -497,7 +550,11 @@ function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom
           );
     }
   }
-  const attributes: Record<string, unknown> = { name: marker.name, ...marker.host };
+  const attributes: Record<string, unknown> = {
+    name: marker.name,
+    ...marker.host,
+    ...(marker.persist ? { 'data-surface-persist': marker.name } : {}),
+  };
   return content ? h('h-state', attributes, content) : h('h-state', attributes);
 }
 
@@ -515,6 +572,13 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
   const id = `${counter}$${index}`;
   const only = marker.activation.only;
   useComponent(state, marker.componentId, marker.activation);
+  if (marker.persist) {
+    if (scope.kind !== 'page')
+      throw new SurfaceError(
+        `${where}: a persisted island must be in page or layout markup, not inside a <Slot>.`
+      );
+    claimPersist(state, marker.persist, where);
+  }
   state.entries.push({
     id,
     mode: 'client',
@@ -522,6 +586,8 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
     props: (marker.props ?? {}) as Record<string, unknown>,
     ...activationMeta(marker.activation),
     ...(marker.resetKey !== undefined ? { resetKey: resetKeyOf(marker.resetKey, where) } : {}),
+    ...(marker.persist ? { persist: marker.persist } : {}),
+    ...(marker.persistProps ? { persistProps: true as const } : {}),
   });
 
   // IC-03: island children are server-rendered once and passed as a static fragment.
@@ -549,10 +615,74 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
       : [];
   return h(
     'h-island',
-    { 'data-island': id, style: 'display:contents' },
+    {
+      'data-island': id,
+      ...(marker.persist ? { 'data-surface-persist': marker.persist } : {}),
+      style: 'display:contents',
+    },
     ...transport,
     ...(content ? [content] : [])
   );
+}
+
+function claimPersist(state: RenderState, id: string, where: string) {
+  if (state.persist.has(id))
+    throw new SurfaceError(`${where}: persist ID "${id}" is used more than once on this page.`);
+  state.persist.add(id);
+}
+
+/** `<video transition:persist="intro">` (DC-19): an element kept across client navigation. */
+function persistElement(node: WDom, scope: Scope, state: RenderState): WDom {
+  const {
+    'transition:persist': id,
+    'transition:persist-props': props,
+    ...rest
+  } = node.props as Record<string, unknown>;
+  const where = `<${node.tag} transition:persist>`;
+  if (props !== undefined)
+    throw new SurfaceError(
+      `${where}: transition:persist-props applies to islands and client Slots.`
+    );
+  if (typeof id !== 'string' || !SLOT_NAME.test(id))
+    throw new SurfaceError(
+      `${where}: transition:persist on an element needs a name matching [a-z0-9-]+(:[a-z0-9-]+)*.`
+    );
+  if (scope.kind !== 'page')
+    throw new SurfaceError(
+      `${where}: persisted elements must be in page or layout markup, not inside a <Slot>.`
+    );
+  claimPersist(state, id, where);
+  return { ...node, props: { ...rest, 'data-surface-persist': id } as never };
+}
+
+function projectRouter(marker: RouterMarker, scope: Scope, state: RenderState): WDom {
+  if (scope.kind !== 'page' || !state.boot)
+    throw new SurfaceError('<ClientRouter> belongs in the layout markup (its <head>).');
+  if (state.router) throw new SurfaceError('<ClientRouter> is rendered more than once.');
+  state.router = marker.options;
+  return Fragment({});
+}
+
+const PREFETCH_STRATEGIES = new Set(['hover', 'tap', 'viewport', 'load']);
+/** hover → moderate, tap → conservative, viewport → eager, load → immediate. */
+const EAGERNESS: Record<string, string> = {
+  hover: 'moderate',
+  tap: 'conservative',
+  viewport: 'eager',
+  load: 'immediate',
+};
+function speculationRules(strategies: Set<string>) {
+  const prefetch = [...strategies].map(strategy => ({
+    source: 'document',
+    where: {
+      and: [
+        { selector_matches: `a[data-prefetch="${strategy}"]` },
+        { not: { selector_matches: '[data-surface-reload]' } },
+      ],
+    },
+    eagerness: EAGERNESS[strategy],
+  }));
+  return JSON.stringify({ prefetch }).replace(/</g, '\\u003c');
 }
 
 function projectBoot(marker: BootMarker, scope: Scope, state: RenderState): WDom {
