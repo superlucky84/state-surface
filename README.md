@@ -363,6 +363,46 @@ export default async function Page(ctx: SurfaceContext) {
 See [docs/server-adapters.md](docs/server-adapters.md#prerendered-pages) for serving and static
 hosting.
 
+## Styles, Server Options and Tooling
+
+```tsx
+// routes/_components/Card.tsx — utilities in markup, component-scoped CSS in a CSS Module
+import s from './Card.module.css'; // @reference "../../client/styles.css"; .card { @apply shadow-sm; }
+
+export default ({ title }: { title: string }) => <section class={`${s.card} p-4`}>{title}</section>;
+```
+
+```ts
+// surface.server.ts — handler options shared by `pnpm dev` and the production server entry
+import type { HandlerConfig } from 'state-surface/server';
+
+export default {
+  middleware: [
+    async (ctx, next) => {
+      const response = await next();
+      response.headers.set('x-frame-options', 'DENY');
+      return response;
+    },
+  ],
+  onError(error) {
+    /* send to your error tracker */
+  },
+} satisfies HandlerConfig;
+```
+
+- **CSS Modules** — static and server components' CSS goes into the page stylesheet, islands'
+  CSS is linked before they activate, client navigation loads the next page's styles first.
+- **Diagnostics** — build rules report `[state-surface] file:line:column`, a code frame and a hint
+  (dev: Vite error overlay, build: failure); `.mdx` errors point at the `.mdx` line.
+- **`state-surface check`** — the build's analysis (pages, slots, islands, transitions, content,
+  server-only imports reachable from the browser) plus `tsc --noEmit`, without bundling. Page
+  modules are type-checked against the page contract.
+- **Runtime trace** — `onTrace(event => …)` from `state-surface/client` sees frames, errors and
+  warnings in production; development warns about protocol violations, unknown slots and plugins
+  that change island DOM; `?debug=1` opens an overlay.
+- **Source maps** — `surface({ sourcemap: 'hidden' })` writes maps of the original TSX for an
+  error tracker ([upload guide](docs/server-adapters.md#source-maps)).
+
 ## Features
 
 - **Full SSR** — Every page renders complete HTML on the server
@@ -380,6 +420,8 @@ hosting.
   (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
 - **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
 - **Static pages** — Prerendered pages per language, content collections, optimized images
+- **Scoped CSS** — CSS Modules (with Tailwind `@apply`) per page and per island
+- **Diagnostics** — source-located build errors with hints, `state-surface check`, runtime trace
 - **Sub-path mounting** — `BASE_PATH=/demo pnpm dev`
 
 ## Project Structure
@@ -397,6 +439,7 @@ layouts/                 # Layout components (Layout.tsx)
 content/                 # Content collections (config.ts, guides/<lang>/*.md, pages/<lang>/*.yaml)
 shared/                  # Data helpers, i18n utilities
 client/                  # styles.css, plugins/, optional entry.ts (runs on every page)
+surface.server.ts        # Handler options (middleware, onError, limits) for dev and production
 
 engine/                  # Framework core (do not edit)
   server/                #   Web-standard core, page renderer, transition handler
@@ -407,11 +450,15 @@ engine/                  # Framework core (do not edit)
 
 ## Install & Update
 
-**New project** — use the CLI scaffolding:
+**New project** — use the CLI scaffolding (minimal starter by default, `--template demo` for this
+showcase site; it asks for the server runtime: Node, Express, Bun, Deno or Cloudflare Workers):
 
 ```bash
 npx create-state-surface my-app
+npx create-state-surface my-site --template demo --adapter node
 ```
+
+The package ships compiled ESM with type declarations and source maps (`lib/`).
 
 **Update existing project** — upgrade the runtime package:
 
@@ -432,6 +479,9 @@ pnpm start                        # Run production server
 pnpm test                         # Run all tests (Vitest)
 pnpm test path/to/file.test.ts    # Run a single test file
 pnpm format                       # Format with Prettier
+pnpm check                        # state-surface check: build analysis + tsc, no bundle
+pnpm test:scaffold                # Pack, create, install, build, test and start the templates
+pnpm test:conformance:app         # Conformance scenarios on the dev server and the production build
 
 BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ```
@@ -465,8 +515,8 @@ import {
 } from 'state-surface/server';
 import { serve } from 'state-surface/adapters/node';
 
-// Client plugins and component actions (the engine entry itself is generated)
-import { definePlugin, useAction, navigate } from 'state-surface/client';
+// Client plugins, component actions and the runtime trace (the engine entry itself is generated)
+import { definePlugin, useAction, navigate, onTrace } from 'state-surface/client';
 ```
 
 ```typescript
@@ -478,6 +528,7 @@ import type {
   TransitionHandler,
   Flash,
   Middleware,
+  HandlerConfig,
 } from 'state-surface/server';
 import type {
   PluginDefinition,

@@ -25,4 +25,6 @@ pnpm build && pnpm start
 
 The server runs on the `__ADAPTER__` adapter (`server.ts`, `vite.config.ts`). Pages are
 `routes/**/*.tsx` (files and folders starting with `_` are not pages); transitions are
-`transitions/**/*.ts`, named by their path.
+`transitions/**/*.ts`, named by their path. Middleware and other request handler options go in an optional
+`surface.server.ts` (`export default { middleware: [...] } satisfies HandlerConfig`); `pnpm dev` and the
+production server both use it.

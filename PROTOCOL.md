@@ -212,6 +212,15 @@ Receive limits (browser and server, configurable with `createHandler({ limits })
 line 1 MB, one response 32 MB, 10,000 ops per request, one `html` op 512 KB, 30 s idle between
 frames and 5 minutes per request. Development warns at 80%.
 
+Runtime trace: `onTrace(listener)` from `state-surface/client` (production too, e.g. in
+`client/entry.ts`) receives `received`, `applied`, `merged`, `dropped`, `skipped`, `done`, `error`
+and `warning` events. Warnings: a frame protocol violation (the request fails) and an op for a slot
+that is not on the page (ignored). Development also logs them and warns about undeclared targets,
+scripts in slot HTML and plugin hooks that change DOM inside client slots or islands; those checks
+are compiled out of production bundles. `?debug=1` shows the trace and warnings in an overlay.
+Errors the loader reports (chunk, plugin and hydration failures) are traced as `error` events and
+passed to `reportError`.
+
 ## Server HTML Application
 
 - `swap="replace"` (default): plugin cleanup → dispose islands in the slot → `innerHTML` →
@@ -231,6 +240,15 @@ frames and 5 minutes per request. Development warns at 80%.
 | unsafe           | Raw HTML allowed; `<script>` is made inert. `sandbox="iframe"` renders the content into a sandboxed iframe `srcdoc`.                                                                    |
 
 Capability is fixed by the page manifest; a frame cannot raise it.
+
+## Stylesheets
+
+The head links the global stylesheets (`client/styles.css`), then the page's stylesheets
+(`<link rel="stylesheet" data-ss>`, engine-less pages included): every stylesheet imported in the
+page's module graph, CSS Modules of static and server components and of islands (their chunk CSS
+too, so islands are styled before they activate). Class names come from the same module in SSR,
+server HTML swaps and client renders. Client navigation loads the next page's new stylesheets
+before the swap and drops the stylesheets the next page does not link.
 
 ## Bootstrap
 

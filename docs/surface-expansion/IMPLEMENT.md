@@ -70,7 +70,7 @@ TBD다.
 | IC-02 | Lithent 속성 이스케이프 보강 릴리스 버전(3장)                               | 단계 2 Entry | Lithent 업스트림 패치 릴리스 후 `^` 범위 갱신                                                                                          | 결정 (2026-10-16): ^1.25.1, 속성 이스케이프 회귀 검증                                                                                                                                                                                                                                                                                                              |
 | IC-03 | 직접 지시자 아일랜드 children의 정적 조각 전달 형식(DC-08)                  | 단계 2       | `<template>` 요소 + 아일랜드가 지정 위치에 삽입                                                                                        | 결정 (2026-10-16): 서버가 children을 한 번 렌더해 `<h-children style="display:contents" innerHTML>`로 컴포넌트에 넘김. 컴포넌트가 출력하지 않았거나 `client:only`면 `<template data-surface-children>`로 운반                                                                                                                                                      |
 | IC-04 | 아일랜드 props의 Date·BigInt 등 추가 codec(DESIGN 2.3)                      | 단계 2       | 1차는 JSON만, 비 JSON 값은 진단                                                                                                        | 결정 (2026-10-16): 기본안. Date·Map·클래스 인스턴스·함수·BigInt·NaN/Infinity·배열 안 undefined·순환은 경로와 함께 SSR 오류, 객체의 undefined 속성은 양쪽에서 생략되므로 허용                                                                                                                                                                                       |
-| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | TBD                                                                                                                                                                                                                                                                                                                                                                |
+| IC-05 | 컴파일 배포 도구(tsc·tsup 등, DC-28 ③)                                      | 단계 8       | `tsc` emit + `exports` 맵                                                                                                              | 결정 (2026-10-17): `tsc` emit(`tsconfig.package.json`)으로 `lib/`(ESM·`.d.ts`·declaration map·소스 내장 source map). `exports` 맨 앞의 `state-surface-source` 조건이 저장소 안에서 원본 `engine/*.ts`를 가리키고 플러그인이 원본 실행 시 그 조건을 켠다. `bin` `state-surface` → `lib/cli.js`, `files`는 `lib`·README·LICENSE, `prepack`이 빌드·검사 |
 | IC-06 | idiomorph 버전 고정과 아일랜드 경계 제외 방법(DC-03)                        | 단계 4       | 고정 버전 + `beforeNodeMorphed`에서 아일랜드 루트 건너뜀                                                                               | 결정 (2026-10-16): idiomorph `0.7.4` 정확 고정. `beforeNodeMorphed(old, new)`에서 old가 `h-island`이고 new 아일랜드의 `islands` 메타데이터(componentId·props)가 기존 인스턴스와 같으면 건너뛰어 로컬 상태 유지, 다르면 교체해 기존 아일랜드 dispose 후 `islands`로 재활성화(DC-08). `instanceof Element` 가드                                                      |
 | IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교                                                                                                                                                                                                                                                                                  |
 | IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                                                                                                                                                                                                                                                                                                    |
@@ -772,34 +772,86 @@ DESIGN 10.7~10.9.
 
 #### 작업
 
-- [ ] 타입 진단: `<Slot>` 속성·지시자 값·`SurfaceContext`·`definePlugin`·페이지 시그니처·`defineServerComponent`·`<Boot>`
+- [x] 타입 진단: `<Slot>` 속성·지시자 값·`SurfaceContext`·`definePlugin`·페이지 시그니처·`defineServerComponent`·`<Boot>`
       타입 선언 완성.
-- [ ] Vite 플러그인 진단 완성(3.1 목록): `[state-surface]` 접두어, 원본 `파일:줄:열`, 코드 프레임, 해결 힌트. dev는 오류
+- [x] Vite 플러그인 진단 완성(3.1 목록): `[state-surface]` 접두어, 원본 `파일:줄:열`, 코드 프레임, 해결 힌트. dev는 오류
       오버레이, build는 실패.
-- [ ] `state-surface check` CLI: `tsc --noEmit` + 플러그인 분석(번들 생성 없음).
-- [ ] 런타임 진단(dev): 프레임 위반·알 수 없는 슬롯·플러그인 DOM 소유권 위반 경고, devOverlay(`?debug=1`) 갱신,
+- [x] `state-surface check` CLI: `tsc --noEmit` + 플러그인 분석(번들 생성 없음).
+- [x] 런타임 진단(dev): 프레임 위반·알 수 없는 슬롯·플러그인 DOM 소유권 위반 경고, devOverlay(`?debug=1`) 갱신,
       production trace 훅.
-- [ ] 소스맵: dev·build 원본 TSX, production `hidden` 소스맵 옵션과 업로드 가이드(8.3-6).
-- [ ] CSS Modules(DC-23): `*.module.css`, `@apply`·`@reference` 가이드와 scaffold 예시, 아일랜드 모듈 CSS는 청크 CSS로
+- [x] 소스맵: dev·build 원본 TSX, production `hidden` 소스맵 옵션과 업로드 가이드(8.3-6).
+- [x] CSS Modules(DC-23): `*.module.css`, `@apply`·`@reference` 가이드와 scaffold 예시, 아일랜드 모듈 CSS는 청크 CSS로
       활성화 전 로드, static·server는 페이지 CSS로 head 출력, 라우터 head 병합 연동, 서버·클라이언트 클래스 해시 일치.
-- [ ] 패키징(DC-28 ③, IC-05): 컴파일된 ESM JS + `.d.ts` + source map을 `exports`로 배포, `files` 갱신. 저장소 내부 개발은
+- [x] 패키징(DC-28 ③, IC-05): 컴파일된 ESM JS + `.d.ts` + source map을 `exports`로 배포, `files` 갱신. 저장소 내부 개발은
       tsconfig·Vite alias로 원본 참조 유지.
-- [ ] scaffold(DC-16): `create-state-surface` 최소 스타터(페이지 1개에 static·server 슬롯·client 아일랜드, transition 1개),
+- [x] scaffold(DC-16): `create-state-surface` 최소 스타터(페이지 1개에 static·server 슬롯·client 아일랜드, transition 1개),
       `--template demo`(쇼케이스), 어댑터 프롬프트(기본 Node). 템플릿 원본을 저장소에 두고 `scripts/build-scaffold.mjs`의
       복사·overrides 방식을 대체한다. CI에서 생성·설치·빌드·테스트.
-- [ ] `pnpm format`·`format:check` 대상에 `.tsx` 페이지·`content/`·새 디렉터리를 포함한다.
+- [x] `pnpm format`·`format:check` 대상에 `.tsx` 페이지·`content/`·새 디렉터리를 포함한다.
 
 #### Baseline 테스트
 
-- [ ] 진단 fixture 전 규칙(Slot 자식, children, 계산된 아일랜드, Slot-in-Slot, 이름 형식·중복, 서버 전용 유출, 라우트
+- [x] 진단 fixture 전 규칙(Slot 자식, children, 계산된 아일랜드, Slot-in-Slot, 이름 형식·중복, 서버 전용 유출, 라우트
       충돌, 지시자 조합, `defineServerComponent`·`<Boot>` 위치, persist 규칙)의 메시지 스냅샷.
-- [ ] dev와 production 빌드에서 같은 적합성 스위트 결과(DC-16 dev/prod 동일성).
-- [ ] CSS Modules: SSR·server 교체·client 렌더 클래스 일치, 이동 시 필요한 CSS만 로드.
-- [ ] 생성 scaffold(최소·demo × Node 어댑터)의 설치·빌드·테스트.
+- [x] dev와 production 빌드에서 같은 적합성 스위트 결과(DC-16 dev/prod 동일성).
+- [x] CSS Modules: SSR·server 교체·client 렌더 클래스 일치, 이동 시 필요한 CSS만 로드.
+- [x] 생성 scaffold(최소·demo × Node 어댑터)의 설치·빌드·테스트.
 
 #### 제거 확인
 
 `scripts/build-scaffold.mjs`의 데모 복사 방식, 원본 `engine/**/*.ts` 배포 설정.
+→ 모두 제거했다. `scripts/build-scaffold.mjs`·생성물 `scaffold/`·`create-state-surface/overrides/`가 없어졌고, 패키지
+`files`는 컴파일 결과 `lib/`와 README·LICENSE다.
+
+#### 계획 조정 (2026-10-17)
+
+- 패키징(IC-05): `tsc` emit(`tsconfig.package.json`)으로 `lib/`(ESM·`.d.ts`·declaration map·소스 내장 source map)를 만든다.
+  `exports`의 맨 앞 조건 `state-surface-source`가 원본 `engine/*.ts`를 가리키고, 플러그인은 원본에서 실행될 때(`.ts`) client·
+  ssr resolve 조건에 그것을 넣는다. 그래서 저장소 개발은 계획의 Vite alias 없이 원본을 쓴다(tsconfig paths는 유지). `prepack`이
+  `lib/`를 빌드하고 export 대상과 bin shebang을 검사한다. 생성 앱 설치로 `idiomorph`(morph 청크)가 devDependency였던 것을
+  찾아 dependency로, `vite`는 peer로 옮겼다.
+- 패키지의 `.js` 엔진 파일은 Vite 내장 CommonJS 검사가 분석기의 `this.resolve`마다 실제로 로드해(importer 없는 모듈) client
+  빌드의 서버 전용 검사가 `lib/content.js`의 마커를 유출로 보고했다. 저장소의 `.ts`에서는 재현되지 않아 scaffold 설치 검사로
+  찾았고, buildEnd 검사는 entry에서 도달하는 모듈만 센다.
+- CSS Modules(DC-23): 분석기가 페이지 모듈 그래프의 stylesheet(`?inline`·`?url` 등 제외, 전처리기 확장자 포함)를 모으고, client
+  빌드가 페이지마다 CSS 전용 entry(`virtual:state-surface/page-styles?<pageId>`)를 낸다. Vite가 client entry export를 지워 부수효과
+  없는 CSS Module import가 함께 사라지므로 이 entry만 `preserveSignature: 'strict'`이고, `importedCss`를
+  `.vite/surface-styles.json`에 기록한 뒤 JS 청크는 버린다. SSR manifest의 page 정의 `styles`를 전역 스타일 다음에 링크하고
+  (엔진이 없는 페이지도), dev는 원본 경로(`/routes/…module.css`)를 링크한다. 아일랜드의 CSS Module도 페이지 CSS에 들어가
+  활성화 전에 적용되고, 라우터는 기존 head 병합(새 stylesheet를 교체 전에 로드)으로 처리한다. 타입은
+  `.state-surface/styles.d.ts`. 데모 가이드 본문 CSS를 `guideProse.module.css`(`@reference`·`@apply`)로 옮겼다.
+- 진단: 모든 플러그인 규칙에 hint가 필수이고 코드 프레임에 caret이 있다. 파일 단위 규칙(라우트 충돌·transition 이름 중복·
+  default export 없음)은 default export 줄, 서버 전용 유출은 첫 import 줄을 가리킨다. dev 오버레이는 Vite가
+  `[plugin:state-surface]` 제목으로 표시하므로 메시지 접두어는 오버레이에서 빠진다. MDX 소스맵은 텍스트·ESM만 매핑하고 JSX
+  요소 위치가 없어, 오류 난 컴파일 JSX 요소를 문서의 같은 순번 JSX 요소(코드 펜스 포함)로 대응하고 속성은 이름으로 찾는다.
+  `<Slot>`의 자식이 바로 `<Slot>`이면 통과하던 빈틈을 고쳤다.
+- `state-surface check`: 프로젝트 Vite 설정을 middleware 모드로 열고(번들 없음) 플러그인 `api.check(resolve)`를 SSR 환경
+  resolver로 실행한다. 생성 타입 쓰기, 콘텐츠(parity 오류), 페이지 분석, 모든 모듈의 call-site 변환, 브라우저 모듈 그래프의
+  서버 전용 import를 끝까지 돌며 오류를 모두 모은 뒤 프로젝트 TypeScript로 `tsc --noEmit`을 실행한다. 시작 중 오류도 모으도록
+  `STATE_SURFACE_CHECK` 동안 buildStart가 던지지 않는다. 페이지 시그니처 타입 검사는 tsc가 검사하는 생성 파일
+  `.state-surface/pages.ts`(각 페이지 모듈 `extends PageModule`)로 하며 tsconfig include를 `.state-surface/*.ts`로 바꿨다.
+- 런타임 진단: `onTrace`(production 포함)와 `warning`(dev 콘솔 + trace 이벤트). 프레임 프로토콜 위반과 페이지에 없는 슬롯의
+  op는 production에서도 trace로 나가고, 플러그인 DOM 소유권 검사(hook 동기 실행 동안 MutationObserver)·targets 미선언·슬롯
+  HTML의 script 경고는 플러그인이 define하는 `__SURFACE_DEV__`(production false)로 번들에서 빠진다. 기존
+  `import.meta.env?.DEV` 판정은 상수로 접히지 않아 dev 문자열이 production 번들에 남아 있었다. 로더의 `report`도 trace로 보내
+  trace 모듈이 로더 청크에 머문다(별도 청크 요청 방지). devOverlay는 `onTrace`를 구독하고 경고 패널을 보인다.
+- 소스맵: `surface({ sourcemap: true | 'hidden' })`가 client 빌드에 지정하고(사용자 `build.sourcemap` 우선) 서버 번들에는 항상
+  맵을 만든다. 어댑터는 `.map`을 공개/비공개로 구분할 정보가 없어 막지 않으므로, hidden 맵은 업로드 후 배포 전에 지우도록
+  가이드한다(docs/server-adapters.md).
+- scaffold(DC-16): 템플릿 원본은 `create-state-surface/templates/{base,minimal,demo,adapters/<name>}`다. demo는 저장소 앱 파일을
+  `template.json` 목록대로 생성 시 복사해(저장소 전용 테스트 제외) 생성물을 커밋하지 않는다. 어댑터별 server.ts·패키지 패치·
+  `vite.config.ts`의 adapter 치환, Cloudflare는 `wrangler.jsonc`와 webworker SSR target(플러그인이 adapter로 지정). 생성기
+  `lib/create.js`, CLI는 `--template`·`--adapter`(TTY에서 프롬프트, 기본 node)·`--source`·`--no-git`. `scripts/scaffold-test.mjs`
+  (`pnpm test:scaffold`, CI `scaffold` 잡)가 pack → 생성 → 설치 → build·test·check·format:check·기동(Node·Express)을, Bun·Deno·
+  Workers는 빌드까지 확인한다.
+- dev/prod 동일성: dev 서버가 사용자 미들웨어·handler 옵션을 받지 못하던 차이를 `surface.server.ts`(handler 옵션 기본 export,
+  `HandlerConfig`, `surface({ handler })`로 경로 변경)로 없앴다. `virtual:state-surface/handler`가 dev 핸들러와 production 엔트리
+  (템플릿 server.ts, 생성 adapter entry)에 같은 옵션을 넣는다. `conformance/app`(fixture를 surface 앱으로 옮김)에서 같은 14개
+  시나리오를 dev와 production에 실행한다(`pnpm test:conformance:app`). 허용 차이는 dev의 오류 상세 노출, prerender 페이지의 요청별
+  렌더(ETag·304·Cache-Control 없음), public 파일 캐시 헤더이고 buildId는 각 bootstrap에서 읽는다.
+- format 대상: engine `.tsx`, `content/**/*.{ts,yaml}`, `scripts`, `create-state-surface`. 가이드 Markdown은 Prettier가 `:::`
+  블록 닫힘 줄을 들여 써 디렉티브가 깨지므로 제외한다(demo 템플릿 `.prettierignore`도 같다).
+- 크기: 로더 gzip 6,573 B·라우터 4,707 B(`perf/measure.mjs`)는 DESIGN의 보고 지표(2KB 목표·4KB 예산)를 넘은 상태로 기록한다.
 
 **검증 ID**: V-05, V-11, V-16, V-18(scaffold 부분), V-25.
 
@@ -905,6 +957,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 5    | 2026-10-16 | `2e737e3`, 기준 `8c83aa8`                | 39 / 610 통과          | 5 runtime × 12 적합성(폼 본문·422·PRG·flash 추가), 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 5(V-04), 전체 tsc 0                   | 홈 초기 JS gzip 12,519 B, 로더 5,505 B, 런타임 6,858 B, core 90,821 B        |
 | 6    | 2026-10-17 | `9c806c2`, 기준 `6aff8a6`                | 40 / 643 통과          | 5 runtime × 12 적합성, 의미 비교 20 + stream 3, 루트 E2E 11 + spike 5 및 /demo 11, modes E2E 10(라우터 동일성·GET 폼·persist·200회 누수·GTM 20회), 전체 tsc 0  | 홈 초기 JS gzip 18,484 B(라우터 4,626 B 포함), 로더 6,414 B, 런타임 7,288 B  |
 | 7    | 2026-10-17 | `97ca338`, 기준 `c1258ea`                | 45 / 590 통과          | 5 runtime × 14 적합성(prerender 서빙·이미지 엔드포인트 추가), 의미 비교 14 + stream 1(언어 경로), 루트 E2E 12 + spike 5 및 /demo 12, modes E2E 12, 전체 tsc 0  | 홈 초기 JS gzip 11,016 B, 가이드 11,668 B(Prism 제거), CLS 0, core 107,733 B |
+| 8    | 2026-10-17 | `f8c01fe`·`b32331a`·`00fb1ac`, 기준 `1a54f46` | 51 / 639 통과 | 진단 fixture 34 스냅샷·dev 오버레이, 5 runtime × 14 적합성 + app dev/prod 각 14, scaffold minimal·demo·Express 설치·빌드·테스트·check·기동, 루트·/demo E2E 각 12 + spike 5, modes E2E 13, 전체 tsc 0 | 홈 초기 JS gzip 11,280 B(로더 6,573 + 라우터 4,707), 패키지 tarball 459 KB, core 107,934 B |
 
 ### 단계 0 실행 상세
 
@@ -1172,14 +1225,55 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions, 실제 정적 호스트 배포(`_headers`), 실제 원격 이미지 호스트,
   Safari·Firefox(AVIF·`imagesrcset` preload), 실제 Cloudflare Images, 원격 CMS loader, 수동·실기기 검증(MT-13)은 관측하지 않았다.
 
+### 단계 8 실행 상세 (2026-10-17)
+
+- 패키징(IC-05): `scripts/build-package.mjs`(`build:package`·`prepack`)가 `tsc -p tsconfig.package.json`으로 `lib/`(323개
+  항목)를 만들고 엔진의 `.d.ts`를 복사한 뒤 모든 export 대상과 bin을 검사한다. `exports`는 `state-surface-source` → `engine/*.ts`,
+  `types` → `lib/*.d.ts`, `default` → `lib/*.js`이고 `server-only`는 browser/default 조건을 유지한다. `pnpm pack`은 459 KB(lib·
+  README·LICENSE·package.json, 테스트·fixture 없음). `lib/`를 지운 상태에서도 테스트·빌드·적합성 빌드가 통과해 원본 조건을 확인했다.
+- CSS Modules(DC-23): 페이지별 CSS 전용 entry와 `surface-styles.json`, 페이지 `styles` 링크(BASE_PATH), dev 원본 링크, 전처리기
+  확장자, `styles.d.ts`, 가이드 본문 CSS Module, template 가이드 "범위 CSS" 절(en·ko parity). modes fixture에 static·server 슬롯과
+  아일랜드가 CSS Module을 쓰는 `/router/styled`와 `restyle` transition을 더했다.
+- 진단: 분석기 40개 규칙 hint, 교차 모듈 규칙 hint·위치, caret 코드 프레임, `atDefaultExport`·`importSite`(첫 import 줄),
+  `SurfaceBuildError.reason`(재배치용), MDX 위치 대응(`inMdxSource`), dev 오버레이 테스트(실제 Vite 서버의 500 오버레이 페이지
+  payload: plugin·id·loc·frame).
+- `state-surface check`(`engine/cli.ts`, `engine/build/check.ts`, 패키지 bin): 데모·modes fixture 통과, broken fixture는 두 유출
+  사슬을 위치와 함께 보고. 타입 계약 테스트 `engine/types.test.tsx`(`@ts-expect-error`로 Slot 속성·지시자 값·async 컴포넌트·
+  Boot 이름/params·definePlugin·PageModule 거부 고정), `.state-surface/pages.ts`.
+- 런타임 진단: `engine/client/trace.ts`(`onTrace`·`emitTrace`·`warning`), `engine/client/dev.ts`(`__SURFACE_DEV__`), PluginHost
+  소유권 검사, StateSurface 프로토콜 위반·알 수 없는 슬롯 경고, devOverlay 경고 패널, 로더 오류 trace.
+- 소스맵: `surface({ sourcemap })`, modes fixture를 `'hidden'`으로 빌드해 client JS에 `sourceMappingURL`이 없고 아일랜드 청크 맵의
+  `sourcesContent`가 원본 TSX와 같으며 서버 번들 맵이 있음을 검사한다.
+- scaffold: 최소 스타터(정적 마크업·`home:greeting` server 슬롯과 CSS Module·`client:visible` 아일랜드·`greet` transition·
+  Vitest 2개), demo(저장소 쇼케이스 + 템플릿 테스트 3개), 어댑터 5종, 생성기 단위 테스트 7개, CI `scaffold` 잡과 verify 잡의
+  `pnpm check`.
+- dev/prod: `surface.server.ts`·`virtual:state-surface/handler`·`HandlerConfig`, modes fixture 미들웨어(CSP·가드)를
+  `surface.server.ts`로 옮겨 dev에서도 CSP가 적용됨을 확인, `conformance/app`과 `conformance/app.mjs`, 시나리오 옵션(`app`·
+  `development`·`buildId`, 기존 5 runtime 실행은 그대로).
+- 찾은 결함: ① client 빌드가 부수효과 없는 CSS Module import를 tree-shaking해 static·server 컴포넌트 CSS가 빠짐 ② 패키지 설치
+  시 `idiomorph` 누락 ③ 패키지 `.js`에서 CommonJS 검사 로드로 서버 전용 거짓 양성 ④ `<Slot>` 직속 `<Slot>` 미검출 ⑤ MDX 진단이
+  컴파일 JSX 줄을 가리킴 ⑥ dev 서버가 사용자 미들웨어를 적용하지 않음 ⑦ dev 전용 경고 문자열이 production 번들에 남음
+  ⑧ trace 공유 모듈이 별도 청크로 분리되어 요청 1개 증가.
+- 검증: Vitest 51개 파일/639개(진단 fixture 34·dev 오버레이 1·check 2·타입 계약 1·페이지 스타일 1·생성기 7·런타임 진단 4 추가),
+  전체 tsc 0, typecheck:server, format:check, `pnpm check`, build(prerender 36페이지). 루트 E2E 12 + spike 5와 `/demo` 같은 수,
+  `pnpm test:modes` 13(CSS Modules: SSR·server 교체·client 렌더 클래스 일치, 아일랜드 JS 지연 중 스타일 적용, 이동 시 페이지 CSS만
+  로드·이탈 시 제거, dev도 수동 확인), `pnpm test:parity` 문서 14 + stream 1, Node·Express·Bun·Deno·workerd 적합성 각 14,
+  `pnpm test:conformance:app` dev 14·prod 14, 5개 어댑터 앱 빌드, `pnpm test:scaffold minimal:node demo:node minimal:express
+  minimal:cloudflare`(Cloudflare 생성 앱은 `wrangler deploy --dry-run`·`wrangler dev`로 페이지와 transition도 수동 확인).
+- 크기(gzip level 9, `perf/measure.mjs` 중앙값): 홈 11,280 B(로더 6,573 + 라우터 4,707, 단계 7 11,016 B)·가이드 11,932 B·검색
+  22,083 B·채팅 25,383 B, 네 페이지 CLS 0. 증가분은 trace 훅·오류 trace와 라우터의 persist 경고(production trace)다.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions의 새 `scaffold` 잡·`pnpm check`, npm 레지스트리 배포와 GitHub tarball에서의
+  생성(`--source` 없이), Bun·Deno·Workers 생성 앱의 기동, 실제 오류 추적 서비스로의 소스맵 업로드는 관측하지 않았다.
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4·5·6·7. IC-01~IC-04·IC-06~IC-09 결정.
-- **다음**: 단계 8(빌드 플러그인·진단 완성·패키징). IC-05·IC-10은 단계 8·10에서 결정한다.
-- **블로커**: 없음. 라우터 gzip 4KB 예산 초과(4,627 B)와 로더 2KB 목표는 단계 8 패키징에서 다시 측정한다. idiomorph 파싱의
-  media 문서 보유 여부는 단계 9에서 확인한다. `.mdx` 안 아일랜드 진단은 컴파일된 JSX 기준 위치라 단계 8에서 MDX source map으로
-  원본 줄을 잇는다. Lithent 빈 텍스트 hydration과 SSR의 `undefined` 속성 출력은 업스트림 보강 후보다.
+- **완료**: 단계 0·1·2·3·4·5·6·7·8. IC-01~IC-09 결정.
+- **다음**: 단계 9(Test Hardening). IC-10은 단계 10에서 결정한다.
+- **블로커**: 없음. 로더 gzip 6,573 B(2KB 목표)와 라우터 4,707 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
+  보유 여부는 단계 9에서 확인한다. Lithent 빈 텍스트 hydration과 SSR의 `undefined` 속성 출력은 업스트림 보강 후보다. hidden 소스맵
+  파일은 어댑터가 서빙을 막지 않으므로 업로드 후 삭제가 배포 절차에 필요하다.
 - **기준 커밋**: 단계 0 `611b37e`, 그 이전 `94e4046`, 단계 1 `077f420`, 단계 2 Entry `c82b92c`, 단계 2 `7f59296`,
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
   단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`, 단계 7 Entry `c1258ea`,
-  단계 7 중간(prerender·i18n) `6839eb5`, 단계 7 `97ca338`.
+  단계 7 중간(prerender·i18n) `6839eb5`, 단계 7 `97ca338`, 단계 8 Entry `1a54f46`, 단계 8 `f8c01fe`·`b32331a`·
+  `00fb1ac`.

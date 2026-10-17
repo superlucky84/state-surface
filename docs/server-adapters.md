@@ -160,6 +160,49 @@ widths only, no redirects, image content types, 20MB and 10s limits), prerenderi
 turns them into static files, and Workers use the original URL unless
 `images.cloudflare` delegates to Cloudflare Images (`/cdn-cgi/image/…`).
 
+## Handler options for dev and production
+
+`surface.server.ts` (or `surface({ handler: 'path' })`) default-exports the handler options:
+`middleware`, `onError`, `limits`, `bodyLimit`, `security`, `secret`, `logger`. The `vite` dev
+server uses them, and so does every production entry through `virtual:state-surface/handler`:
+
+```ts
+// surface.server.ts
+import type { HandlerConfig } from 'state-surface/server';
+export default { middleware: [auth, securityHeaders], onError: report } satisfies HandlerConfig;
+
+// server.ts (Node; the other adapters spread the same object)
+import manifest from 'virtual:state-surface/manifest';
+import handler from 'virtual:state-surface/handler';
+import { serve } from 'state-surface/adapters/node';
+await serve({ ...handler, manifest });
+```
+
+Without the file the module is `{}`. The file is server-only (`.server.ts`): a browser import fails
+the build.
+
+## Source maps
+
+`surface({ sourcemap: 'hidden' })` writes source maps of the original TSX next to the client chunks
+in `dist/client/assets/` without a `sourceMappingURL` comment (`true` adds the comment); the server
+bundle always gets `dist/server.js.map` (`node --enable-source-maps dist/server.js`). A
+`build.sourcemap` in the Vite config wins. The adapters serve whatever is in `dist/client`, so upload
+hidden maps and delete them before deploying:
+
+```sh
+pnpm build
+# Sentry: inject debug IDs into the chunks and maps, then upload both
+npx @sentry/cli sourcemaps inject dist/client/assets
+npx @sentry/cli sourcemaps upload --release "$RELEASE" dist/client/assets
+# Datadog: minified files are matched by URL
+npx @datadog/datadog-ci sourcemaps upload dist/client/assets \
+  --service my-app --release-version "$RELEASE" --minified-path-prefix "https://example.com/assets"
+find dist/client -name '*.map' -delete
+```
+
+With BASE_PATH the public URL prefix includes it (`https://example.com/demo/assets`). The maps
+contain the original sources (`sourcesContent`); keep them out of public storage.
+
 ## Validation
 
 ```sh
@@ -175,6 +218,7 @@ pnpm test:conformance express
 pnpm test:conformance bun
 pnpm test:conformance deno
 pnpm test:conformance cloudflare
+pnpm test:conformance:app # the same scenarios on `vite` dev and on a surface() production build
 ```
 
 All adapters run the same fixture and eight HTTP scenarios, including progressive
@@ -184,3 +228,8 @@ middleware, CSRF/body limits, BASE_PATH and static assets. `BUN_BINARY` and
 check startup, preserve failure status and are stopped in finally. Core source and
 bundle checks are required in CI, alongside the five runtime jobs. The saved legacy
 snapshot was captured before refactoring and normalizes only the removed SSR hash.
+
+`conformance/app` is the fixture as a surface() app (pages, transitions, `surface.server.ts`). Its
+dev server and its production build answer the same scenarios; the expected differences are the
+development error detail, prerendered pages rendered on request in dev (no ETag/304) and Vite's
+cache headers for public files.

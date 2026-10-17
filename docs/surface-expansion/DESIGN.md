@@ -345,7 +345,9 @@ components/ layouts/ ...     위치 자유 (import로 참조)
   (`?debug=1`)에 표시한다. production에서는 trace 훅으로만 노출한다.
 - **소스맵**: dev·build 모두 원본 TSX 소스맵을 유지한다. 호출 지점 변환(3장)도 소스맵을 생성한다.
 - **dev/prod 동일성**: dev는 Vite SSR 모듈 로드, prod는 빌드 registry를 쓰지만 같은 분석·manifest 생성 함수를
-  호출한다. CI에서 같은 적합성 테스트(V-28)를 dev 서버와 production 빌드 양쪽에 실행한다.
+  호출한다. handler 옵션(미들웨어·`onError`·한도)은 `surface.server.ts`의 기본 export 하나를 dev 서버와 production
+  엔트리가 함께 쓴다(`virtual:state-surface/handler`, 단계 8). CI에서 같은 적합성 테스트(V-28)를 dev 서버와 production
+  빌드 양쪽에 실행한다(`conformance/app`).
 - **scaffold**: `create-state-surface` 기본 템플릿은 **최소 스타터**(페이지 1개에 static 마크업·server 슬롯·
   client 아일랜드 하나씩, transition 1개)다. `--template demo`는 현재 쇼케이스 사이트를 생성한다. 어댑터는
   프롬프트로 고르며 기본은 Node(DC-28). 템플릿은 저장소에 원본으로 두고 CI에서 생성·설치·빌드·테스트한다.
@@ -879,6 +881,7 @@ iframe, 위젯 노드를 head·body에 동적으로 추가한다. 이를 통제�
 5. **서버 오류 훅**: `createHandler({ onError(err, ctx) })`를 제공하고 SSR·transition 스트림 중간·액션·지연 슬롯
    오류를 모두 전달한다. 트레이스 컨텍스트는 미들웨어(`onRequest`)에서 연결한다.
 6. **소스맵**: production 빌드에 `hidden` 소스맵 생성 옵션을 두고 업로드 가이드를 제공한다(DC-16 소스맵과 동일 원본).
+   `surface({ sourcemap: 'hidden' })`, 업로드 후 배포 전 `.map` 삭제(docs/server-adapters.md).
 7. **스크립트 순서**: 엔진 스크립트는 `type="module"`(defer 의미)로 출력해 head의 업체 스니펫·로더가 먼저 실행되게 한다.
    엔진은 업체 스니펫보다 먼저 실행되어야 한다는 가정을 하지 않는다.
 8. **지표 구분**: static 페이지의 "실행 JS 0바이트"(R-01·NFR-01)는 엔진 기준이며 앱이 추가한 서드파티·앱 엔트리는
@@ -1475,8 +1478,8 @@ const response: Response = await handler.fetch(request, platform);
 - **기본값**(DC-28 결정): 어댑터를 지정하지 않으면 Node 자체 서버를 사용하고 scaffold 기본값도 같다.
   `express`는 `dependencies`에서 빼고 optional peer로 옮긴다. scaffold는 어댑터 선택지를 제공한다.
 - **배포 형식**(DC-28 결정): 원본 `engine/**/*.ts` 배포를 중단하고 컴파일된 ESM JS + `.d.ts` + source map을
-  `exports`로 배포한다. 저장소 내부 개발은 기존 tsconfig·Vite alias로 원본을 참조한다. 빌드 도구(tsc/tsup 등)
-  선택은 구현 단계에서 정한다.
+  `exports`로 배포한다. 빌드 도구는 `tsc` emit이다(IC-05). 저장소 내부 개발은 `exports`의 `state-surface-source`
+  조건(원본 `engine/*.ts`)을 플러그인이 켜서 원본을 참조한다.
 - **어댑터 계약**: 어댑터는 `{ name, serverEntry, readStatic(path), supports: { fs, imageTransform, longStream, ... } }`를
   선언한다. `readStatic`은 prerender HTML 본문을 읽는 함수다(Node·Bun·Deno는 파일, Workers는 `ASSETS` 바인딩
   fetch). Workers는 HTML 경로에 Worker 우선 실행(`run_worker_first`)을 설정하고 나머지 자산은 Static Assets가

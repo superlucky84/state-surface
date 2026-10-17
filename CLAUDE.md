@@ -53,6 +53,10 @@ pnpm test -- -t "keyword"         # run tests matching a keyword
 pnpm format                       # format with Prettier
 pnpm format:check                 # check formatting without writing
 pnpm test:modes                   # stage 3 fixture: entry selection, lazy chunks, server-only build checks
+pnpm check                        # state-surface check: build analysis (no bundle) + tsc --noEmit
+pnpm test:scaffold                # pack, create apps from create-state-surface/templates, install, build, test, start
+pnpm test:conformance:app         # conformance scenarios on `vite` dev and on the production build (conformance/app)
+pnpm build:package                # tsc → lib/ (also run by prepack)
 
 # Sub-path mounting (basePath)
 BASE_PATH=/demo pnpm dev          # serve under /demo/ prefix
@@ -73,7 +77,8 @@ engine/              # Framework core — users should not edit these files
   index.ts           # 'state-surface': Slot, Boot, ClientRouter, Image, Picture, getImage, prefixPath, actionUrl, types
   content.ts         # 'state-surface/content' (server only): defineCollection, getCollection, getEntry, highlight
   server.ts          # 'state-surface/server': createHandler, defineTransition, TransitionError, defineServerComponent
-  client.ts          # 'state-surface/client': definePlugin, useAction, navigate, ActionError
+  client.ts          # 'state-surface/client': definePlugin, useAction, navigate, onTrace, ActionError
+  cli.ts             # `state-surface` bin: `state-surface check` (build/check.ts)
   vite.ts            # 'state-surface/vite': surface() plugin (manifest with page manifests/buildId, islands, transform)
   rich.ts            # 'state-surface/rich': Markdown renderer for capability="rich" (mdast → hast allowlist)
   build/
@@ -82,10 +87,11 @@ engine/              # Framework core — users should not edit these files
     transform.ts     # Call-site transform: islands and Slot children → Island descriptors
     routeScanner.ts  # Page discovery: routes/**/*.tsx except `_` files/folders, URL collisions
     transitionScanner.ts # transitions/**/*.ts → names (path, kebab-case), .state-surface/actions.d.ts
-    diagnostics.ts   # SurfaceBuildError with file:line:column and code frame
+    diagnostics.ts   # SurfaceBuildError: file:line:column, caret code frame, hint (diagnostics.test.ts snapshots)
+    check.ts         # state-surface check: Vite middleware mode + plugin api.check, then tsc --noEmit
     prerender.ts     # Build-time render of prerendered pages → dist/client/<path>/index.html (+ language-less copy)
     content.ts       # Collections: .md directive blocks, .json/.yaml, schema/parity diagnostics with file:line
-    mdx.ts           # .mdx → JSX (lithent), code → <Code>, heading ids
+    mdx.ts           # .mdx → JSX (lithent), code → <Code>, heading ids, diagnostics mapped to the .mdx line
     images.ts        # Image imports → ImageAsset + variants in dist/client/assets, prerendered remote images
   content/           # Block renderers (renderMd, mdxComponents), server Prism highlighting, query runtime
   images/
@@ -155,7 +161,12 @@ routes/              # Pages (routes/**/*.tsx) + page-specific components
   [lang]/examples/*.tsx   # GET /en/examples/... — demos (streaming, actions, view-transition, search, chat, ui-patch)
   _shared/components/    # Cross-route components (pageHeader, systemError)
   <route>/_components/   # Per-route slot components (`_` folders are not pages)
-.state-surface/      # Generated (gitignored): actions.d.ts, content.d.ts (collections), images.d.ts (image imports)
+.state-surface/      # Generated (gitignored): actions.d.ts, content.d.ts, images.d.ts, styles.d.ts (*.module.css),
+                     #   pages.ts (tsc checks every page module against PageModule)
+surface.server.ts    # (optional) handler options for dev and production (middleware, onError, limits)
+create-state-surface/ # Scaffold CLI (bin/, lib/create.js) and templates/{base,minimal,demo,adapters/<name>}
+conformance/         # Adapter fixture + scenarios (5 runtimes); app/ = the fixture as a surface() app (dev/prod)
+lib/                 # Compiled package (gitignored; exports use it outside this repository)
 ```
 
 ## Architecture
@@ -283,7 +294,17 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   `virtual:state-surface/manifest` (server: per-page plugins and page manifests, buildId, build secret),
   `virtual:state-surface/islands`
   (componentId → lazy chunk loader), `virtual:state-surface/plugins` (plugin id → lazy chunk loader) and
-  `virtual:state-surface/content` (parsed collections; `.mdx` entries import their module).
+  `virtual:state-surface/content` (parsed collections; `.mdx` entries import their module) and
+  `virtual:state-surface/handler` (the `surface.server.ts` default export, `{}` without it). Every rule's error
+  carries a hint; dev shows it in Vite's overlay, builds fail.
+- Packaging (IC-05): `tsc` emits `lib/`; `exports` lists `state-surface-source` → `engine/*.ts` first and the plugin
+  adds that condition when it runs from source, so this repository resolves `state-surface/*` to the sources.
+- CSS Modules (DC-23): stylesheets imported in a page's module graph are built per page
+  (`virtual:state-surface/page-styles?<pageId>`, `.vite/surface-styles.json`) and linked after the global styles;
+  islands' module CSS is included, so islands are styled before activation; dev links the source files.
+- Dev-only engine checks use `DEV` from `engine/client/dev.ts` (`__SURFACE_DEV__`, defined by the plugin, false in
+  production) so they are dropped from production bundles; `warning()`/`onTrace` (`engine/client/trace.ts`) also
+  reach production trace subscribers. `surface({ sourcemap: 'hidden' })` for production source maps.
 - componentId = project-relative module path + `#` + export name (e.g. `routes/[lang]/examples/chat/_components/chatInput.tsx#default`).
 - Prerender (DC-24, DC-32): `closeBundle` of the SSR build builds a prerender bundle and writes
   `dist/client/<path>/index.html`; dynamic routes list params with `getStaticPaths()` (on `[lang]` routes entries

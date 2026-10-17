@@ -29,9 +29,9 @@ are under `routes/[lang]/` (`/en/…`, `/ko/…`); their texts are `content/page
 and the guides `content/guides/<lang>/*.md`, declared in `content/config.ts`. Transitions take the page language as a
 `lang` param.
 Transitions are `transitions/**/*.ts`; the path is the name (`transitions/comments/add.ts` → `"comments/add"`,
-kebab-case segments). The build writes `.state-surface/actions.d.ts`, `content.d.ts` and `images.d.ts` (gitignored) to
+kebab-case segments). The build writes `.state-surface/actions.d.ts`, `content.d.ts`, `images.d.ts`, `styles.d.ts` and `pages.ts` (gitignored) to
 type `useAction`/`<Boot>`/`actionUrl()`, collections and image imports.
-Scaffolding CLI lives in `create-state-surface/` (GitHub tarball에서 `scaffold/` 추출). `scaffold/`는 `pnpm build` 시 루트 파일 + `create-state-surface/overrides/`로 자동 생성.
+Scaffolding CLI lives in `create-state-surface/` (`bin/`, `lib/create.js`). Templates are sources in `create-state-surface/templates/` (`base/`, `minimal/` starter, `demo/` built from the repository's showcase files at create time, `adapters/<name>/`); nothing is generated into the repository. `surface.server.ts` holds handler options (middleware, onError, limits) shared by `vite` dev and the production entry. The package ships `lib/` (tsc output); inside this repository the `state-surface-source` export condition resolves to `engine/*.ts`.
 The StateSurface 2.0 plan is `docs/surface-expansion/` (REQUIREMENTS → DESIGN → IMPLEMENT → MANUAL_TEST_CHECKLIST). Other primary docs are `PROTOCOL.md` (two-layer contract), `NEXT_IDEA.md`, the superseded
 `docs/ui-protocol/DESIGN.md`, and archive docs in `docs/completed/` (`DESIGN.md`, `DESIGN_PHASE2.md`, `IMPLEMENT.md`, `IMPLEMENT_PHASE2.md`).
 
@@ -49,6 +49,9 @@ Use Node.js (latest stable) with `pnpm@10.13.1`. Key commands:
   home and guides excluded since stage 7).
 - `pnpm build:conformance`, `pnpm check:core`, and `pnpm test:conformance <adapter>` validate runtime portability.
 - `pnpm typecheck:server` checks the portable server and adapter API.
+- `pnpm check` runs `state-surface check` (build analysis without bundling + `tsc --noEmit`).
+- `pnpm test:scaffold` packs the engine and creates, installs, builds, tests and starts apps from the templates.
+- `pnpm test:conformance:app` runs the conformance scenarios on the `vite` dev server and on the production build.
 - `pnpm format` and `pnpm format:check` apply or verify Prettier formatting.
 
 ## Coding Style & Naming Conventions
