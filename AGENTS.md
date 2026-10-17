@@ -22,6 +22,8 @@ The runtime core lives in `engine/`:
 - Images (DC-26): `engine/shared/image.ts` (`<Image>`, `<Picture>`, `getImage`), `engine/build/images.ts` (import →
   variants), `engine/images/service.ts` (sharp, disk cache) and `engine/server/core/imageEndpoint.ts`.
 - `engine/shared/` for the two-layer protocol, NDJSON parsing, capability helpers, and shared contracts.
+- `engine/hardening/` for the stage 9 suites (malicious input, seeded frame fuzz, races, parallel SSR, resources,
+  limits); rerun one fuzz case with `FUZZ_SEED=<seed>`, widen with `FUZZ_SCALE=<n>`.
 
 User/project code lives in `client/`, `content/`, `layouts/`, `routes/`, `transitions/`, and `shared/`. Pages are `routes/**/*.tsx`
 (files and folders starting with `_` are not pages); slot components live in `_components/` next to pages. The demo pages

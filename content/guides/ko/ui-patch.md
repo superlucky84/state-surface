@@ -208,7 +208,7 @@ accumulate 프레임(`accumulate: true`)에는 `ui`를 넣을 수 없습니다: 
 - partial 프레임은 패치하는 모든 슬롯을 `uiChanged`에 나열하고, `uiChanged`의 모든 키는 `ui`에 항목이 있습니다.
 - 각 항목은 슬롯의 전체 패치입니다 — 유지할 클래스와 변수도 다시 적습니다.
 - 클래스 이름은 `A-Z a-z 0-9 _ : / [ ] . -`로 된 단일 토큰입니다: `['badge is-new']`가 아니라 `['badge', 'is-new']`. `#`, `(`, `%`가 들어간 Tailwind 임의 값은 실패합니다 — 색상과 크기는 `cssVars`로 전달합니다.
-- `cssVars` 키는 `--`로 시작하고, 값에는 `;` `{` `}` `\` `url(` `expression(`이 없습니다.
+- `cssVars` 키는 `--`로 시작하고, 값에는 `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`이 없습니다.
 - 패치하는 슬롯은 transition의 `targets`에 있고 static이 아닙니다.
 - full 프레임에서 패치하는 target에는 `states` 항목도 필요합니다 — `states`에 없는 target은 패치와 함께 제거됩니다.
 - 패치 초기화는 반대 클래스를 보내는 대신 `null`로 합니다.

@@ -31,6 +31,8 @@ interface Instance {
   resetKey?: string[];
   keyValue?: string;
   childrenHtml?: string;
+  /** strict/rich slot content gets the browser DOM guard; page islands are app markup. */
+  guard: boolean;
   status: 'dormant' | 'loading' | 'active' | 'failed';
   generation: number;
   component?: TagFunction;
@@ -153,6 +155,7 @@ export class ComponentHost {
       media: meta.media,
       only: meta.only === true,
       snapshot: meta.props,
+      guard: !key.startsWith('$') && meta.capability !== 'unsafe',
       status: 'dormant',
       generation: 0,
       ...(meta.resetKey
@@ -268,6 +271,7 @@ export class ComponentHost {
     return bridge.mountComponent(instance.component!, data, instance.el, {
       hydrate,
       childrenHtml: instance.childrenHtml,
+      guard: instance.guard,
     });
   }
 

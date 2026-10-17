@@ -177,6 +177,8 @@ export class RequestProjection {
     const ops: Op[] = [];
     for (const name of removed) {
       this.dirty.delete(name);
+      // The browser clears a removed slot's UI; forget it too, so a later frame resends it.
+      delete nextUi[name];
       ops.push({ slot: name, remove: true });
     }
     const now = this.now();

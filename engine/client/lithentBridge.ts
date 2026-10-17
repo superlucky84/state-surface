@@ -1,6 +1,7 @@
 import { h, render, mount, componentUpdate } from 'lithent';
 import type { TagFunction, Props } from 'lithent';
 import { hydration } from 'lithent/ssr';
+import { guardDom } from './domGuard.js';
 
 /**
  * Lithent glue, loaded as its own chunk only on pages that activate a client component.
@@ -17,6 +18,8 @@ export interface MountOptions {
   hydrate: boolean;
   /** Island children: static server HTML passed as the component's children (IC-03). */
   childrenHtml?: string;
+  /** strict/rich slot content: remove what the server would drop (DESIGN 8.1). */
+  guard?: boolean;
 }
 
 export function mountComponent(
@@ -40,12 +43,17 @@ export function mountComponent(
     cleanup = hydration(wdom, el);
     restore();
   } else cleanup = render(wdom, el);
+  const guard = options.guard ? guardDom(el) : undefined;
   return {
     update(next) {
       proxyProps.__data = next;
       componentUpdate(proxyProps)();
+      guard?.flush();
     },
-    cleanup,
+    cleanup() {
+      guard?.dispose();
+      cleanup();
+    },
   };
 }
 

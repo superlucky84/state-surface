@@ -817,14 +817,19 @@ mode는 렌더링 위치, capability는 입력에 허용하는 표현이다. ser
 - **rich 렌더러**: DOM 구현이 필요 없는 AST allowlist 방식이라 Workers에서도 동작하며 콘텐츠 컬렉션(R-24)과 같은
   파이프라인을 쓴다. DOMPurify 같은 출력 후 정화는 사용하지 않는다.
 - **승격 금지**: 프레임의 `trusted:true` 같은 자기 선언으로 capability를 올릴 수 없다. 등록 registry가 정본이다.
-- **UI 패치 검증**: 클래스는 `[A-Za-z0-9_:/\[\].-]+` 토큰만, `cssVars` 키는 `--`로 시작해야 하며 값에 `;`·`{`·`}`·
-  `url(`·`expression(`이 있으면 거부한다. 임의 `style`·이벤트 속성·selector·외부 stylesheet는 받지 않는다.
+- **UI 패치 검증**: 클래스는 `[A-Za-z0-9_:/\[\].-]+` 토큰만, `cssVars` 키는 `--`로 시작해야 하며 값에 `;`·`{`·`}`·`\`·
+  `url(`·`image-set(`·`src(`·`expression(`이 있으면 거부한다(단계 9: URL을 읽는 `image-set`·`src` 추가). 임의 `style`·이벤트 속성·selector·외부 stylesheet는 받지 않는다.
   현재 잘못된 `ui.classAdd` 타입이 검증을 통과하는 문제를 고친다.
 - **SSR 이스케이프**: 텍스트·속성·URL 문맥별로 이스케이프한다. Lithent `renderToString`은 속성값을 전혀
   이스케이프하지 않으므로(1장) UI 클래스뿐 아니라 모든 속성(`data-params` JSON 포함)이 깨지거나 주입될 수 있다.
   Lithent SSR에 속성값 이스케이프(`&`·`"`·`<`·`>`)를 추가하고(직접 관리하는 라이브러리이므로 업스트림 수정), 엔진은
   `href`·`src`·`action`·`formaction` 등 URL 속성에서 허용 scheme(http·https·mailto·상대) 밖 값을 제거한다. 이 보강은
   2단계 진입 조건이다(14장). `safeStateJSON`의 script 안전성만으로 속성 안전성을 충족했다고 보지 않는다.
+  단계 9 보강: 이벤트 속성은 대소문자와 무관하게 제거하고(Lithent는 소문자 `on…`만 건너뜀), `srcdoc`은 raw HTML로
+  취급하며, `<object data codebase>`·SVG `<animate>`/`<set>`의 `href` 값도 URL 규칙을 적용한다. 브라우저에서 frame
+  props를 렌더하는 client 컴포넌트(client 슬롯, 슬롯 안 island)는 같은 속성 규칙을 MutationObserver 가드로 적용한다
+  (렌더 직후 microtask, 이후 task의 클릭·`onerror`·`javascript:` 탐색 전). unsafe는 script만 무력화하므로 이벤트
+  속성·`javascript:` URL이 남는다. 신뢰할 수 없는 HTML은 `sandbox="iframe"`으로 격리한다.
 - 초기 SSR UI는 base class/style과 결합해 client와 같은 의미를 갖게 한다. UI reset의 원래 값 복원 범위를 검증한다.
 - 보호 대상은 외부 상태·UI·agent 프레임이다. 신뢰해서 설치한 임의 JS의 격리나 CSS 변수의 완전한 샌드박스는
   제공하지 않는다. 인증·CSRF·origin 검증은 액션 경계(11.2 미들웨어)에서 처리하고 surface/build ID를 인증 근거로

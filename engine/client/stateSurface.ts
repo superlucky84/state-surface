@@ -166,6 +166,7 @@ export class StateSurface {
   /** Requests with received, unflushed ops, in arrival order. */
   private dirty = new Set<Request>();
   private flushScheduled = false;
+  private reloading = false;
   private applying: Promise<void> = Promise.resolve();
   private pendingCount = new Map<string, number>();
   private resultCount = new Map<string, number>();
@@ -307,6 +308,8 @@ export class StateSurface {
     params: Record<string, unknown> = {},
     options: TransitionOptions = {}
   ): Promise<ActionResult> {
+    // A 409 is reloading the document for a new build: later actions would get 409 too.
+    if (this.reloading) return { ok: false, aborted: true };
     const meta = Object.hasOwn(this.options.actions ?? {}, name)
       ? this.options.actions![name]
       : undefined;
@@ -391,7 +394,7 @@ export class StateSurface {
       });
       if (response.status === 409) {
         this.abort(request);
-        (this.options.reload ?? (() => location.reload()))();
+        this.reloadDocument();
         return;
       }
       if (response.headers.get('x-surface-view-transition') === '1') request.viewTransition = true;
@@ -434,8 +437,16 @@ export class StateSurface {
           kind: 'error',
           detail: { source: 'ndjson', stage: event.stage, message: event.error.message },
         });
-        if (event.stage === 'limit')
-          this.fail(request, new ActionError('protocol', event.error.message));
+        // A line that does not parse is a lost frame: later deltas would build on it (V-08).
+        this.fail(
+          request,
+          new ActionError(
+            'protocol',
+            event.stage === 'limit'
+              ? event.error.message
+              : 'The response has an invalid NDJSON line'
+          )
+        );
       },
       { maxLine: this.options.frameSize ?? 1024 * 1024 }
     );
@@ -485,7 +496,9 @@ export class StateSurface {
           );
           continue;
         }
+        // Static slots never change (DESIGN 6.2): any op for one is a mismatch, `remove`/`ui` too.
         if (
+          meta.mode === 'static' ||
           ('html' in op && meta.mode !== 'server') ||
           (('props' in op || 'merge' in op) && meta.mode !== 'client')
         )
@@ -529,6 +542,17 @@ export class StateSurface {
         { transition: request.name }
       );
     this.options.report?.(error, { transition: request.name, kind: error.kind });
+  }
+
+  /**
+   * Build mismatch (409): reload once. Running requests belong to the old page and are
+   * aborted (their ops would be lost with the reload anyway); new ones are not sent.
+   */
+  private reloadDocument() {
+    if (this.reloading) return;
+    this.reloading = true;
+    for (const request of this.requests) this.abort(request);
+    (this.options.reload ?? (() => location.reload()))();
   }
 
   private abort(request: Request) {
@@ -687,7 +711,7 @@ export class StateSurface {
         },
         ...(post ? { body: meta.defer } : {}),
       });
-      if (response.status === 409) return (this.options.reload ?? (() => location.reload()))();
+      if (response.status === 409) return this.reloadDocument();
       if (!response.ok) throw new Error(`Deferred slot "${meta.id}": HTTP ${response.status}`);
       const body = (await response.json()) as { html?: unknown; islands?: unknown };
       const checked = checkWireFrame({

@@ -54,6 +54,11 @@ export interface IslandMeta {
   /** DC-19: persist ID kept across client navigation; `persistProps` keeps the old props. */
   persist?: string;
   persistProps?: true;
+  /**
+   * DESIGN 8.1: islands inside a slot get the browser DOM guard of strict/rich content
+   * unless the slot is `capability="unsafe"`. Page-level islands (`$N`) are app markup.
+   */
+  capability?: 'unsafe';
 }
 
 export type HtmlOp = { slot: string; html: string; islands?: IslandMeta[] };
@@ -109,6 +114,8 @@ export interface SlotMeta {
   /** Client slots and islands (DC-19): persist ID across client navigation. */
   persist?: string;
   persistProps?: true;
+  /** Client slots and slot islands of `capability="unsafe"`: no browser DOM guard (8.1). */
+  capability?: 'unsafe';
   /** Server slots: `morph` (default `replace`). */
   swap?: 'morph';
   viewTransition?: true;
@@ -156,7 +163,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 /** DESIGN 8.1: class tokens and custom property names/values a UI patch may carry. */
 export const CLASS_TOKEN = /^[A-Za-z0-9_:/[\].-]+$/;
 const CSS_VAR = /^--[A-Za-z0-9_-]+$/;
-const CSS_VALUE_FORBIDDEN = /[;{}\\]|url\s*\(|expression\s*\(/i;
+const CSS_VALUE_FORBIDDEN = /[;{}\\]|url\s*\(|expression\s*\(|image-set\s*\(|src\s*\(/i;
 
 /** Returns why a UI patch is rejected, or undefined when it is valid. */
 export function uiPatchProblem(patch: unknown): string | undefined {
@@ -193,6 +200,10 @@ export function validateStateFrame(frame: unknown): ValidationResult {
   if (frame.type !== 'state') return invalid(`Unknown frame type: "${String(frame.type)}"`);
   if (!isPlainObject(frame.states)) return invalid('"states" must be a non-null object');
   const states = frame.states;
+  // Slot state is component props: an object (the browser rejects other props ops).
+  for (const [key, state] of Object.entries(states))
+    if (!isPlainObject(state))
+      return invalid(`states["${key}"] must be an object (component props)`);
 
   if (frame.reset !== undefined) {
     if (!Array.isArray(frame.reset) || frame.reset.some(key => typeof key !== 'string'))

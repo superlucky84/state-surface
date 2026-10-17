@@ -127,16 +127,19 @@ engine/              # Framework core — users should not edit these files
     slotDom.ts       # Server HTML swap (replace + focus/scroll restore, morph), remove, UI patches
     morph.ts         # idiomorph chunk (swap="morph" pages only), island boundaries (IC-06)
     lithentBridge.ts # Lithent chunk: mountComponent (DataProxy, hydrate/render, island children, keeps user input)
+    domGuard.ts      # strict/rich attribute guard for client components (MutationObserver, capability.ts rules)
     actionEvents.ts  # data-action / actionUrl form event → invocation (defaultPrevented skip, one per event)
     actionDelegation.ts  # Declarative action binding (document click/submit delegation, bubble phase)
     devOverlay.ts    # Debug overlay UI (?debug=1)
+  hardening/         # Stage 9 suites: malicious input, tokens, server/browser frame fuzz (seeded), races,
+                     #   parallel SSR, resources, limits (FUZZ_SEED / FUZZ_SCALE to rerun or widen)
   shared/
     surfaceTree.ts   # Slot / Boot / Island markers, slot name rules, JSON checks, JSX types
     actions.ts       # ActionName/ActionParams (global StateSurface.Actions), actionUrl, endpoint paths
     schema.ts        # Standard Schema types and validateSchema (field errors)
     basePath.ts      # Central basePath management (setBasePath, getBasePath, prefixPath)
     protocol.ts      # Authoring frames, transport ops, bootstrap types, validators, applyFrame reducer
-    capability.ts    # URL scheme allowlist, script neutralization, rich marker
+    capability.ts    # URL scheme allowlist, unsafeAttribute (event/URL/srcdoc rules), script neutralization, rich marker
     ndjson.ts        # NDJSON encode/decode with streaming chunk parser
     routeModule.ts   # PageModule contract (default page function, prerender, getStaticPaths, plugins)
     image.ts         # <Image>, <Picture>, getImage, remotePatterns matching, image config
@@ -247,7 +250,8 @@ with `data-pending` until it ends and `data-has-result` after its first result (
 - Transitions with an `input` Standard Schema validate params first: invalid → 422 error frame
   `{ kind: 'validation', fieldErrors }`, handler not run. Form bodies become objects (repeated names → arrays)
 - `reset: [slot]` remounts a client slot (`props` op `reset: true`); invalid for server/static slots
-- UI tokens `[A-Za-z0-9_:/\[\].-]+`, `cssVars` keys `--*` without `;{}\`/`url(`/`expression(`
+- UI tokens `[A-Za-z0-9_:/\[\].-]+`, `cssVars` keys `--*` without `;{}\`/`url(`/`image-set(`/`src(`/`expression(`;
+  slot states are objects; a new `ui` op first undoes the slot's previous patch (SSR classes come back)
 
 ### Pages, Slots and the Build Plugin
 
@@ -263,9 +267,11 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   per render. `server:defer` renders the fallback and loads the content from `/_surface/island/:componentId`.
   The demo's header, home slots and `examples:list` are static; the other slots are server slots except
   `chat:current` (client, token streaming via `merge`).
-- Capability (DC-13): `strict` (default) forbids raw HTML and strips non-http(s)/mailto/relative URLs in slot
-  content; `rich` allows `Markdown` from `state-surface/rich`; `unsafe` allows raw HTML with inert scripts and
-  optional `sandbox="iframe"`. External agent frames enter only via `yield* ctx.external(source)` into
+- Capability (DC-13): `strict` (default) forbids raw HTML (`innerHTML`, `srcdoc`), drops event attributes in any
+  letter case and non-http(s)/mailto/relative URLs in slot content; `rich` allows `Markdown` from
+  `state-surface/rich`; `unsafe` allows raw HTML with inert scripts (event attributes stay: untrusted HTML goes in
+  `sandbox="iframe"`). Client slots and slot islands get the same attribute rules in the browser
+  (`engine/client/domGuard.ts`, MutationObserver). External agent frames enter only via `yield* ctx.external(source)` into
   `<Slot external schema={…}>` slots.
 - Activation (DC-04/05): client components start at their timing or at once on `pointerdown`/`focusin`/`keydown`
   inside them (the event is not replayed; typed input, focus and selection survive hydration). Chunks retry once

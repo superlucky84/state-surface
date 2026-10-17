@@ -208,7 +208,7 @@ Every full frame resets the UI of its targets. A full frame without `ui` clears 
 - Partial frames list every patched slot in `uiChanged`, and every `uiChanged` key has an entry in `ui`.
 - Each entry is the slot's whole patch — repeat the classes and variables that should stay.
 - Class names are single tokens of `A-Z a-z 0-9 _ : / [ ] . -`: `['badge', 'is-new']`, not `['badge is-new']`. Tailwind arbitrary values with `#`, `(` or `%` fail — pass colors and sizes through `cssVars`.
-- `cssVars` keys start with `--`, and values contain none of `;` `{` `}` `\` `url(` `expression(`.
+- `cssVars` keys start with `--`, and values contain none of `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`.
 - The patched slot is in the transition's `targets` and is not static.
 - In a full frame, a patched target also needs a `states` entry — a target missing from `states` is removed, patch included.
 - Clear a patch with `null`, not by sending the opposite classes.

@@ -17,7 +17,7 @@ import {
   type SlotMarker,
 } from '../shared/surfaceTree.js';
 import type { ActionMeta, IslandMeta, PluginMeta, SlotMeta } from '../shared/protocol.js';
-import { RICH, URL_ATTRIBUTES, neutralizeScripts, safeUrl } from '../shared/capability.js';
+import { RICH, neutralizeScripts, unsafeAttribute } from '../shared/capability.js';
 import { readServerComponent } from './serverComponent.js';
 import { buildSurfaceScript } from './ssr.js';
 import { nonceOf } from './prerenderContext.js';
@@ -457,30 +457,31 @@ function owned(node: unknown): unknown {
 }
 
 /**
- * strict/rich: no raw HTML and URL attributes limited to http, https, mailto and relative
- * references. unsafe: raw HTML allowed, scripts made inert (DC-13).
+ * strict/rich: no raw HTML (`innerHTML`, `srcdoc`), no event handler attributes and URL
+ * attributes limited to http, https, mailto and relative references. unsafe: raw HTML
+ * allowed, scripts made inert (DC-13).
  */
 function applyCapability(node: WDom, scope: Scope): WDom {
   const props = node.props as Record<string, unknown>;
   let next: Record<string, unknown> | undefined;
-  if (props.innerHTML !== undefined && props.innerHTML !== null) {
+  for (const key of ['innerHTML', 'srcdoc']) {
+    if (props[key] === undefined || props[key] === null) continue;
     if (scope.capability !== 'unsafe')
       throw new SurfaceError(
-        `<Slot name="${scope.slot}">: raw HTML (innerHTML) needs capability="unsafe".`
+        `<Slot name="${scope.slot}">: raw HTML (${key}) needs capability="unsafe".`
       );
-    const html = String(props.innerHTML);
+    const html = String(props[key]);
     const inert = neutralizeScripts(html);
-    if (inert !== html) next = { ...props, innerHTML: inert };
+    if (inert !== html) (next ??= { ...props })[key] = inert;
   }
-  if (scope.capability !== 'unsafe')
-    for (const key of Object.keys(props)) {
-      if (!URL_ATTRIBUTES.has(key.toLowerCase())) continue;
-      const value = props[key];
-      if (typeof value === 'string' && !safeUrl(value)) {
+  if (scope.capability !== 'unsafe') {
+    const tag = node.type === 'e' ? (node.tag ?? '') : '';
+    for (const key of Object.keys(props))
+      if (unsafeAttribute(tag, key, props[key], props.attributeName ?? props.attributename)) {
         next ??= { ...props };
         delete next[key];
       }
-    }
+  }
   return next ? { ...node, props: next as never } : node;
 }
 
@@ -522,6 +523,8 @@ function projectSlot(marker: SlotMarker, scope: Scope, state: RenderState): WDom
   const { child } = marker;
   const meta: SlotMeta = { id: marker.name, mode: marker.mode };
   if (marker.viewTransition) meta.viewTransition = true;
+  // DESIGN 8.1: the browser guards client components unless the slot allows raw HTML.
+  if (marker.mode === 'client' && marker.capability === 'unsafe') meta.capability = 'unsafe';
   if (marker.persist) {
     claimPersist(state, marker.name, where);
     meta.persist = marker.name;
@@ -615,6 +618,7 @@ function projectIsland(marker: IslandMarker, scope: Scope, state: RenderState): 
     ...(marker.resetKey !== undefined ? { resetKey: resetKeyOf(marker.resetKey, where) } : {}),
     ...(marker.persist ? { persist: marker.persist } : {}),
     ...(marker.persistProps ? { persistProps: true as const } : {}),
+    ...(scope.capability === 'unsafe' ? { capability: 'unsafe' as const } : {}),
   });
 
   // IC-03: island children are server-rendered once and passed as a static fragment.

@@ -41,6 +41,62 @@ test('actions without client components load the runtime but not Lithent; server
   expect(urls.filter(url => url.includes('lithent'))).toEqual([]);
 });
 
+test('DESIGN 8.1: a strict client slot drops javascript: URLs and event attributes from frame props', async ({
+  page,
+}) => {
+  await page.goto('/guard');
+  await expect(page.locator('h-state[name="link"] a')).toHaveAttribute('href', '/guard');
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('button', { name: 'Inject' }).click();
+  const link = page.locator('h-state[name="link"] a');
+  await expect(link).toHaveText('evil');
+  expect(await link.getAttribute('href')).toBeNull();
+  expect(await link.getAttribute('onclick')).toBeNull();
+  expect(await page.locator('h-state[name="link"] iframe').getAttribute('src')).toBeNull();
+  await link.click();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
+});
+
+test('stage 9: morphing a slot with media does not keep parsed documents alive', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.goto('/morph-media');
+  await page.waitForLoadState('networkidle');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  const audio = await page.locator('h-state[name="player"] audio').elementHandle();
+  const morph = async (times: number) => {
+    for (let i = 0; i < times; i++) {
+      const before = await page.locator('.turn').textContent();
+      await page.getByRole('button', { name: 'Morph' }).click();
+      await expect(page.locator('.turn')).not.toHaveText(before!);
+    }
+  };
+  // Blink frees documents some time after a V8 GC: sample until two reads agree.
+  const documents = async () => {
+    let previous = -1;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
+      await page.waitForTimeout(250);
+      const { metrics } = await cdp.send('Performance.getMetrics');
+      const current = metrics.find(metric => metric.name === 'Documents')!.value;
+      if (current === previous) return current;
+      previous = current;
+    }
+    return previous;
+  };
+  await morph(3);
+  const before = await documents();
+  await morph(30);
+  const after = await documents();
+  console.log('morph documents', { before, after });
+  expect(after).toBeLessThanOrEqual(before + 1);
+  // The morph kept the media node itself.
+  expect(await audio!.evaluate(node => node.isConnected)).toBe(true);
+});
+
 test('client:load hydrates at start; client:visible chunk waits until visible', async ({
   page,
 }) => {

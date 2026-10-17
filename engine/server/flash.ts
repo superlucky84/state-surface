@@ -14,6 +14,8 @@ export interface Flash {
 }
 
 export const FLASH_COOKIE = 'surface_flash';
+/** Seconds a flash stays valid: the cookie's max-age, also signed into the value (no replay). */
+export const FLASH_TTL = 60;
 const encoder = new TextEncoder();
 
 function base64url(bytes: Uint8Array) {
@@ -36,17 +38,20 @@ async function sign(secret: string, data: string) {
 /**
  * Seal a flash for `name` within `limit` characters: drop the echoed input first, then the
  * field errors (keeping the error summary). Returns the cookie value and what was dropped.
+ * The signed expiry (`e`) rejects a captured value after FLASH_TTL seconds.
  */
 export async function sealFlash(
   secrets: SecretSource,
   name: string,
   flash: Flash,
-  limit: number
+  limit: number,
+  now = Date.now()
 ): Promise<{ value: string; trimmed: Array<'input' | 'fieldErrors'> }> {
   const trimmed: Array<'input' | 'fieldErrors'> = [];
+  const expires = Math.floor(now / 1000) + FLASH_TTL;
   let current: Flash = flash;
   while (true) {
-    const data = base64url(encoder.encode(JSON.stringify({ n: name, ...current })));
+    const data = base64url(encoder.encode(JSON.stringify({ n: name, e: expires, ...current })));
     const value = `${data}.${await sign(secrets.current, data)}`;
     if (FLASH_COOKIE.length + 1 + value.length <= limit) return { value, trimmed };
     if (current.input) {
@@ -61,10 +66,11 @@ export async function sealFlash(
   }
 }
 
-/** Verify a flash cookie value with the current or previous secret. */
+/** Verify a flash cookie value with the current or previous secret and its expiry. */
 export async function openFlash(
   secrets: SecretSource,
-  value: string
+  value: string,
+  now = Date.now()
 ): Promise<(Flash & { n: string }) | undefined> {
   const dot = value.indexOf('.');
   if (dot < 1) return undefined;
@@ -79,7 +85,9 @@ export async function openFlash(
         fromBase64url(signature),
         encoder.encode(data)
       );
-      if (valid) return JSON.parse(new TextDecoder().decode(fromBase64url(data)));
+      if (!valid) continue;
+      const { e: expires, ...flash } = JSON.parse(new TextDecoder().decode(fromBase64url(data)));
+      return typeof expires === 'number' && expires * 1000 >= now ? flash : undefined;
     } catch {
       return undefined;
     }
@@ -97,24 +105,22 @@ export function redirectTarget(
   origin: string,
   basePath: string
 ): string {
-  const inside = (path: string) =>
-    !basePath ||
-    path === basePath ||
-    path.startsWith(basePath + '/') ||
-    path.startsWith(basePath + '?');
-  if (
-    typeof requested === 'string' &&
-    requested.startsWith('/') &&
-    !requested.startsWith('//') &&
-    !requested.startsWith('/\\') &&
-    !/[\u0000-\u001f\\]/.test(requested) &&
-    inside(requested)
-  )
-    return requested;
+  // A path of this origin: `//host` and `/\\host` are other hosts, so is a Referer path that
+  // starts with `//` (`https://site//evil.test/` parses to the pathname `//evil.test/`).
+  const local = (path: string) =>
+    path.startsWith('/') &&
+    !path.startsWith('//') &&
+    !path.startsWith('/\\') &&
+    !/[\u0000-\u001f\u007f\\]/.test(path) &&
+    (!basePath ||
+      path === basePath ||
+      path.startsWith(basePath + '/') ||
+      path.startsWith(basePath + '?'));
+  if (typeof requested === 'string' && local(requested)) return requested;
   if (referer)
     try {
       const url = new URL(referer);
-      if (url.origin === origin && inside(url.pathname)) return url.pathname + url.search;
+      if (url.origin === origin && local(url.pathname)) return url.pathname + url.search;
     } catch {
       /* not a URL */
     }

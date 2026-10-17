@@ -103,6 +103,20 @@ This was necessary for idle-stream cancellation under local workerd even with th
 request-signal flag. No client assertions are skipped to accommodate this behavior.
 Worker CPU and post-disconnect waitUntil limits remain platform constraints.
 
+### Request time on Workers
+
+The engine ends a transition after `limits.timeout` (default 5 minutes) and after
+`limits.idleTimeout` (default 30 s) without a frame; both answer a `timeout` error frame.
+Cloudflare limits CPU time, not wall-clock time: an HTTP request may stream as long as the
+client stays connected, and time spent awaiting I/O (fetch, KV, timers) does not count. The
+CPU limit is 10 ms per request on the Free plan and 30 s by default on Paid, configurable up
+to 5 minutes with `"limits": { "cpu_ms": 300000 }` in `wrangler.jsonc`
+([platform limits](https://developers.cloudflare.com/workers/platform/limits/)). A transition
+that re-renders large server slots on every frame spends CPU and can reach that limit before
+the engine timeout; stream to a client slot (`merge`) instead or raise `cpu_ms`. Keep
+`limits.timeout` within what the plan allows so the browser gets a `timeout` error frame
+rather than a dropped connection.
+
 ## Prerendered pages
 
 Pages opt in with `export const prerender = true` (or `surface({ prerender: true })`

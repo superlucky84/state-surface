@@ -145,4 +145,24 @@ describe('remove and UI', () => {
     expect(el.className).toBe('b');
     expect(el.style.getPropertyValue('--x')).toBe('');
   });
+
+  it('regression: a new patch restores what the previous one changed on the SSR host', () => {
+    const { el, dom } = setup();
+    el.className = 'card on';
+    el.style.setProperty('--x', '0');
+    // Removing and re-adding SSR classes, overriding an SSR variable…
+    dom.setUi(el, 'panel', {
+      classRemove: ['card'],
+      classAdd: ['on', 'hot'],
+      cssVars: { '--x': '9' },
+    });
+    expect([...el.classList].sort()).toEqual(['hot', 'on']);
+    expect(el.style.getPropertyValue('--x')).toBe('9');
+    // …is undone by the next patch: same result as if only that patch had been applied.
+    dom.setUi(el, 'panel', { classAdd: ['cold'] });
+    expect([...el.classList].sort()).toEqual(['card', 'cold', 'on']);
+    expect(el.style.getPropertyValue('--x')).toBe('0');
+    dom.setUi(el, 'panel', null);
+    expect([...el.classList].sort()).toEqual(['card', 'on']);
+  });
 });

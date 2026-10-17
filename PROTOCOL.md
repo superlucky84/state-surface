@@ -31,7 +31,8 @@ transition yields StateFrame ─▶ server: validate → request reducer → pro
   (`fieldErrors`: field path → messages; the error slot is rendered as for other errors).
 - Required headers (sent by the engine runtime):
   - `X-Surface-Build: <buildId>` — must equal the server's build id, else **409** (the browser
-    reopens the current URL as a document load).
+    reopens the current URL as a document load, once: running requests are aborted and later
+    actions resolve `{ ok: false, aborted: true }` without a request).
   - `X-Surface-Page: <pageId>` — the page manifest used to resolve slots (route file path without
     extension, e.g. `[lang]/guide/[slug]`); missing or unknown is **400**. It is not an authorization
     input. The page's language is not sent: pages pass it in the params (`lang`) when the
@@ -76,6 +77,7 @@ sends an `error` frame and ends the request):
 - **Targets**: `defineTransition({ targets, handler })` declares the slots the transition may
   change. Without it, the slots of the first full frame become the targets. Any frame that touches
   a slot outside the targets, a slot that is not on the page, or a static slot is invalid.
+- Each `states` value is the slot's component props: an object. Other values are invalid.
 - `full` (default) replaces the **targets** — not the whole page. Target slots missing from a full
   frame are removed; slots outside the targets and static content stay.
 - Partial (`full: false`) needs at least one of `changed`, `removed`, `uiChanged`. `changed` keys
@@ -83,8 +85,9 @@ sends an `error` frame and ends the request):
 - Accumulate (`accumulate: true`) merges deltas: arrays concat, strings concat, other values
   replace (shallow). It cannot carry `removed` or `ui` and is never the first frame.
 - UI patches: `classAdd`/`classRemove` are arrays of tokens matching `[A-Za-z0-9_:/\[\].-]+`;
-  `cssVars` keys start with `--` and values must not contain `;`, `{`, `}`, `\`, `url(` or
-  `expression(`. A full frame sets the UI of every target slot (missing → cleared).
+  `cssVars` keys start with `--` and values must not contain `;`, `{`, `}`, `\`, `url(`,
+  `image-set(`, `src(` or `expression(`. A full frame sets the UI of every target slot that keeps
+  content (missing → cleared); a removed slot loses its UI.
 - An empty handler (no frame) is a successful request: the engine sends only `done`.
 - `reset: [slot]` (any frame except accumulate; keys must be in `states`) asks for a new instance
   of a client slot (DC-05): its `props` op carries `reset: true` and the browser remounts it, local
@@ -156,6 +159,7 @@ type IslandMeta = {
   media?: string;
   only?: true;
   resetKey?: string[]; // prop names that identify the instance across morph
+  capability?: 'unsafe'; // inside a capability="unsafe" slot: no browser attribute guard
 };
 ```
 
@@ -185,9 +189,13 @@ Browser state table (per request):
 | completed / failed / aborted | nothing (later frames are ignored)                                                                            |
 
 - EOF without `done` or `error` is an error; applied ops are not rolled back.
+- A line that is not JSON stops the request: a lost frame would leave later deltas wrong.
 - The browser re-checks op structure only. A malformed content op, an unknown op (version
-  mismatch) or an op whose kind does not match the slot mode stops the request; an invalid `ui`
-  op is skipped and traced.
+  mismatch), any op for a static slot or an op whose kind does not match the slot mode stops the
+  request; an invalid `ui` op is skipped and traced.
+- A `ui` op replaces the slot's previous patch: the browser first undoes it (classes it added or
+  removed, variables it set), so the host shows its SSR classes and style plus the latest patch,
+  however the patches were coalesced.
 - Queued ops are coalesced once per animation frame: per slot the last `html`/`props` wins,
   `merge` folds into the preceding `props`/`merge`, ops after `remove` are a new appearance.
 - Concurrency (DC-11, DC-30): a new request aborts running requests of the same name and those
@@ -233,13 +241,18 @@ passed to `reportError`.
 
 ## Capability
 
-| Capability       | Slot content                                                                                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| strict (default) | Component props only. No raw HTML (`innerHTML` is an error). URL attributes (`href`, `src`, `action`, `formaction`, …) outside http, https, mailto and relative references are dropped. |
-| rich             | strict plus Markdown through `Markdown` from `state-surface/rich` (mdast → hast allowlist, raw HTML dropped).                                                                           |
-| unsafe           | Raw HTML allowed; `<script>` is made inert. `sandbox="iframe"` renders the content into a sandboxed iframe `srcdoc`.                                                                    |
+| Capability       | Slot content                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| strict (default) | Component props only. No raw HTML (`innerHTML`, `srcdoc` are errors). Event handler attributes in any letter case are dropped, and so are URL attributes (`href`, `src`, `action`, `formaction`, `poster`, `cite`, `background`, `xlink:href`, `<object data codebase>`, SVG `<animate>`/`<set>` values written into `href`) outside http, https, mailto and relative references. |
+| rich             | strict plus Markdown through `Markdown` from `state-surface/rich` (mdast → hast allowlist, raw HTML dropped).                                                                                                                                                                                                                                                                     |
+| unsafe           | Raw HTML allowed; `<script>` is made inert (in `srcdoc` too). Event handler attributes and `javascript:` URLs inside that HTML are not removed: render untrusted HTML with `sandbox="iframe"` (a sandboxed iframe `srcdoc` without scripts).                                                                                                                                      |
 
-Capability is fixed by the page manifest; a frame cannot raise it.
+Capability is fixed by the page manifest; a frame cannot raise it. The browser applies the same
+attribute rules to client components that render frame data: client slots and islands inside a
+slot (not `capability="unsafe"`; `capability: "unsafe"` in their bootstrap metadata). A
+MutationObserver removes the attributes in the microtask after each render, before any later
+task (a click, an `onerror`, a queued `javascript:` navigation) can use them. Islands in page or
+layout markup are app code and are not guarded.
 
 ## Stylesheets
 
@@ -286,6 +299,8 @@ One JSON script per page (written only when the page needs the engine or has an 
 - `actions`: targets and `queue` of the transitions that declare them (others overlap everything).
 - `router` (only on pages that render `<ClientRouter />`): its options, see Client Router below.
 - `persist` / `persistProps` (client slots and islands): the persist ID and the keep-props flag.
+- `capability: "unsafe"` (client slots and slot islands of a `capability="unsafe"` slot): the
+  browser does not guard their attributes (Capability below).
 - Page responses carry `X-Surface-Build`; a page whose chunk failed twice compares it with its
   `buildId` and reloads on the next interaction when they differ.
 
@@ -316,11 +331,13 @@ the engine intercepts the submit (`method="post"`, same origin, action under
 - The handler runs to the end and its frames are dropped; the response is **303** with
   `Cache-Control: no-store`. `Location`: the `_redirect` field when it is a path inside BASE_PATH on
   this origin (starts with `/`, no `//`, `/\`, scheme or control characters), else a same-origin
-  `Referer` inside BASE_PATH, else the BASE_PATH root.
+  `Referer` whose path passes the same check, else the BASE_PATH root.
 - The result travels in the `surface_flash` cookie (HttpOnly, SameSite=Lax, Max-Age 60, Secure
   on https): `base64url(JSON).base64url(HMAC-SHA256)` with the IC-09 flash key
   (`state-surface/flash/v1`; the previous secret also verifies). Payload:
-  `{ n: name, ok, error?: { message, kind: 'validation' | 'server', fieldErrors? }, input? }`.
+  `{ n: name, e: expiry, ok, error?: { message, kind: 'validation' | 'server', fieldErrors? }, input? }`;
+  `e` (Unix seconds, issue time + 60) is signed too, so a captured value is refused after the
+  cookie's lifetime.
   `input` holds only the fields listed in `defineTransition({ flash: { input: [...] } })` and never
   files. A server error's message is the `TransitionError` message, else `Transition failed`
   outside development.

@@ -23,7 +23,14 @@ import { IdleTimeoutError, frameEncoder, produceFrames } from '../transitionResp
 import { assertSecret, seal, unseal, type SecretSource } from '../secrets.js';
 import { TransitionError } from '../transition.js';
 import { validateSchema } from '../../shared/schema.js';
-import { FLASH_COOKIE, openFlash, redirectTarget, sealFlash, type Flash } from '../flash.js';
+import {
+  FLASH_COOKIE,
+  FLASH_TTL,
+  openFlash,
+  redirectTarget,
+  sealFlash,
+  type Flash,
+} from '../flash.js';
 import type { ActionMeta } from '../../shared/protocol.js';
 import type { DeferredPayload } from '../ssrRenderer.js';
 import { prerenderFile, prerenderView } from '../prerenderContext.js';
@@ -700,7 +707,7 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
             );
           ctx.cookies.set(FLASH_COOKIE, sealed.value, {
             httpOnly: true,
-            maxAge: 60,
+            maxAge: FLASH_TTL,
             secure: ctx.url.protocol === 'https:',
           });
           return new Response(null, {

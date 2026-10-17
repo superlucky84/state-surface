@@ -71,6 +71,11 @@ function restore(el: HTMLElement, saved: Saved) {
  */
 export class SlotDom {
   private ui = new Map<string, UiPatch>();
+  /** How to undo the applied patch: classes it added or removed, variables it replaced. */
+  private undo = new Map<
+    string,
+    { added: string[]; removed: string[]; vars: [string, string][] }
+  >();
   private morph?: Promise<Morph>;
 
   constructor(
@@ -121,21 +126,35 @@ export class SlotDom {
     el.innerHTML = '';
   }
 
-  /** `ui` op: the slot's whole UI patch (null clears it). Content is applied first. */
+  /**
+   * `ui` op: the slot's whole UI patch (null clears it). Content is applied first. A new
+   * patch first undoes the previous one, so the host shows its SSR classes and style plus the
+   * current patch only, whatever patches came before (DESIGN 8.1 UI reset).
+   */
   setUi(el: HTMLElement, slot: string, patch: UiPatch | null) {
-    const previous = this.ui.get(slot);
-    if (previous) {
-      if (previous.classAdd?.length) el.classList.remove(...previous.classAdd);
-      for (const key of Object.keys(previous.cssVars ?? {})) el.style.removeProperty(key);
+    const undo = this.undo.get(slot);
+    if (undo) {
+      el.classList.remove(...undo.added);
+      el.classList.add(...undo.removed);
+      for (const [key, value] of undo.vars)
+        if (value) el.style.setProperty(key, value);
+        else el.style.removeProperty(key);
+      this.undo.delete(slot);
     }
     if (!patch) {
       this.ui.delete(slot);
       return;
     }
-    if (patch.classRemove?.length) el.classList.remove(...patch.classRemove);
-    if (patch.classAdd?.length) el.classList.add(...patch.classAdd);
-    for (const [key, value] of Object.entries(patch.cssVars ?? {}))
+    const removed = (patch.classRemove ?? []).filter(name => el.classList.contains(name));
+    el.classList.remove(...removed);
+    const added = (patch.classAdd ?? []).filter(name => !el.classList.contains(name));
+    el.classList.add(...added);
+    const vars: [string, string][] = [];
+    for (const [key, value] of Object.entries(patch.cssVars ?? {})) {
+      vars.push([key, el.style.getPropertyValue(key)]);
       el.style.setProperty(key, value);
+    }
+    this.undo.set(slot, { added, removed, vars: vars.reverse() });
     this.ui.set(slot, patch);
   }
 
@@ -145,6 +164,10 @@ export class SlotDom {
 
   /** Client navigation: UI patches of replaced slots are gone with their DOM. */
   leavePage(persisted: ReadonlySet<string> = new Set()) {
-    for (const slot of [...this.ui.keys()]) if (!persisted.has(slot)) this.ui.delete(slot);
+    for (const slot of [...this.ui.keys()])
+      if (!persisted.has(slot)) {
+        this.ui.delete(slot);
+        this.undo.delete(slot);
+      }
   }
 }
