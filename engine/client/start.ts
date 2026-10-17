@@ -1,12 +1,10 @@
-/// <reference path="./virtual.d.ts" />
-import components from 'virtual:state-surface/islands';
 import { emitTrace } from './trace.js';
-import plugins from 'virtual:state-surface/plugins';
+import { DEV } from './dev.js';
 import { setBasePath } from '../shared/basePath.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
-import { ComponentHost, type PersistTarget } from './componentHost.js';
-import { PluginHost, type PluginDefinition } from './pluginHost.js';
-import { actionTarget, readAction, type ActionInvocation } from './actionEvents.js';
+import type { ComponentHost, PersistTarget } from './componentHost.js';
+import { PluginRelay } from './pluginRelay.js';
+import type { ActionInvocation } from './actionEvents.js';
 import { readBootstrap } from './bootstrap.js';
 import { provideRuntime } from './runtimeAccess.js';
 import type { StateSurface } from './stateSurface.js';
@@ -55,13 +53,19 @@ export interface PageController {
  * Lifetimes (DC-18): the loader, listeners, plugin modules and the action runtime live for
  * the document; slots, instances, plugin entries and `<Boot>` live for a page. The router
  * chunk (pages with `<ClientRouter>`) drives `leavePage`/`enterPage` on client navigation.
+ *
+ * Size (DC-17): the loader keeps only what every engine page needs. The component host
+ * (with the app's componentId → chunk map) loads on pages with client components and with
+ * the action runtime; the plugin host at the earliest timing of the page's plugins.
  */
 export function startLoader(root: Document = document) {
   let bootstrap = readBootstrap(root);
   setBasePath(bootstrap.basePath);
   const debug = new URLSearchParams(location.search).get('debug') === '1';
   const report = (error: unknown, detail: Record<string, unknown>) => {
-    if (debug) console.error('[StateSurface]', detail, error);
+    // Development always logs; it also keeps the flag's module in the loader chunk, so the
+    // other engine chunks import it from there instead of from a chunk of its own.
+    if (debug || DEV) console.error('[StateSurface]', detail, error);
     // Trace subscribers (onTrace) see unexpected errors with their context in production too.
     emitTrace({
       kind: 'error',
@@ -86,24 +90,35 @@ export function startLoader(root: Document = document) {
       .catch(() => {});
   };
 
-  const pluginHost = new PluginHost(
-    bootstrap.plugins ?? [],
-    plugins as Record<string, (() => Promise<PluginDefinition>) | undefined>,
-    report
-  );
-  const host = new ComponentHost({
-    loaders: components,
-    plugins: pluginHost,
-    report,
-    onChunkError: checkBuild,
-  });
+  const pluginHost = new PluginRelay(() => import('./pluginEntry.js'), report);
+  let host: ComponentHost | undefined;
+  let hostLoading: Promise<ComponentHost> | undefined;
+  const loadHost = () =>
+    (hostLoading ??= import('./components.js').then(
+      module => {
+        host = module.createComponentHost({
+          plugins: pluginHost,
+          report,
+          onChunkError: checkBuild,
+        });
+        // The page may have changed while the chunk loaded: scan the current one.
+        host.scan(root, bootstrap.slots ?? []);
+        return host;
+      },
+      error => {
+        hostLoading = undefined;
+        report(error, { kind: 'chunk', chunk: 'components' });
+        checkBuild();
+        throw error;
+      }
+    ));
   const actionEnd: Array<() => void> = [];
 
   let runtime: Promise<StateSurface> | undefined;
   let surface: StateSurface | undefined;
   const startRuntime = () =>
-    (runtime ??= import('./runtime.js').then(
-      module => {
+    (runtime ??= Promise.all([import('./runtime.js'), loadHost()]).then(
+      ([module, host]) => {
         // The page may have changed while the chunk loaded: start with the current one.
         surface = module.startRuntime({
           bootstrap,
@@ -127,21 +142,37 @@ export function startLoader(root: Document = document) {
       }
     ));
   provideRuntime(startRuntime);
+  // Until the runtime delegation runs, a click or submit on an action is snapshotted at event
+  // time and run once the runtime loaded (DC-04 ⑦). The event reader is its own chunk
+  // (shared with the runtime and modulepreloaded with it), so pages without actions do not
+  // carry it; it is in place as soon as that preloaded chunk evaluates.
+  let events: typeof import('./actionEvents.js') | undefined;
   // Bubble phase: a component handler that called preventDefault() keeps the event.
   const capture = (event: Event) => {
-    if (surface) return;
-    const element = actionTarget(event);
+    if (surface || !events) return;
+    const element = events.actionTarget(event);
     if (!element) return;
     event.preventDefault();
-    const invocation: ActionInvocation | undefined = readAction(element, event);
+    const invocation: ActionInvocation | undefined = events.readAction(element, event);
     if (!invocation) return;
     void startRuntime().then(
       surface => runAction(surface, invocation),
       () => {}
     );
   };
-  root.addEventListener('click', capture);
-  root.addEventListener('submit', capture);
+  let capturing: Promise<void> | undefined;
+  const startCapture = () => {
+    if (capturing || surface) return;
+    capturing = import('./actionEvents.js').then(
+      module => {
+        events = module;
+        if (surface) return;
+        root.addEventListener('click', capture);
+        root.addEventListener('submit', capture);
+      },
+      () => {}
+    );
+  };
 
   /** Page lifetime: display static/server slots, activate components, start plugins. */
   const mountPage = (persisted: ReadonlySet<string> = new Set()) => {
@@ -151,18 +182,18 @@ export function startLoader(root: Document = document) {
       const el = root.querySelector<HTMLElement>(`h-state[name="${CSS.escape(meta.id)}"]`);
       if (el?.childNodes.length) pluginHost.displayedSlot(meta.id, el, meta.mode);
     }
-    host.scan(root, slots);
+    if (host) host.scan(root, slots);
+    else if (slots.some(meta => meta.mode === 'client' && meta.component))
+      void loadHost().catch(() => {});
     if (surface) {
       surface.mountPage(bootstrap, persisted, root);
       surface.startPage(bootstrap.boot);
-    } else if (
-      !runtime &&
-      (root.querySelector('[data-action], form[action*="/_surface/action/"]') ||
-        bootstrap.boot?.length ||
-        slots.some(meta => meta.defer) ||
-        debug)
-    )
-      void startRuntime().catch(() => {});
+    } else if (!runtime) {
+      const actions = root.querySelector('[data-action], form[action*="/_surface/action/"]');
+      if (actions) startCapture();
+      if (actions || bootstrap.boot?.length || slots.some(meta => meta.defer) || debug)
+        void startRuntime().catch(() => {});
+    }
     // Without the router, Speculation Rules prefetch the opted-in links (DC-20 ③); browsers
     // without them get <link rel="prefetch"> for the eager strategies.
     if (!bootstrap.router && !HTMLScriptElement.supports?.('speculationrules'))
@@ -177,7 +208,7 @@ export function startLoader(root: Document = document) {
         root.head.append(hint);
       }
   };
-  pluginHost.start(root);
+  pluginHost.mountPage(bootstrap.plugins ?? [], root);
   mountPage();
 
   const controller: PageController = {
@@ -193,7 +224,7 @@ export function startLoader(root: Document = document) {
     leavePage(plan) {
       surface?.leavePage(plan.slots);
       pluginHost.leavePage(plan.slots);
-      host.leavePage(plan.instances);
+      host?.leavePage(plan.instances);
     },
     enterPage(next, plan) {
       bootstrap = next;
@@ -210,5 +241,13 @@ export function startLoader(root: Document = document) {
       module => module.startRouter(controller, root),
       error => report(error, { kind: 'chunk', chunk: 'router' })
     );
-  return { host, plugins: pluginHost, runtime: () => runtime, controller };
+  return {
+    /** The component host once its chunk loaded (tests). */
+    host: () => hostLoading,
+    /** The early action capture once its chunk loaded (tests). */
+    capture: () => capturing,
+    plugins: pluginHost,
+    runtime: () => runtime,
+    controller,
+  };
 }

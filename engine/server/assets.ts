@@ -21,8 +21,8 @@ export function resolveAssetCss(source: string): string[] {
  * serves modules on demand and injects their CSS.
  */
 export function resolveChunk(source: string): { files: string[]; css: string[] } | undefined {
-  const key = source.replace(/^\//, '');
-  if (!assets[key]) return undefined;
+  const key = manifestKey(source);
+  if (!key) return undefined;
   const files: string[] = [];
   const css: string[] = [];
   const seen = new Set<string>();
@@ -36,4 +36,21 @@ export function resolveChunk(source: string): { files: string[]; css: string[] }
   };
   visit(key);
   return { files, css };
+}
+
+/**
+ * The manifest key of a source module. Rollup gives a dynamic entry chunk no facade module
+ * when other chunks import code it also contains (app plugins import `definePlugin` from the
+ * plugin host chunk); Vite then keys it by chunk name (`_pluginEntry-<hash>.js`).
+ */
+function manifestKey(source: string): string | undefined {
+  const key = source.replace(/^\//, '');
+  if (assets[key]) return key;
+  const name = key.slice(key.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
+  return Object.keys(assets).find(
+    candidate =>
+      candidate.startsWith('_') &&
+      assets[candidate].isDynamicEntry &&
+      assets[candidate].name === name
+  );
 }

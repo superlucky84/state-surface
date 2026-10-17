@@ -71,6 +71,8 @@ const ENGINE_CLIENT = {
   bridge: engineFile('client/lithentBridge'),
   morph: engineFile('client/morph'),
   router: engineFile('client/router'),
+  components: engineFile('client/components'),
+  plugins: engineFile('client/pluginEntry'),
 };
 const SERVER_ONLY_MARKERS = [engineFile('serverOnly'), engineFile('serverOnly.browser')];
 type PluginContext = Pick<Rollup.PluginContext, 'resolve'>;
@@ -429,6 +431,8 @@ export function surface(options: SurfacePluginOptions = {}): Plugin {
           bridge: documentPath(ENGINE_CLIENT.bridge),
           morph: documentPath(ENGINE_CLIENT.morph),
           router: documentPath(ENGINE_CLIENT.router),
+          components: documentPath(ENGINE_CLIENT.components),
+          plugins: documentPath(ENGINE_CLIENT.plugins),
         },
       };
       let assets = {};

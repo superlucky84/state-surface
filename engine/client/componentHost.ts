@@ -1,6 +1,6 @@
 import type { TagFunction } from 'lithent';
 import type { Mount } from './lithentBridge.js';
-import type { PluginHost } from './pluginHost.js';
+import type { PluginEvents } from './pluginHost.js';
 import type { IslandMeta, SlotMeta } from '../shared/protocol.js';
 import { schedule, type Timing } from './scheduler.js';
 
@@ -77,7 +77,7 @@ export class ComponentHost {
   constructor(
     private options: {
       loaders: ComponentLoaders;
-      plugins?: PluginHost;
+      plugins?: PluginEvents;
       report?: Report;
       loadBridge?: () => Promise<Bridge>;
       /** A chunk failed after its retry (the loader checks for a new deployment). */

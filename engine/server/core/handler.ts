@@ -842,8 +842,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
  * Entry selection (DESIGN 5.1): every page gets the global styles and the app entry; the
  * engine loader only when the page uses client components, actions, `<Boot>`, deferred
  * slots or plugins. Rendered client components add their chunk CSS; `client:load`
- * components, the action runtime and the morph chunk are modulepreloaded so the loader does
- * not wait on a request waterfall.
+ * components, the action runtime, the component host, the morph chunk and plugins loading
+ * at `load` are modulepreloaded so the loader does not wait on a request waterfall.
  */
 function createDocumentTags(document: DocumentConfig) {
   // Asset URLs are immutable build configuration; resolve the static parts once.
@@ -866,6 +866,14 @@ function createDocumentTags(document: DocumentConfig) {
     };
     const eager = usage.components.some(component => component.preload);
     if (usage.actions) add(engine.runtime, true);
+    // The loader imports the component host for client components and the runtime.
+    if ((usage.actions || usage.components.length) && engine.components)
+      add(engine.components, true);
+    if (usage.plugins.length && engine.plugins)
+      add(
+        engine.plugins,
+        usage.plugins.some(plugin => plugin.load === 'load')
+      );
     if (usage.morph && engine.morph) add(engine.morph, true);
     if (usage.router && engine.router) add(engine.router, true);
     if (usage.components.length) add(engine.bridge, eager);

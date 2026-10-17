@@ -40,6 +40,8 @@ describe('startLoader', () => {
     document.head.innerHTML = bootstrap({ basePath: '/demo' });
     document.body.innerHTML = '<button data-action="like" data-params=\'{"id":7}\'>Like</button>';
     const loader = startLoader();
+    // The capture is ready as soon as its (modulepreloaded) chunk evaluates.
+    await loader.capture();
     document.querySelector('button')!.click();
     await loader.runtime();
     await flush();

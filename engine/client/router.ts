@@ -5,7 +5,6 @@ import type { SurfaceBootstrap } from '../shared/protocol.js';
 import type { PrefetchStrategy, RouterOptions } from '../shared/surfaceTree.js';
 import { provideRouter } from './runtimeAccess.js';
 import { readBootstrap } from './bootstrap.js';
-import { schedule } from './scheduler.js';
 import type { PageController, PersistPlan } from './start.js';
 
 export type NavigationTrigger = 'link' | 'form' | 'popstate' | 'api' | 'load';
@@ -316,21 +315,32 @@ export function startRouter(page: PageController, doc: Document = document) {
   on(doc, 'pointerdown', tap, { passive: true });
   on(doc, 'touchstart', tap, { passive: true });
 
-  // viewport and load links are collected when a page loads (the scheduler's timings).
+  // viewport and load links are collected when a page loads (the scheduler's timings). The
+  // scheduler chunk loads only for pages that have such links (hover is the default).
   let watching: Array<() => void> = [];
-  const unwatch = () => watching.splice(0).forEach(cancel => cancel());
+  let generation = 0;
+  const unwatch = () => {
+    generation++;
+    watching.splice(0).forEach(cancel => cancel());
+  };
   const watchLinks = () => {
     unwatch();
     if (slowConnection()) return;
-    for (const link of doc.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    const links = Array.from(doc.querySelectorAll<HTMLAnchorElement>('a[href]')).flatMap(link => {
       const strategy = strategyOf(link);
-      if (strategy === 'viewport' || strategy === 'load')
+      return strategy === 'viewport' || strategy === 'load' ? [{ link, strategy }] : [];
+    });
+    if (!links.length) return;
+    const current = generation;
+    void import('./scheduler.js').then(({ schedule }) => {
+      if (current !== generation) return;
+      for (const { link, strategy } of links)
         watching.push(
           schedule(strategy === 'load' ? 'idle' : 'visible', () => prefetch(link), {
             element: link,
           })
         );
-    }
+    });
   };
 
   // ── Swap (DESIGN 10.1 ②) ──

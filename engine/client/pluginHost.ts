@@ -16,6 +16,21 @@ export interface ActionEvent {
 }
 
 /**
+ * Slot and action events of the page. The loader's `PluginRelay` takes them before the
+ * plugin host chunk loads and hands them on once it did; ComponentHost, SlotDom and the
+ * action runtime only see this interface.
+ */
+export interface PluginEvents {
+  /** Slot DOM is ready (SSR content of static/server slots, client activation or render). */
+  displayedSlot(name: string, el: HTMLElement, mode: SlotKind): void;
+  /** The same DOM was updated (client props update, morph). */
+  updatedSlot(name: string): void;
+  /** Called before the slot DOM is cleared. */
+  removedSlot(name: string): void;
+  action(event: ActionEvent): void;
+}
+
+/**
  * Client plugin (DC-12). Declared with `export const plugins = [plugin]` on pages or the
  * modules they import (layouts); only those pages load its chunk. `load` and `slots` must be
  * literals because the build reads them.
@@ -67,7 +82,7 @@ interface DisplayedSlot {
  * and aborts the page signal; `mountPage` activates the next page's plugins (already loaded
  * modules at once) and persisted slots get `update`.
  */
-export class PluginHost {
+export class PluginHost implements PluginEvents {
   /** Loaded plugin modules by id (document lifetime). */
   private modules = new Map<string, Promise<PluginDefinition | undefined>>();
   /** Plugins of the current page, in load order. */

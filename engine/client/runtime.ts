@@ -3,7 +3,7 @@ import { DEV } from './dev.js';
 import { bindDeclarativeActions } from './actionDelegation.js';
 import { SlotDom } from './slotDom.js';
 import type { ComponentHost } from './componentHost.js';
-import type { PluginHost } from './pluginHost.js';
+import type { PluginEvents } from './pluginHost.js';
 import type { SurfaceBootstrap } from '../shared/protocol.js';
 
 /**
@@ -15,7 +15,7 @@ import type { SurfaceBootstrap } from '../shared/protocol.js';
 export function startRuntime(options: {
   bootstrap: SurfaceBootstrap;
   host: ComponentHost;
-  plugins: PluginHost;
+  plugins: PluginEvents;
   debug: boolean;
   report: (error: unknown, detail: Record<string, unknown>) => void;
   /** Action start/end (the router empties its prefetch cache when an action ends). */

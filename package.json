@@ -125,6 +125,7 @@
     "test:e2e": "playwright test",
     "perf": "node perf/measure.mjs",
     "perf:compare": "node perf/compare.mjs",
+    "perf:gate": "node perf/gate.mjs",
     "test:spikes": "playwright test --project=spikes",
     "build:conformance": "node conformance/build.mjs",
     "test:conformance": "node conformance/run.mjs",

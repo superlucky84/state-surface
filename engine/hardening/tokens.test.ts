@@ -165,10 +165,18 @@ describe('deferred slot tokens', () => {
   it('rejects every flipped byte, truncation and foreign encodings', async () => {
     const token = await seal({ current: SECRET }, payload);
     const statuses = new Set<number>();
-    for (let i = 0; i < token.length; i += Math.ceil(token.length / 24)) {
-      const flipped = token.slice(0, i) + (token[i] === 'A' ? 'B' : 'A') + token.slice(i + 1);
-      statuses.add((await handler('b1').fetch(request('cart.tsx#default', flipped))).status);
+    // Flip whole bytes: the last base64url character also carries unused padding bits, so
+    // changing one character there can decode to the same bytes (the same token).
+    const bytes = Buffer.from(token, 'base64url');
+    for (let i = 0; i < bytes.length; i += Math.ceil(bytes.length / 24)) {
+      const flipped = Buffer.from(bytes);
+      flipped[i] ^= 0xff;
+      statuses.add(
+        (await handler('b1').fetch(request('cart.tsx#default', flipped.toString('base64url'))))
+          .status
+      );
     }
+    statuses.add((await handler('b1').fetch(request('cart.tsx#default', token + 'A'))).status);
     for (const bad of [token.slice(0, 20), token.slice(0, -1), '', '%00', 'a'.repeat(5000)])
       statuses.add((await handler('b1').fetch(request('cart.tsx#default', bad))).status);
     // A flash cookie value (HMAC key) is not a token (AES key): IC-09 key separation.

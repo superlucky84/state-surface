@@ -3,7 +3,7 @@ import { warning } from './trace.js';
 import type { IslandMeta, UiPatch } from '../shared/protocol.js';
 import { hasScript } from '../shared/capability.js';
 import type { ComponentHost } from './componentHost.js';
-import type { PluginHost } from './pluginHost.js';
+import type { PluginEvents } from './pluginHost.js';
 
 type Morph = typeof import('./morph.js');
 
@@ -80,7 +80,7 @@ export class SlotDom {
 
   constructor(
     private host: ComponentHost,
-    private plugins: PluginHost | undefined,
+    private plugins: PluginEvents | undefined,
     private options: { development?: boolean; loadMorph?: () => Promise<Morph> } = {}
   ) {}
 

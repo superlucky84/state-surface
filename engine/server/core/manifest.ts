@@ -9,17 +9,35 @@ import type { ImageConfig } from '../../shared/image.js';
 /** Vite build manifest entries (keys are project-relative source paths). */
 export type AssetManifest = Record<
   string,
-  { file: string; css?: string[]; imports?: string[]; dynamicImports?: string[] }
+  {
+    file: string;
+    css?: string[];
+    imports?: string[];
+    dynamicImports?: string[];
+    name?: string;
+    isDynamicEntry?: boolean;
+  }
 >;
 /**
  * Project-relative source paths (leading `/`) of the engine-managed head tags, resolved
  * through the asset manifest: global styles, the optional app entry (`client/entry.ts`)
- * and the engine chunks (loader entry, action runtime, Lithent bridge, morph, router).
+ * and the engine chunks (loader entry, action runtime, Lithent bridge, morph, router, component
+ * and plugin hosts).
  */
 export interface DocumentConfig {
   styles?: string[];
   appEntry?: string;
-  engine?: { loader: string; runtime: string; bridge: string; morph?: string; router?: string };
+  engine?: {
+    loader: string;
+    runtime: string;
+    bridge: string;
+    morph?: string;
+    router?: string;
+    /** Component host chunk (pages with client components or the action runtime). */
+    components?: string;
+    /** Plugin host chunk (pages that declare plugins). */
+    plugins?: string;
+  };
 }
 
 export type { StandardSchema };
