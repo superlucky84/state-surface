@@ -24,6 +24,9 @@ import { startServer } from '../perf/server.mjs';
  * and hreflang links join the head. The home page and guides are rewritten content (DC-25 ⑥:
  * guides on the 2.0 API, home concepts corrected) and their boot transitions are gone, so they
  * are not compared; neither are `switch-lang` and `guide-load`, which were removed.
+ *
+ * Stage 10 (MT-14): inputs in flex rows gained the `min-w-0` class so they shrink on narrow
+ * screens; that class token is ignored.
  */
 
 /** Stage 5 additions to the actions page, removed from the current tree before comparing. */
@@ -87,6 +90,14 @@ const stage7 = (node, base) => {
       if (key === 'href') return [key, unprefix(value)];
       if (key === 'value' && attributes.some(([k, v]) => k === 'name' && v === '_redirect'))
         return [key, unprefix(value)];
+      if (key === 'class')
+        return [
+          key,
+          value
+            .split(/\s+/)
+            .filter(token => token !== 'min-w-0')
+            .join(' '),
+        ];
       if (key === 'data-params') {
         const params = JSON.parse(value);
         delete params.lang;

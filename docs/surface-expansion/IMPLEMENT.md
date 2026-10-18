@@ -1389,7 +1389,8 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 찾은 결함(모두 회귀 테스트): ① Workers 데모 첫 요청 `Prism is not defined`(wrangler의 CommonJS 번들 순서) ② Lithent 1.25.2에서
   client 슬롯 props·merge 무시(생성 demo 앱 채팅) ③ reduced motion에서 `data-animate` reveal·대기 이동 ④ 320~360 px 가로 스크롤
   (actions·chat 입력란, 가이드 긴 경로). 테스트 쪽: tokens 테스트의 base64url 패딩 비트 뒤집기(바이트 단위로 고침), Playwright
-  `reducedMotion` 옵션 미적용(`contextOptions`), 헤더 링크 중복 선택자.
+  `reducedMotion` 옵션 미적용(`contextOptions`), 헤더 링크 중복 선택자. `pnpm test:parity`는 좁은 화면 수정의 `min-w-0`
+  class 토큰을 허용 차이로 무시한다(`conformance/parity.mjs`).
 - 검증: Vitest 61개 파일/752개, 전체 tsc 0, `pnpm check`, format:check, build(prerender 36페이지), 루트 데모 e2e 22 + spike 5,
   `pnpm test:modes` 15, `pnpm test:parity` 문서 14 + stream 1, 적합성 5 런타임 × 14와 app dev 14·prod 14, `pnpm test:sdk` 2,
   `pnpm perf:gate`.
