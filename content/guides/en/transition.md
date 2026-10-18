@@ -287,7 +287,7 @@ h-state[data-animate="rotate"][data-just-updated] {
 ```
 
 :::callout{kind="info"}
-The animation is CSS only, and the presets are plain CSS in the app's `client/styles.css`. The engine sets `data-just-updated` each time it applies new content to a slot (and removes it on `animationend`), and `data-pending` while a request that targets the slot runs. A custom preset only needs to target `h-state[data-animate="name"][data-just-updated]`.
+The animation is CSS only, and the presets are plain CSS in the app's `client/styles.css`. The engine sets `data-just-updated` each time it applies new content to a slot (and removes it on `animationend`), and `data-pending` while a request that targets the slot runs. A custom preset only needs to target `h-state[data-animate="name"][data-just-updated]`. With `prefers-reduced-motion: reduce` the engine does not set `data-just-updated`, and the presets keep only the pending dimming, without movement.
 :::
 
 :::callout{kind="tip"}

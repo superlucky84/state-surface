@@ -819,6 +819,20 @@ describe('in-page View Transitions (DC-06)', () => {
     await surface.transition('vt', {}, { viewTransition: true });
     expect(started).toEqual([]);
   });
+
+  it('marks data-animate slots for their reveal animation, except with reduced motion', async () => {
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    const { surface, slot } = setup();
+    slot('list').setAttribute('data-animate', 'slide-up');
+    await surface.transition('plain');
+    expect(slot('list').hasAttribute('data-just-updated')).toBe(true);
+    slot('list').removeAttribute('data-just-updated');
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
+    vi.stubGlobal('fetch', async () => ndjson(frames));
+    await surface.transition('plain');
+    expect(slot('list').innerHTML).toBe('<p>2</p>');
+    expect(slot('list').hasAttribute('data-just-updated')).toBe(false);
+  });
 });
 
 describe('deferred server slots (DC-21)', () => {

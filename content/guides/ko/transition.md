@@ -287,7 +287,7 @@ h-state[data-animate="rotate"][data-just-updated] {
 ```
 
 :::callout{kind="info"}
-애니메이션은 CSS로만 동작하며, 프리셋은 앱의 `client/styles.css`에 있는 평범한 CSS입니다. 엔진은 슬롯에 새 콘텐츠를 적용할 때마다 `data-just-updated`를 설정하고(`animationend`에서 제거), 그 슬롯을 대상으로 하는 요청이 실행되는 동안 `data-pending`을 설정합니다. 커스텀 프리셋은 `h-state[data-animate="name"][data-just-updated]`만 타겟으로 하면 됩니다.
+애니메이션은 CSS로만 동작하며, 프리셋은 앱의 `client/styles.css`에 있는 평범한 CSS입니다. 엔진은 슬롯에 새 콘텐츠를 적용할 때마다 `data-just-updated`를 설정하고(`animationend`에서 제거), 그 슬롯을 대상으로 하는 요청이 실행되는 동안 `data-pending`을 설정합니다. 커스텀 프리셋은 `h-state[data-animate="name"][data-just-updated]`만 타겟으로 하면 됩니다. `prefers-reduced-motion: reduce`이면 엔진은 `data-just-updated`를 설정하지 않고, 프리셋은 움직임 없이 대기 중 흐림 표시만 남깁니다.
 :::
 
 :::callout{kind="tip"}

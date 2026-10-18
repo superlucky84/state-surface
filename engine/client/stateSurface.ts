@@ -597,7 +597,7 @@ export class StateSurface {
 
   private viewTransitionFor(request: Request, ops: readonly Op[]) {
     if (request.transitioned || typeof document.startViewTransition !== 'function') return false;
-    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+    if (reducedMotion()) return false;
     return (
       request.viewTransition ||
       ops.some(op => isContent(op) && this.metas.get(op.slot)?.viewTransition === true)
@@ -737,7 +737,7 @@ export class StateSurface {
         if (
           meta.viewTransition &&
           typeof document.startViewTransition === 'function' &&
-          !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+          !reducedMotion()
         )
           await document.startViewTransition(run).updateCallbackDone.catch(() => {});
         else await run();
@@ -805,9 +805,12 @@ export class StateSurface {
   }
 }
 
-/** Opt-in reveal animation (`data-animate` on `<h-state>`). */
+/** View Transitions and reveal animations are skipped for reduced motion (DC-06). */
+const reducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Opt-in reveal animation (`data-animate` on `<h-state>`), none for reduced motion. */
 function reveal(el: HTMLElement) {
-  if (!el.hasAttribute('data-animate')) return;
+  if (!el.hasAttribute('data-animate') || reducedMotion()) return;
   el.removeAttribute('data-just-updated');
   void el.offsetWidth; // force reflow to restart animation
   el.setAttribute('data-just-updated', '');

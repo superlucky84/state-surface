@@ -81,6 +81,18 @@ h-state[data-animate="flip"][data-pending] {
   transform: perspective(600px) rotateY(8deg);
 }
 
+/* Reduced motion (DC-06): the engine plays no reveal animation, and the pending hint keeps its
+   dimming without movement. */
+@media (prefers-reduced-motion: reduce) {
+  h-state[data-animate] {
+    transition: none;
+  }
+
+  h-state[data-animate][data-pending] {
+    transform: none;
+  }
+}
+
 /* ── Reveal keyframes per preset ── */
 
 @keyframes h-state-fade {
