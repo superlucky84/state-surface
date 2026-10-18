@@ -18,7 +18,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "lithent": "^1.25.1",
+    "lithent": "^1.25.2",
     "state-surface": "__STATE_SURFACE_VERSION__"
   },
   "devDependencies": {

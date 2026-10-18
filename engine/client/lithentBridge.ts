@@ -1,4 +1,4 @@
-import { h, render, mount, componentUpdate } from 'lithent';
+import { h, render, mount } from 'lithent';
 import type { TagFunction, Props } from 'lithent';
 import { hydration } from 'lithent/ssr';
 import { guardDom } from './domGuard.js';
@@ -7,6 +7,11 @@ import { guardDom } from './domGuard.js';
  * Lithent glue, loaded as its own chunk only on pages that activate a client component.
  * Each instance is wrapped in a DataProxy so external props updates go through Lithent's
  * VDOM diff while local state survives.
+ *
+ * The proxy reads the latest props from a holder object and redraws through its own
+ * `renew`. Lithent 1.25.2+ draws a component created outside a diff with a copy of its
+ * props, so neither mutating the props object passed to `h` nor `componentUpdate(props)`
+ * reaches the instance; the holder is shared by reference and `renew` is the instance's.
  */
 export interface Mount {
   update(data: unknown): void;
@@ -28,15 +33,15 @@ export function mountComponent(
   el: HTMLElement,
   options: MountOptions
 ): Mount {
-  const proxyProps: Props = {
-    __data: data,
-    __component: component,
-    __children:
+  const holder: Holder = {
+    data,
+    component,
+    children:
       options.childrenHtml === undefined
         ? []
         : [h('h-children', { style: 'display:contents', innerHTML: options.childrenHtml })],
   };
-  const wdom = h(DataProxy as TagFunction, proxyProps);
+  const wdom = h(DataProxy as TagFunction, { __holder: holder } as Props);
   let cleanup: () => void;
   if (options.hydrate) {
     const restore = keepUserInput(el);
@@ -46,8 +51,8 @@ export function mountComponent(
   const guard = options.guard ? guardDom(el) : undefined;
   return {
     update(next) {
-      proxyProps.__data = next;
-      componentUpdate(proxyProps)();
+      holder.data = next;
+      holder.renew?.();
       guard?.flush();
     },
     cleanup() {
@@ -57,9 +62,19 @@ export function mountComponent(
   };
 }
 
-const DataProxy = mount<{ __data: any; __component: TagFunction; __children: unknown[] }>(
-  () => props => h(props.__component, props.__data ?? {}, ...(props.__children as never[]))
-);
+interface Holder {
+  data: unknown;
+  component: TagFunction;
+  children: unknown[];
+  /** The proxy instance's own redraw, set when it mounts. */
+  renew?: () => unknown;
+}
+
+const DataProxy = mount<{ __holder: Holder }>((renew, props) => {
+  const holder = props.__holder;
+  holder.renew = renew;
+  return () => h(holder.component, (holder.data ?? {}) as Props, ...(holder.children as never[]));
+});
 
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 

@@ -170,7 +170,7 @@
   "dependencies": {
     "@mdx-js/mdx": "3.1.1",
     "idiomorph": "0.7.4",
-    "lithent": "^1.25.1",
+    "lithent": "^1.25.2",
     "magic-string": "^0.30.21",
     "mdast-util-directive": "3.1.0",
     "mdast-util-from-markdown": "2.0.3",

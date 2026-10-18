@@ -15,8 +15,8 @@ importers:
         specifier: 0.7.4
         version: 0.7.4
       lithent:
-        specifier: ^1.25.1
-        version: 1.25.1
+        specifier: ^1.25.2
+        version: 1.25.2
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
@@ -1579,8 +1579,8 @@ packages:
     resolution: {integrity: sha512-utfs7Pr5uJyyvDETitgsaqSyjCb2qNRAtuqUeWIAKztsOYdcACf2KtARYXg2pSvhkt+9NfoaNY7fxjl6nuMjIQ==}
     engines: {node: '>= 12.0.0'}
 
-  lithent@1.25.1:
-    resolution: {integrity: sha512-AjpFa4CkMfd+H9Z1ngDx7xMRC2FIUJwWAy/9d2JlTokAfiS6xjGS+miCI0ikQ4Yd9SKNO8DhoFpt3VUaP+urNA==}
+  lithent@1.25.2:
+    resolution: {integrity: sha512-pBhQryDI2RNr56qeNLPfSTBc7pixKPlXddDfaBWm4akibIj2XNitwV9c8mmKwmVn4T2oSjar/15hHd4dXAuKNw==}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -3506,7 +3506,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.30.2
       lightningcss-win32-x64-msvc: 1.30.2
 
-  lithent@1.25.1: {}
+  lithent@1.25.2: {}
 
   longest-streak@3.1.0: {}
 

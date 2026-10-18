@@ -59,6 +59,33 @@ describe('mountComponent', () => {
     expect(second.textContent).toBe('Updated');
   });
 
+  it('keeps local state and island children across props updates (Lithent ≥ 1.25.2 props copy)', async () => {
+    // Lithent 1.25.2 draws a component made outside a diff with a copy of its props: the
+    // update has to reach the instance through the proxy's own renew.
+    const Counter = mount((renew, _props: { label: string }, children: unknown[]) => {
+      let count = 0;
+      return (next: { label: string }) =>
+        h(
+          'div',
+          {},
+          h('button', { onClick: () => (count++, renew()) }, `${next.label} ${count}`),
+          ...(children as never[])
+        );
+    }) as unknown as TagFunction;
+    const el = host();
+    const mounted = mountComponent(Counter, { label: 'A' }, el, {
+      hydrate: false,
+      childrenHtml: '<p>child</p>',
+    });
+    el.querySelector('button')!.click();
+    await tick();
+    expect(el.querySelector('button')!.textContent).toBe('A 1');
+    for (const label of ['B', 'C']) mounted.update({ label });
+    await tick();
+    expect(el.querySelector('button')!.textContent).toBe('C 1');
+    expect(el.querySelector('h-children > p')!.textContent).toBe('child');
+  });
+
   it('passes island children as a static fragment (IC-03)', () => {
     const el = host();
     mountComponent(Card, { title: 'Card' }, el, {
