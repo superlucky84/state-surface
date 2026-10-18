@@ -138,6 +138,7 @@
     "build:adapter-app": "tsx conformance/app-build.ts",
     "test:adapters": "node e2e/adapters/run.mjs",
     "test:modes": "node e2e/modes/build.mjs && playwright test -c e2e/modes/playwright.config.ts",
+    "test:sdk": "node e2e/sdk/build.mjs && playwright test -c e2e/sdk/playwright.config.ts",
     "build:package": "node scripts/build-package.mjs",
     "prepack": "node scripts/build-package.mjs"
   },
@@ -147,7 +148,9 @@
     ]
   },
   "devDependencies": {
+    "@datadog/browser-rum": "7.16.0",
     "@playwright/test": "1.56.1",
+    "@sentry/browser": "11.8.0",
     "@tailwindcss/vite": "^4.1.18",
     "@types/express": "^5.0.6",
     "@types/hast": "3.0.4",

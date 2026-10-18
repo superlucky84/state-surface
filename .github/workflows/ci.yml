@@ -131,6 +131,29 @@ jobs:
           name: performance-report
           path: perf/results/
 
+  sdk:
+    # V-31 (stage 10): the real Sentry and Datadog RUM browser SDKs (npm; Sentry Loader and
+    # Datadog CDN snippet) and the GTM runtime on a router app under a nonce CSP, sending to a
+    # local intake (no vendor accounts, IC-10). Needs network for the CDNs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:sdk
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-e2e
+          path: test-results/
+
   adapters:
     # Stage 10: the demo parity e2e against the production build of each adapter, at the
     # root and under BASE_PATH=/demo (Workers in local workerd).
