@@ -412,13 +412,19 @@ export default {
 - **Target-aware concurrency** — A new action aborts the same action and actions whose targets
   overlap; disjoint targets run in parallel, `mode: 'queue'` runs one name in order
 - **Per-slot hydration** — Reuses SSR DOM from snapshot props, no full-page rehydration
+- **Pay for what the page uses** — static pages load no engine JS; the 2.9 KB loader fetches the
+  component host, plugin host, action runtime and router only when the page needs them (home and
+  guides: 7.7 KB gzip of engine JS before `load`, 73% below 1.0)
+- **Works with your observability tools** — default Sentry, Datadog RUM and GTM installs keep
+  collecting errors, views and trace headers across client navigations, under a nonce CSP
 - **File-based routing** — `.tsx` pages from `routes/`, transitions from `transitions/` (path = name)
 - **Progressive forms** — `actionUrl()` forms work without JavaScript (PRG + signed one-time flash)
 - **Opt-in client router** — `<ClientRouter />` swaps server HTML between pages, keeps
   `transition:persist` iframes, media and islands, prefetches on hover
 - **View Transition API** — page cross-fade (MPA or router); in-page transitions are opt-in per action
   (`viewTransition: true`, `data-view-transition`) or slot (`<Slot viewTransition>`)
-- **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...)
+- **Animation presets** — 8 CSS animations via `data-animate` (`fade`, `slide-up`, `scale`, `blur`, ...);
+  reduced motion turns them and every View Transition off
 - **Static pages** — Prerendered pages per language, content collections, optimized images
 - **Scoped CSS** — CSS Modules (with Tailwind `@apply`) per page and per island
 - **Diagnostics** — source-located build errors with hints, `state-surface check`, runtime trace
@@ -443,7 +449,7 @@ surface.server.ts        # Handler options (middleware, onError, limits) for dev
 
 engine/                  # Framework core (do not edit)
   server/                #   Web-standard core, page renderer, transition handler
-  client/                #   Loader, component host, patch apply pipeline, morph
+  client/                #   Loader, component/plugin hosts, action runtime, router, morph
   build/                 #   Vite plugin: page discovery, call-site transform, diagnostics
   shared/                #   Protocol types, Slot/Boot markers
 ```
@@ -482,6 +488,10 @@ pnpm format                       # Format with Prettier
 pnpm check                        # state-surface check: build analysis + tsc, no bundle
 pnpm test:scaffold                # Pack, create, install, build, test and start the templates
 pnpm test:conformance:app         # Conformance scenarios on the dev server and the production build
+pnpm test:e2e --project=demo-parity # Demo e2e on the production build
+pnpm test:adapters                # Demo e2e on Node, Express, Bun, Deno and Workers (pnpm build:adapter-app first)
+pnpm test:sdk                     # Sentry, Datadog RUM and GTM over 20 client navigations
+pnpm perf:gate                    # Performance gate (engine JS on home/guide, CLS)
 
 BASE_PATH=/demo pnpm dev          # Serve under /demo/ prefix
 ```

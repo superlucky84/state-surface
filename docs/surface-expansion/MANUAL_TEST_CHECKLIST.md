@@ -1,8 +1,9 @@
 # StateSurface 2.0 — 수동 검증 체크리스트
 
-작성일: 2026-10-14
+작성일: 2026-10-14 · 갱신: 2026-10-18
 
-상태: Draft — 구현 후 실행할 항목, 현재 미실행
+상태: 구현 완료(단계 0~10). Chromium으로 자동화할 수 있는 부분은 단계마다 선행 실행해 5장에 기록했다. 실기기·Firefox·
+Safari·스크린리더·실제 배포·업체 계정이 필요한 수동 항목은 미실행이며 릴리스 판정은 보류다(4장).
 
 요구사항은 [REQUIREMENTS.md](./REQUIREMENTS.md), 계약·결정·검증 ID는 [DESIGN.md](./DESIGN.md), 단계별 자동 테스트는
 [IMPLEMENT.md](./IMPLEMENT.md)에 있다. 이 문서는 자동 테스트로 판정하기 어려운 항목을 사람이 실제 브라우저·장치·배포
@@ -331,20 +332,33 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
 
 ## 4. 릴리스 판정
 
-- [ ] MT-01~MT-18의 모든 체크 항목에 판정과 증거가 있다.
-- [ ] 릴리스 블로커(1.3)가 0이다.
-- [ ] 비블로커 실패마다 담당자와 후속 이슈가 기록돼 있다.
-- [ ] IMPLEMENT 단계 10의 자동 검증(V-ID 판정)과 성능 게이트가 통과했다.
+- [ ] MT-01~MT-18의 모든 체크 항목에 판정과 증거가 있다. → Chromium 자동 선행 부분만 판정했다(5장 단계 10). 수동 항목
+      (아래 목록)은 미실행.
+- [ ] 릴리스 블로커(1.3)가 0이다. → 자동 선행 실행이 찾은 블로커 3건(Lithent 1.25.2에서 client 슬롯 갱신 무시, Workers 첫
+      요청 실패, reduced motion에서 `data-animate` 재생)은 고쳤고 회귀 테스트가 있다. 수동 항목의 블로커 여부는 미판정.
+- [ ] 비블로커 실패마다 담당자와 후속 이슈가 기록돼 있다. → 비블로커: 좁은 화면 가로 스크롤(수정함), 로더 2,869 B(목표
+      2 KB)·라우터 4,813 B(목표 4 KB) 초과(보고 지표), Lithent 업스트림 후보 3건(IMPLEMENT 상태). 담당자 지정은 남았다.
+- [x] IMPLEMENT 단계 10의 자동 검증(V-ID 판정)과 성능 게이트가 통과했다(2026-10-18, IMPLEMENT 단계 10 실행 상세).
+
+**판정: 보류.** 자동 검증과 성능 게이트는 통과했다. 릴리스 전에 다음 수동 항목이 남는다.
+
+- 실기기·다른 브라우저: iOS Safari·Android Chrome 실기기, Firefox·Safari 데스크톱(MT-02·07·08·09·10·13·14·17), `moveBefore`
+  미지원 브라우저의 persist 한계(MT-09), Speculation Rules·`requestIdleCallback` 미지원 쪽(MT-01·10).
+- 보조 기술: VoiceOver·NVDA로 이동 안내와 포커스(MT-14).
+- 실제 배포: Cloudflare Workers 계정 배포(긴 스트림·CPU 한도·콜드 스타트 실측), Node graceful shutdown 수동 확인(MT-15).
+- 업체 계정(IC-10): GTM 미리보기의 실제 태그 실행, Sentry 소스맵 업로드 후 원본 TSX 위치, Datadog session replay 재생(MT-12).
+- 사람 관찰: 편집기 자동 완성·오류 표시 체감, 신규 사용자 30분 과제(MT-16), 체감 성능(MT-17).
 
 ---
 
 ## 5. 결과 기록
 
-실기기·스크린리더 수동 항목은 모두 미실행이다. 단계 0 자동 선행 검증은 아래 별도 기록하며 수동 통과로 계산하지 않는다.
+실기기·스크린리더 수동 항목은 모두 미실행이다. 단계별 자동 선행 검증은 아래 별도 기록하며 수동 통과로 계산하지 않는다.
 
-| 항목          | 날짜 | commit | 어댑터·브라우저·장치·네트워크 | 판정   | 증거·후속 조치          |
-| ------------- | ---- | ------ | ----------------------------- | ------ | ----------------------- |
-| MT-01 ~ MT-18 | —    | —      | —                             | 미실행 | 구현 전 체크리스트 초안 |
+| 항목                      | 날짜       | commit    | 어댑터·브라우저·장치·네트워크                                    | 판정           | 증거·후속 조치                |
+| ------------------------- | ---------- | --------- | ---------------------------------------------------------------- | -------------- | ----------------------------- |
+| MT-01 ~ MT-18 (수동)      | —          | —         | —                                                                | 미실행         | 4장 남은 수동 항목            |
+| MT-01 ~ MT-18 (자동 선행) | 2026-10-18 | `98f8549` | 5개 어댑터, Chromium 141 headless(BFCache는 full Chromium), 로컬 | 자동 부분 통과 | 아래 "단계 10 자동 선행 실행" |
 
 ### 단계 0 자동 선행 검증 — 2026-10-15
 
@@ -409,3 +423,75 @@ V-15(중복 ID·소유권 진단)는 자동 테스트로만 판정하며 이 문
   Markdown raw HTML·위험 링크 제거, unsafe의 inert script와 sandbox iframe, UI 클래스 토큰·cssVars 값 검증(`url(`·`expression(`·
   `;`·`{}`·`\`), `__SURFACE__` JSON의 `</script>` 이스케이프. 수동 보안 스모크는 미실행이다.
 - 데모의 transition 갱신 슬롯이 server 모드로 바뀌어 홈 초기 JS gzip 10,448 B(단계 0 28,147 B)다. MT-01 수동 판정으로 계산하지 않는다.
+
+### 단계 5 자동 선행 검증 (2026-10-16)
+
+- MT-02 관련: modes e2e V-04(청크를 붙잡은 채 입력·선택 → hydration 뒤 값·선택·포커스·컴포넌트 상태 유지), 조작 시 즉시
+  활성화(`pointerdown`·`focusin`·`keydown`, 이벤트는 재생하지 않음), 청크 1초 뒤 1회 재시도와 다른 `X-Surface-Build`의 다음 조작
+  재로드, resetKey·reset 재마운트, 같은 컴포넌트 인스턴스 독립(단위). 실기기·다른 브라우저 판정은 미실행이다.
+- MT-04 관련: 동시성 매트릭스(같은 이름·겹치는 targets abort, 분리 targets 병렬, targets 생략 = 전부와 겹침 + dev 경고 1회,
+  `mode: 'queue'` 순차), 요청별 pending 카운트·`data-has-result`, `<Boot>`, 오류 슬롯 유무. Chromium에서 actions 데모의 like 병렬·
+  queue·검증 오류 표시를 확인했다.
+- MT-05 관련: JS 끔 PRG 303·flash 일회성·새로고침 재제출 없음(루트 E2E), 422 필드 오류, 3KB flash 축소, `_redirect` 검증,
+  cross-origin 403(5개 런타임 적합성). JS 켬 경로와 결과가 같다.
+- 결함: Lithent hydration이 빈 텍스트 노드를 갱신하지 못함(`null` 렌더로 해결·가이드 기록).
+
+### 단계 6 자동 선행 검증 (2026-10-17)
+
+- MT-08 관련(modes e2e): 링크·GET 폼·뒤로·앞으로 결과가 같은 URL의 문서 로드와 같음, 뒤로 스크롤 복원, 포커스 `<main>`·title
+  안내, 라우터 없는 페이지는 문서 로드, 이동 뒤 `<Boot>`·액션 실행.
+- MT-09 관련: persist iframe 재로드 없음·같은 노드, audio 재생 유지(`moveBefore`), 입력 포커스·선택 유지, 아일랜드 로컬 상태 유지,
+  짝 없는 페이지에서 해제. Safari 등 `moveBefore` 미지원 쪽은 미실행이다.
+- MT-10 관련(단위): hover 65ms·tap·viewport·load, LRU 20·TTL 30s·1회·액션 후 비움, Save-Data·2G 생략, `data-prefetch="false"`.
+- MT-12 관련: GTM식 fixture(인라인·외부 script·iframe 주입)가 20회 이동 뒤 같은 노드, 각 1회 실행, page_view 21회, nonce CSP 위반 0.
+  실제 업체 SDK는 단계 10에서 실행했다.
+- MT-14 관련: 이동 뒤 포커스·title 안내(live region). 스크린리더는 미실행이다.
+- 결함 3건(태그 매니저 노드 삭제, persist placeholder 연결, media 문서 누수)은 고쳤고 회귀 테스트가 있다.
+
+### 단계 7 자동 선행 검증 (2026-10-17)
+
+- MT-13 관련: prerender 응답이 미들웨어 헤더·ETag/304를 갖고(5개 런타임 적합성), prerender 페이지에서도 server 슬롯 액션·아일랜드가
+  동작, 언어 없는 경로 302(쿠키 → Accept-Language → 기본)와 언어 링크·hreflang, 가이드 7종 × 2개 언어의 서버 하이라이트(Prism 요청
+  0), 히어로 WebP·preload·CLS ≤ 0.1(루트 E2E). DPR 2 기기의 `srcset` 선택과 Safari·Firefox(AVIF)는 미실행이다.
+- 결함 5건(인라인 사이 공백, `undefined` 속성 출력, Deno 이미지 서비스 시작 실패, YAML 오류 위치, 한국어 검색 문구)은 고쳤다.
+
+### 단계 8 자동 선행 검증 (2026-10-17)
+
+- MT-16 관련: 진단 fixture 34종의 `[state-surface] 파일:줄:열`·코드 프레임·hint 스냅샷, 실제 Vite 서버의 오버레이 payload,
+  `state-surface check`, 타입 계약(`@ts-expect-error`), hidden 소스맵의 원본 TSX, CSS Modules(dev·prod). scaffold 최소·demo·Express
+  생성 앱의 설치·빌드·테스트·check·기동. 편집기 자동 완성 체감과 신규 사용자 관찰은 미실행이다.
+- 결함 8건(CSS Module tree-shaking, `idiomorph` 누락 등)은 고쳤다.
+
+### 단계 9 자동 선행 검증 (2026-10-17)
+
+- MT-18 관련: 악성 입력 77개(속성 breakout, URL 스킴·인코딩, 대소문자 이벤트 속성, `srcdoc`, SVG animate, rich Markdown 우회,
+  `cssVars` 주입, `__SURFACE__`), 브라우저 DOM 가드(client 슬롯·아일랜드), `_redirect`·Referer·flash 변조·재사용, 지연 토큰 변조·
+  다른 빌드 재사용, 퍼즈(서버 3만·브라우저 1만), 병렬 SSR 200×3 유출 0. 수동 보안 스모크는 미실행이다.
+- MT-06 관련: 경쟁 스위트(취소 5시점, 409 중 조작, 무작위 동시 액션 1천), 2만 프레임 스트림 메모리.
+- 결함 13건을 고쳤다(IMPLEMENT 단계 9 실행 상세).
+
+### 단계 10 자동 선행 실행 (2026-10-18)
+
+commit `98f8549`, 클라우드 로컬 머신, Chromium 141.0.7390.37(headless shell, BFCache·View Transition 스펙은 full Chromium
+new headless), Node 22.22, Bun 1.4.2, Deno 2.5.4, Wrangler 4.151.0/workerd. 수동 판정으로 계산하지 않는다.
+
+| 항목  | 자동 선행 실행                                                                                                                                                                                                                                                                                                                                                                                                        | 결과 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| MT-01 | 성능 게이트: 홈·가이드 엔진 JS(`load` 전) 7,680 B, 가이드 플러그인 청크는 `load` 뒤. modes e2e: static 페이지 엔진 JS 0, 액션 전용 페이지 Lithent 없음, visible 지연, 플러그인 선언 페이지만                                                                                                                                                                                                                          | 통과 |
+| MT-02 | modes e2e V-04, 생성 minimal 앱의 `client:visible` 아일랜드 hydration·상태 유지(5개 어댑터)                                                                                                                                                                                                                                                                                                                           | 통과 |
+| MT-03 | 데모 검색 morph 입력 유지, server 슬롯 HTML 교체(생성 minimal 앱 5개 어댑터, 텍스트로 렌더된 `<b>`)                                                                                                                                                                                                                                                                                                                   | 통과 |
+| MT-04 | 데모 actions(병렬 like·scoped pending·queue·검증 오류), 5개 어댑터 × `/`·`/demo`                                                                                                                                                                                                                                                                                                                                      | 통과 |
+| MT-05 | JS 끔 PRG·flash(5개 어댑터 × `/`·`/demo`), 적합성 PRG·422·403(5개 런타임 + dev/prod)                                                                                                                                                                                                                                                                                                                                  | 통과 |
+| MT-06 | 채팅 토큰 스트림·abort previous(5개 어댑터, 생성 demo 앱), 409 재로드(적합성). 생성 demo 앱에서 client 슬롯 갱신 무시 결함 발견 → 수정                                                                                                                                                                                                                                                                                | 통과 |
+| MT-07 | V-14 스펙 7개: 문서 로드 `@view-transition`, 라우터 이동·뒤로·앞으로 각 1회, 액션당 1회·스트림 DOM 동일, reduced motion·API 없음 즉시 반영. reduced motion에서 `data-animate` 재생 결함 발견 → 수정                                                                                                                                                                                                                   | 통과 |
+| MT-08 | modes 라우터 e2e, BFCache 복원 후 화면·입력 유지·액션 동작(full Chromium), 문서 로드 이동 대체                                                                                                                                                                                                                                                                                                                        | 통과 |
+| MT-09 | modes persist e2e(iframe·audio·입력·아일랜드)                                                                                                                                                                                                                                                                                                                                                                         | 통과 |
+| MT-10 | 라우터 prefetch 단위 테스트, 데모 hover prefetch                                                                                                                                                                                                                                                                                                                                                                      | 통과 |
+| MT-11 | 지연 슬롯 토큰·island 엔드포인트(5개 런타임 적합성)                                                                                                                                                                                                                                                                                                                                                                   | 통과 |
+| MT-12 | `pnpm test:sdk`: @sentry/browser 11.8.0·@datadog/browser-rum 7.16.0(npm)과 Sentry Loader·Datadog CDN 스니펫, 실제 GTM 런타임, nonce CSP. 문서 로드 + 20회 이동에서 오류 3종 수집, Sentry pageload 1 + navigation 20, Datadog view 21, GTM page_view 21, 모든 transition·라우터 fetch에 `sentry-trace`·`baggage`·`traceparent`·`x-datadog-*`, `onError`가 같은 trace로 실패 transition 수신, SDK 노드 동일, CSP 위반 0 | 통과 |
+| MT-13 | 루트·`/demo` 데모 e2e(prerender·언어·가이드·히어로), 적합성 prerender ETag/304                                                                                                                                                                                                                                                                                                                                        | 통과 |
+| MT-14 | 모든 데모 페이지(en·ko) 320 px·640 px(200% 확대) 가로 스크롤 없음, 키보드 정지점마다 포커스 표시. 320~360 px 가로 스크롤 결함 발견 → 수정                                                                                                                                                                                                                                                                             | 통과 |
+| MT-15 | 데모 e2e 22개 × 5개 어댑터 × `/`·`/demo`, 적합성 14 × 5 런타임 + app dev/prod, 생성 앱 5개 어댑터 기동·브라우저 e2e. Workers 번들 875 KB(gzip 178 KB), 시작 프록시 42 ms(첫 응답 99 ms). Workers 첫 요청 실패 결함 발견 → 수정                                                                                                                                                                                        | 통과 |
+| MT-16 | 생성 minimal 앱(5개 어댑터)·demo 앱 설치·빌드·test·check·format·기동·브라우저 e2e                                                                                                                                                                                                                                                                                                                                     | 통과 |
+| MT-17 | 보고 지표(CPU 4x·Fast 4G): 첫 액션 검색 67 ms·채팅 88 ms(단계 0 약 100·117 ms), lab INP 24 ms, 라우터 이동 114 ms·뒤로 122 ms, CLS 0                                                                                                                                                                                                                                                                                  | 기록 |
+| MT-18 | 단계 9 스위트 회귀(Vitest 752)                                                                                                                                                                                                                                                                                                                                                                                        | 통과 |

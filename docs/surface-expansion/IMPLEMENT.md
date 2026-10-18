@@ -2,7 +2,7 @@
 
 작성일: 2026-10-14
 
-상태: 단계 9 완료 — 악성 입력·프레임 퍼즈·경쟁·자원·병렬 SSR·한도 경계 스위트와 찾은 결함 수정. 다음은 단계 10
+상태: 단계 10 완료 — production × 5 어댑터·BASE_PATH·생성 앱 E2E, 성능 게이트(DC-17), View Transition(V-14)·외부 SDK(V-31) 자동 검증과 MANUAL_TEST_CHECKLIST 자동 선행 기록. 릴리스 판정은 수동 항목 실행 전까지 보류
 
 이 문서는 [REQUIREMENTS.md](./REQUIREMENTS.md)와 [DESIGN.md](./DESIGN.md)의 결정(AG-01~09, DC-01~32)을 단계별
 작업·테스트·종료 조건으로 옮긴 **실행 체크리스트**다. 결정의 정본은 DESIGN.md이며 이 문서는 결정을 바꾸지 않는다.
@@ -75,7 +75,7 @@ TBD다.
 | IC-07 | 적합성 테스트 하네스 구조(공통 fixture 앱·어댑터 실행 방식)                 | 단계 1       | conformance/ 공통 fixture 앱과 HTTP 시나리오를 Node·Express·Bun·Deno·workerd에서 실행; 코어는 같은 Request/Response 입력으로 직접 검증 | 결정 (2026-10-15): 문서 기본안, 실제 런타임의 스트리밍·abort와 정적 파일까지 비교                                                                                                                                                                                                                                                                                  |
 | IC-08 | 성능 측정 하네스 위치·CI 러너(DC-17)                                        | 단계 0       | `perf/` Playwright + GitHub Actions Ubuntu, production 서버와 cold browser context, CPU 4x/Fast 4G, 5회 중앙값·원시값 기록             | 결정 (2026-10-15): 문서 기본안, E2E와 같은 브라우저 버전 재사용                                                                                                                                                                                                                                                                                                    |
 | IC-09 | `SURFACE_SECRET`에서 토큰 암호화 키와 flash 서명 키 분리(DC-21·DC-22)       | 단계 4       | HKDF로 AES-GCM 키와 HMAC 키를 파생                                                                                                     | 결정 (2026-10-16): HKDF-SHA256으로 루트 시크릿에서 용도별 키 파생(info `state-surface/defer/v1` → AES-GCM-256, `state-surface/flash/v1` → HMAC-SHA256). `SURFACE_SECRET_PREVIOUS`도 같은 방식으로 파생해 복호화·검증에만 사용. 환경 변수가 없으면 빌드 생성 루트 키, 32바이트 미만 시크릿은 오류(옵션은 handler 생성 시, Workers binding 등 요청 env는 첫 사용 시) |
-| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | TBD                                                                                                                                                                                                                                                                                                                                                                |
+| IC-10 | 실제 SDK 검증(V-31)용 GTM·Sentry·Datadog 테스트 계정·키 보관                | 단계 10      | CI 비밀 값으로 주입, 없으면 MANUAL_TEST_CHECKLIST에서 수동 판정                                                                        | 결정 (2026-10-18): 계정 없이 실제 SDK 기본 설치를 로컬 수집 서버로 자동 검증한다(`pnpm test:sdk`, `e2e/sdk`). Sentry DSN·Datadog `proxy`가 테스트 서버를 가리키고, GTM은 빈 컨테이너 `GTM-TEST`의 실제 런타임, Sentry Loader는 Sentry 공개 템플릿을 빌드 때 받아 채운다. 업체 화면이 필요한 부분(GTM 미리보기의 태그 실행, 소스맵 원본 위치, session replay 재생)은 계정·키를 CI 비밀 값으로 넣기 전까지 MT-12 수동 항목 |
 
 ---
 
@@ -916,16 +916,46 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 
 #### 작업
 
-- [ ] production 빌드 × 5개 어댑터에서 적합성 스위트와 데모 동등성 e2e, BASE_PATH(`/demo`), 생성 scaffold 앱 E2E.
-- [ ] 성능 게이트 활성화(DC-17): 홈·가이드 엔진 초기 JS gzip 기준선 대비 70% 이상 감소, 라우터·액션·boot·플러그인 없는
+- [x] production 빌드 × 5개 어댑터에서 적합성 스위트와 데모 동등성 e2e, BASE_PATH(`/demo`), 생성 scaffold 앱 E2E.
+      → `pnpm test:adapters`(`e2e/adapters/run.mjs`, Workers는 local workerd), 적합성 5 런타임 + app dev/prod,
+      `scripts/scaffold-test.mjs`가 생성 앱을 `pnpm start`로 띄워 `e2e/scaffold/minimal.spec.ts`·데모 e2e를 실행.
+- [x] 성능 게이트 활성화(DC-17): 홈·가이드 엔진 초기 JS gzip 기준선 대비 70% 이상 감소, 라우터·액션·boot·플러그인 없는
       static 페이지 엔진 JS 0, 대표 페이지 CLS ≤ 0.1, 라우터 100회 이동 누수 없음. 보고 지표(INP·첫 액션·라우터 이동·
-      Workers 콜드 스타트·서버 번들·로더·라우터 크기)를 기록한다.
-- [ ] View Transition(V-14): 문서 로드·라우터 이동·인페이지, 미지원 브라우저, reduced motion, 뒤로/앞으로·BFCache.
-- [ ] 외부 SDK(V-31): 실제 GTM·Sentry(npm·Loader)·Datadog RUM(npm·CDN) 기본 설치로 문서 로드와 이동 20회, 오류 수집·
-      page_view/view 수·트레이스 헤더·서버 오류 훅·노드 보존·CSP 위반 0(IC-10).
-- [ ] MANUAL_TEST_CHECKLIST MT-01~MT-18 전 항목 실행·기록과 4장 릴리스 판정. 각 단계 종료 시 해당 MT의 선행 실행 결과도
-      그 문서 5장에 기록한다.
-- [ ] 문서 정본 갱신: README, CLAUDE.md(아키텍처·폴더 구조·명령), PROTOCOL.md, 공개 guide, scaffold README, 릴리스 노트.
+      Workers 콜드 스타트·서버 번들·로더·라우터 크기)를 기록한다. → `pnpm perf:gate`(CI 필수), 0 B·누수는 modes e2e,
+      보고 지표는 `pnpm perf`·`pnpm perf:report`.
+- [x] View Transition(V-14): 문서 로드·라우터 이동·인페이지, 미지원 브라우저, reduced motion, 뒤로/앞으로·BFCache.
+      → `e2e/demo-parity/viewTransition.spec.ts`(full Chromium, BFCache 켬). Firefox·Safari는 MT-07.
+- [x] 외부 SDK(V-31): 실제 GTM·Sentry(npm·Loader)·Datadog RUM(npm·CDN) 기본 설치로 문서 로드와 이동 20회, 오류 수집·
+      page_view/view 수·트레이스 헤더·서버 오류 훅·노드 보존·CSP 위반 0(IC-10). → `pnpm test:sdk`(로컬 수집 서버, IC-10).
+- [x] MANUAL_TEST_CHECKLIST MT-01~MT-18 전 항목 실행·기록과 4장 릴리스 판정. 각 단계 종료 시 해당 MT의 선행 실행 결과도
+      그 문서 5장에 기록한다. → Chromium 자동 선행 부분을 실행·기록했고(단계 5~10 기록 추가) 4장 판정은 **보류**(수동 항목 미실행).
+- [x] 문서 정본 갱신: README, CLAUDE.md(아키텍처·폴더 구조·명령), PROTOCOL.md, 공개 guide, scaffold README, 릴리스 노트.
+      → AGENTS.md, docs/server-adapters.md, CHANGELOG.md(릴리스 노트), MIGRATION.md 포함.
+
+#### 계획 조정 (2026-10-18)
+
+- 첫 게이트 측정에서 홈 엔진 JS가 11,314 B로 한도(8,444 B)를 넘었다. 로더를 나눴다: 컴포넌트 호스트(`components.ts`, 아일랜드
+  맵 포함)는 client 컴포넌트가 있는 페이지와 액션 런타임에서, 플러그인 호스트(`pluginEntry.ts`)는 플러그인의 가장 이른 시점에,
+  초기 액션 읽기(`actionEvents`)는 액션 페이지에서, 라우터의 `scheduler`는 viewport·load prefetch 링크가 있을 때만 불러온다.
+  로더 안의 `PluginRelay`가 호스트가 오기 전 표시된 슬롯을 기록해 넘긴다. 플러그인 호스트 청크는 앱 플러그인이 그 청크의
+  `definePlugin`을 import해 Rollup이 facade 없는 청크(`_pluginEntry-*.js`)로 만들므로 서버가 이름으로 찾는다. 결과 로더 6,608 →
+  2,869 B, 홈·가이드 7,680 B(72.7% 감소). 검색·채팅은 분할 오버헤드로 각 약 +0.5~1.5 KB(보고만).
+- 게이트 측정 정의: `load` 이벤트 전에 요청된 엔진 청크(Vite manifest로 `engine/`·`node_modules` 모듈과 엔진 이름의 공유 청크를
+  구분)의 gzip -9 합, CPU 4x·Fast 4G, 3회 중앙값. 의도적으로 늦춘 작업(idle·visible 컴포넌트·플러그인)은 따로 보고한다.
+- 어댑터 e2e: 각 어댑터 앱 엔트리(`dist/adapter-app/<name>/server.mjs`)를 띄우고 같은 데모 e2e를 돌린다(`E2E_EXTERNAL`).
+  Workers 데모가 첫 요청에서 `Prism is not defined`로 죽었다. wrangler가 Prism의 CommonJS 언어 파일을 `globalThis.Prism` 설정보다
+  먼저 번들했기 때문이라 cloudflare 어댑터 SSR 빌드는 모든 의존성을 번들한다(`ssr.noExternal: true`, 회귀 테스트).
+- 생성 앱 E2E가 Lithent 1.25.2 결함을 드러냈다: 생성 앱은 `^1.25.1` 범위에서 1.25.2를 받는데, 1.25.2는 diff 밖에서 만든
+  컴포넌트를 props 복사본으로 그려 브리지의 DataProxy가 바꾼 props와 `componentUpdate(props)`가 인스턴스에 닿지 않았다(client 슬롯
+  props·merge 무시, 채팅 스트림 미표시). DataProxy가 holder 객체를 읽고 자기 `renew`로 다시 그리게 고쳤고(두 버전 모두 동작),
+  저장소·템플릿을 `^1.25.2`로 올려 테스트가 사용자와 같은 버전을 쓴다.
+- V-14: Playwright는 `--disable-back-forward-cache`를 넘기고 headless shell에는 BFCache가 없어 해당 스펙은 full Chromium(new
+  headless)에서 그 인자를 빼고 돈다. `test.use({ reducedMotion })`는 적용되지 않아 `contextOptions`로 켠다. reduced motion에서
+  엔진이 `data-just-updated`를 붙이고 프리셋이 대기 중 슬롯을 움직이는 결함(DESIGN 9.1 위반)을 찾아 고쳤다.
+- V-31(IC-10): 업체 계정이 없어 실제 SDK를 로컬 수집 서버로 보낸다. Sentry 11은 트랜잭션 대신 span v2 스트리밍이라 pageload·
+  navigation은 세그먼트 span의 `sentry.op`로 센다. transition 실패도 오류 슬롯 표시 뒤 `reportError`로 전달된다(DESIGN 8.3-2).
+- MT-14 자동 부분을 추가해 320~360 px에서 데모 3개 페이지의 가로 스크롤(flex 행 입력란의 최소 폭, 가이드의 긴 파일 경로)을
+  찾아 고쳤다.
 
 **검증 ID**: V-14, V-17, V-18, V-19, V-26, V-29, V-30, V-31(릴리스 판정).
 
@@ -986,6 +1016,7 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 | 7    | 2026-10-17 | `97ca338`, 기준 `c1258ea`                | 45 / 590 통과          | 5 runtime × 14 적합성(prerender 서빙·이미지 엔드포인트 추가), 의미 비교 14 + stream 1(언어 경로), 루트 E2E 12 + spike 5 및 /demo 12, modes E2E 12, 전체 tsc 0  | 홈 초기 JS gzip 11,016 B, 가이드 11,668 B(Prism 제거), CLS 0, core 107,733 B |
 | 8    | 2026-10-17 | `f8c01fe`·`b32331a`·`00fb1ac`, 기준 `1a54f46` | 51 / 639 통과 | 진단 fixture 34 스냅샷·dev 오버레이, 5 runtime × 14 적합성 + app dev/prod 각 14, scaffold minimal·demo·Express 설치·빌드·테스트·check·기동, 루트·/demo E2E 각 12 + spike 5, modes E2E 13, 전체 tsc 0 | 홈 초기 JS gzip 11,280 B(로더 6,573 + 라우터 4,707), 패키지 tarball 459 KB, core 107,934 B |
 | 9    | 2026-10-17 | `a3898b5`, 기준 `fe7c43c` | 59 / 744 통과 | 퍼즈 서버 3만·브라우저 1만·경쟁 1천 시퀀스(기본 600·400·100), 악성 입력 테스트 77개·병렬 SSR 200×3, 5 runtime × 14 적합성 + app dev/prod 각 14, 루트·/demo E2E 각 12 + spike 5, modes E2E 15, 전체 tsc 0 | 결함 13건 수정(회귀 테스트 포함), 홈 초기 JS gzip 11,314 B, 채팅 26,147 B(가드 포함 브리지 1,925 B), core 109,313 B |
+| 10   | 2026-10-18 | `3983de1`…`98f8549`, 기준 `93737e1` | 61 / 752 통과 | 성능 게이트(홈·가이드 엔진 JS `load` 전 7,680 B ≤ 8,444 B, CLS 0), 데모 e2e 22 × 5 어댑터 × `/`·`/demo`, 5 runtime × 14 적합성 + app dev/prod 각 14, 생성 앱 6종 브라우저 e2e, V-14 7·V-31 2·MT-14 3, modes E2E 15, 전체 tsc 0 | 결함 4건 수정(Workers 첫 요청, Lithent 1.25.2 client 갱신, reduced motion 재생, 좁은 화면), 로더 2,869 B, 라우터 4,813 B, Workers 번들 gzip 178 KB |
 
 ### 단계 0 실행 상세
 
@@ -1334,11 +1365,43 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 - 이번 실행은 클라우드 로컬 머신 결과다. Firefox·Safari에서의 가드 타이밍, Cloudflare 실제 배포의 CPU 한도 동작, 장시간(수 시간)
   스트림의 실브라우저 힙 추이는 관측하지 않았다.
 
+### 단계 10 실행 상세 (2026-10-18)
+
+- 성능(DC-17): `perf/gate.mjs`(CI 필수, 3회 중앙값) — `/en` 7,680 B(라우터 4,813 + 로더 2,867), `/en/guide/quickstart` 7,680 B
+  (`load` 뒤 pluginEntry 1,529·scheduler 489·guideToc 695 앱), `/en/examples/search` 22,840 B, `/en/examples/chat` 27,699 B
+  (+ 앱 613 B), 네 페이지 CLS 0. static 페이지 엔진 JS 0과 200회 이동 누수 없음은 modes e2e. 보고 지표: `pnpm perf`(CPU 4x·Fast 4G,
+  5회 중앙값) 첫 액션 검색 67 ms·채팅 88 ms(단계 0 약 100·117 ms), lab INP 24 ms, 문서 로드 홈 262 ms·가이드 433 ms;
+  `pnpm perf:report` 청크 gzip(로더 2,869·라우터 4,813·런타임 7,331·components 2,705·plugins 1,528·actionEvents 974·bridge 1,913·
+  morph 3,514 B), 서버 번들(Node `dist/server.js` 792 KB/gzip 159 KB, Workers 875 KB/gzip 178 KB), 라우터 이동 114 ms·뒤로 122 ms,
+  Workers 시작 프록시(새 V8 프로세스의 모듈 평가 42 ms, 첫 동적 응답 99 ms; Cloudflare 측정값 아님).
+- 어댑터: `pnpm test:adapters`가 Node·Express·Bun 1.4.2·Deno 2.5.4·workerd(Wrangler 4.151.0)에서 데모 e2e 22개를 `/`와
+  `BASE_PATH=/demo` 각각 통과. CI `adapters` 잡(어댑터 행렬 × 두 base path).
+- 생성 앱: `pnpm test:scaffold`가 minimal(Node·Express·Bun·Deno·Workers)과 demo(Node)를 만들어 설치·빌드·(Node·Express는 test·
+  check·format)·`pnpm start`·브라우저 e2e(minimal: server 슬롯 스트림·텍스트 이스케이프·CSS Module·`client:visible` 아일랜드·
+  JS 없음, demo: 데모 e2e) 통과.
+- V-14(`e2e/demo-parity/viewTransition.spec.ts`, full Chromium): 문서 로드가 `@view-transition`으로 `pagereveal` 전환, 라우터
+  이동·뒤로·앞으로 각 루트 전환 1회(같은 문서), 뒤로 돌아온 페이지는 서버가 다시 렌더(인페이지 상태 복원 없음), 갤러리 액션당
+  1회, 스트리밍 데모에 `data-view-transition`을 붙이면 전환 1회이고 최종 DOM이 전환 없을 때와 같음, reduced motion(라우터·액션·
+  문서 로드 모두 즉시, reveal 표식 0, 대기 표시 transform 없음), API 없음(즉시 반영·오류 0), BFCache 복원(`pageshow.persisted`,
+  결과·입력 유지, 복원된 엔진으로 새 검색).
+- V-31(`pnpm test:sdk`, `e2e/sdk`): 위 체크리스트 MT-12 행. npm과 Loader·CDN 두 변형 모두 통과.
+- MT-14 자동 부분(`e2e/demo-parity/a11y.spec.ts`): 데모 10개 경로 × en·ko의 320 px·640 px 가로 스크롤 0, 키보드 정지점 포커스 표시.
+- 찾은 결함(모두 회귀 테스트): ① Workers 데모 첫 요청 `Prism is not defined`(wrangler의 CommonJS 번들 순서) ② Lithent 1.25.2에서
+  client 슬롯 props·merge 무시(생성 demo 앱 채팅) ③ reduced motion에서 `data-animate` reveal·대기 이동 ④ 320~360 px 가로 스크롤
+  (actions·chat 입력란, 가이드 긴 경로). 테스트 쪽: tokens 테스트의 base64url 패딩 비트 뒤집기(바이트 단위로 고침), Playwright
+  `reducedMotion` 옵션 미적용(`contextOptions`), 헤더 링크 중복 선택자.
+- 검증: Vitest 61개 파일/752개, 전체 tsc 0, `pnpm check`, format:check, build(prerender 36페이지), 루트 데모 e2e 22 + spike 5,
+  `pnpm test:modes` 15, `pnpm test:parity` 문서 14 + stream 1, 적합성 5 런타임 × 14와 app dev 14·prod 14, `pnpm test:sdk` 2,
+  `pnpm perf:gate`.
+- 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions의 새 잡(adapters·sdk·scaffold 확장·perf 게이트), Firefox·Safari·실기기·
+  스크린리더, Cloudflare 실제 배포, 업체 계정 화면은 관측하지 않았다(MANUAL_TEST_CHECKLIST 4장 남은 수동 항목).
+
 ### 상태
 
-- **완료**: 단계 0·1·2·3·4·5·6·7·8·9. IC-01~IC-09 결정.
-- **다음**: 단계 10(Integration Test). IC-10은 단계 10에서 결정한다.
-- **블로커**: 없음. 로더 gzip 6,608 B(2KB 목표)와 라우터 4,706 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
+- **완료**: 단계 0~10. IC-01~IC-10 결정. 자동 검증과 성능 게이트 통과.
+- **다음**: MANUAL_TEST_CHECKLIST 4장의 수동 항목(실기기·Firefox·Safari·스크린리더·Workers 실제 배포·업체 계정·사람 관찰)을
+  실행해 릴리스를 판정한다(현재 보류).
+- **블로커**: 자동 검증 범위에서 없음. 로더 gzip 2,869 B(2KB 목표)와 라우터 4,813 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
   보유는 없음을 확인했다(단계 9). Lithent 빈 텍스트 hydration, SSR의 `undefined` 속성 출력, `<style>`·`<textarea>` 내용의
   `<`·`>` 이스케이프는 업스트림 보강 후보다. unsafe capability는 script만 무력화하므로 신뢰할 수 없는 HTML은 `sandbox="iframe"`이
   필요하다. hidden 소스맵 파일은 어댑터가 서빙을 막지 않으므로 업로드 후 삭제가 배포 절차에 필요하다.
@@ -1346,4 +1409,4 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   단계 2 문서 `5a659cd`, 단계 3 `5c8f024`, 단계 4 Entry `07bb893`, 단계 4 `4e184bf`, 단계 4 문서 `16a2e7e`,
   단계 5 Entry `8c83aa8`, 단계 5 `2e737e3`, 단계 6 Entry `6aff8a6`, 단계 6 `9c806c2`, 단계 7 Entry `c1258ea`,
   단계 7 중간(prerender·i18n) `6839eb5`, 단계 7 `97ca338`, 단계 8 Entry `1a54f46`, 단계 8 `f8c01fe`·`b32331a`·
-  `00fb1ac`, 단계 9 Entry `fe7c43c`, 단계 9 `a3898b5`.
+  `00fb1ac`, 단계 9 Entry `fe7c43c`, 단계 9 `a3898b5`, 단계 10 Entry `93737e1`, 단계 10 `3983de1`…`98f8549`.

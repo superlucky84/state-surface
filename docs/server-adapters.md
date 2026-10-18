@@ -93,6 +93,13 @@ same web core through the Node transport. `pnpm dev` replaces the previous tsx w
 BASE_PATH is fixed in the generated application build; a mismatched runtime override
 is rejected instead of serving stale URLs.
 
+With the Workers adapter the server build bundles every dependency (`ssr.noExternal: true`,
+`target: 'webworker'`), so wrangler only uploads the bundle. Left to wrangler, CommonJS
+packages such as Prism's language components are bundled ahead of the module that sets
+`globalThis.Prism` and the worker fails on its first request. The demo's Workers bundle is
+875 KB (178 KB gzip, `pnpm perf:report`); evaluating it and answering a first dynamic page takes
+about 42 ms and 99 ms in a fresh V8 process, a local stand-in for Cloudflare's startup time.
+
 Workers must bind `ASSETS`, use `run_worker_first` for HTML, and enable the
 [`enable_request_signal` flag](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#enable-requestsignal-for-incoming-requests).
 The adapter uses a native TransformStream writer and idle NDJSON empty-line
@@ -233,6 +240,7 @@ pnpm test:conformance bun
 pnpm test:conformance deno
 pnpm test:conformance cloudflare
 pnpm test:conformance:app # the same scenarios on `vite` dev and on a surface() production build
+pnpm build:adapter-app && pnpm test:adapters   # the demo e2e against each adapter's production entry
 ```
 
 All adapters run the same fixture and eight HTTP scenarios, including progressive
@@ -242,6 +250,10 @@ middleware, CSRF/body limits, BASE_PATH and static assets. `BUN_BINARY` and
 check startup, preserve failure status and are stopped in finally. Core source and
 bundle checks are required in CI, alongside the five runtime jobs. The saved legacy
 snapshot was captured before refactoring and normalizes only the removed SSR hash.
+
+`pnpm test:adapters` starts `dist/adapter-app/<name>/server.mjs` with Node, Express, Bun and Deno,
+and the Workers bundle in local workerd (`wrangler dev`, `e2e/adapters/wrangler.json`), then runs the
+demo browser e2e against each. Build and run with the same `BASE_PATH` to test sub-path mounting.
 
 `conformance/app` is the fixture as a surface() app (pages, transitions, `surface.server.ts`). Its
 dev server and its production build answer the same scenarios; the expected differences are the

@@ -56,6 +56,11 @@ pnpm test:modes                   # stage 3 fixture: entry selection, lazy chunk
 pnpm check                        # state-surface check: build analysis (no bundle) + tsc --noEmit
 pnpm test:scaffold                # pack, create apps from create-state-surface/templates, install, build, test, start
 pnpm test:conformance:app         # conformance scenarios on `vite` dev and on the production build (conformance/app)
+pnpm test:e2e --project=demo-parity # demo e2e on the production build (incl. View Transitions, BFCache, narrow screens)
+pnpm test:adapters [node bun …]   # demo e2e against each adapter's production entry (after pnpm build:adapter-app)
+pnpm test:sdk                     # real Sentry/Datadog RUM (npm, Loader/CDN) + GTM runtime on e2e/sdk, local intake
+pnpm perf:gate                    # DC-17 gate: home/guide engine JS before load ≤ 8,444 B gzip, CLS ≤ 0.1
+pnpm perf / pnpm perf:report      # report metrics: INP, first action / chunk and server bundle sizes, router nav, Workers
 pnpm build:package                # tsc → lib/ (also run by prepack)
 
 # Sub-path mounting (basePath)
@@ -111,8 +116,12 @@ engine/              # Framework core — users should not edit these files
     transition.ts    # defineTransition({ input, targets, mode, flash, viewTransition, handler } | handler), TransitionError
   client/
     loader.ts        # Engine entry chunk (only on pages that need the engine) → start.ts
-    start.ts         # Reads bootstrap, schedules components/plugins, loads the runtime, captures early actions,
-                     #   chunk failure → build check → reload on next interaction; PageController (page lifetime)
+    start.ts         # Reads bootstrap, loads the component host / plugin host / runtime chunks when the page needs
+                     #   them, captures early actions (actionEvents chunk), chunk failure → build check → reload on
+                     #   next interaction; PageController (page lifetime)
+    components.ts    # Component host chunk (ComponentHost + islands map): pages with client components, the runtime
+    pluginEntry.ts   # Plugin host chunk (PluginHost + plugins map): at once for `load` plugins, else at idle
+    pluginRelay.ts   # Loader-side PluginEvents stand-in: records displayed slots until the plugin host loads
     bootstrap.ts     # readBootstrap() (loader and router)
     router.ts        # Router chunk (pages with <ClientRouter>): link/GET form interception, surface:* events,
                      #   head/body marker swap, persist moveBefore, scripts, history/scroll/focus, prefetch
@@ -126,7 +135,8 @@ engine/              # Framework core — users should not edit these files
     useAction.ts     # useAction(renew, name) handle over the shared runtime (runtimeAccess.ts, no globals)
     slotDom.ts       # Server HTML swap (replace + focus/scroll restore, morph), remove, UI patches
     morph.ts         # idiomorph chunk (swap="morph" pages only), island boundaries (IC-06)
-    lithentBridge.ts # Lithent chunk: mountComponent (DataProxy, hydrate/render, island children, keeps user input)
+    lithentBridge.ts # Lithent chunk: mountComponent (DataProxy reads a holder, redraws with its own renew; hydrate/render,
+                     #   island children, keeps user input)
     domGuard.ts      # strict/rich attribute guard for client components (MutationObserver, capability.ts rules)
     actionEvents.ts  # data-action / actionUrl form event → invocation (defaultPrevented skip, one per event)
     actionDelegation.ts  # Declarative action binding (document click/submit delegation, bubble phase)
@@ -169,6 +179,10 @@ routes/              # Pages (routes/**/*.tsx) + page-specific components
 surface.server.ts    # (optional) handler options for dev and production (middleware, onError, limits)
 create-state-surface/ # Scaffold CLI (bin/, lib/create.js) and templates/{base,minimal,demo,adapters/<name>}
 conformance/         # Adapter fixture + scenarios (5 runtimes); app/ = the fixture as a surface() app (dev/prod)
+e2e/                 # Playwright: demo-parity/ (demo, View Transitions V-14, a11y MT-14), modes/ (stage 3+ fixture),
+                     #   adapters/ (demo e2e per adapter, wrangler.json), scaffold/ (generated minimal app),
+                     #   sdk/ (V-31 fixture: Sentry/Datadog/GTM, nonce CSP, local intake)
+perf/                # gate.mjs (DC-17 gate), measure.mjs (INP, first action), report.mjs (sizes, router nav, Workers)
 lib/                 # Compiled package (gitignored; exports use it outside this repository)
 ```
 
@@ -278,9 +292,18 @@ with `data-pending` until it ends and `data-has-result` after its first result (
   after 1 s; after that SSR stays and a different `X-Surface-Build` reloads on the next interaction. Dormant slots
   keep the latest props and hydrate the SSR snapshot first. `resetKey` (Slot prop) remounts on a new key value.
   Lithent hydration cannot fill an empty SSR text node later: render `null`, not `''`, for empty text.
+  Lithent ≥ 1.25.2 draws a component created outside a diff with a copy of its props: the bridge's DataProxy reads
+  the latest props from a holder object and redraws with its own `renew` (never `componentUpdate(props)`).
 - Entry selection: the engine loader script is written only when the page renders client components, `data-action`,
   `<Boot>`, deferred slots, plugins or `<ClientRouter>`; `client:load` chunks, the action runtime and the morph chunk get
   `modulepreload`, rendered components' chunk CSS is linked. `client/entry.ts` (if present) runs on every page.
+  The loader (~2.9 KB gzip) keeps only what every engine page needs: the component host chunk (`components.ts`) loads
+  on pages with client components or the action runtime, the plugin host (`pluginEntry.ts`, a facade-less chunk the
+  server resolves by name) at the earliest plugin timing, the early-action reader (`actionEvents`) on pages with
+  actions, the router imports `scheduler` only for viewport/load prefetch links. Home and guide load 7.7 KB of engine
+  JS before `load` (DC-17 gate ≤ 8,444 B, `pnpm perf:gate`).
+- Workers builds bundle every dependency (`ssr.noExternal: true` for the cloudflare adapter): wrangler would otherwise
+  bundle Prism's CommonJS language files ahead of `globalThis.Prism`.
 - Server-only code: `import 'state-surface/server-only'`, `*.server.ts(x)` and `node:*` reachable from a client
   component fail the client build with the import chain.
 - Client router (DC-18~20): `<ClientRouter prefetch transition dataLayer />` in the layout head. Same-origin links
@@ -403,7 +426,8 @@ Used as a DOM diff/patch engine only — no component API exposed to users. Key 
 `fade`, `slide-up`, `slide-down`, `slide-left`, `slide-right`, `scale`, `blur`, `flip`
 
 Each preset includes reveal animation (entrance) and per-preset pending visual hint.
-CSS-only — defined in `client/styles.css`.
+CSS-only — defined in `client/styles.css`. With `prefers-reduced-motion: reduce` the engine does not set
+`data-just-updated` and the presets keep only the pending dimming (no transform or transition).
 
 ### View Transition API
 

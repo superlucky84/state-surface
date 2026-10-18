@@ -9,7 +9,8 @@ The runtime core lives in `engine/`:
 - `engine/build/` and `engine/vite.ts` for page discovery, the oxc call-site transform, diagnostics and generated manifests.
 - `engine/server/projection.ts` and `transitionResponse.ts` for the request reducer and slot projection
   (authoring frames → per-slot `html`/`props`/`merge`/`remove`/`ui` ops).
-- `engine/client/` for the browser runtime: loader, component host (activation, retry, resetKey), action
+- `engine/client/` for the browser runtime: loader (lazy component host `components.ts`, plugin host `pluginEntry.ts`
+  behind `pluginRelay.ts`, early-action reader `actionEvents.ts`), component host (activation, retry, resetKey), action
   runtime (target-aware concurrency, per-request pending, `useAction`), patch apply pipeline, morph chunk,
   and the opt-in router chunk (`router.ts`: server HTML swap between `ss:head`/`ss:body` markers, persist,
   prefetch). Runtime pieces are split into document lifetime and page lifetime (`leavePage`/`mountPage`).
@@ -54,6 +55,13 @@ Use Node.js (latest stable) with `pnpm@10.13.1`. Key commands:
 - `pnpm check` runs `state-surface check` (build analysis without bundling + `tsc --noEmit`).
 - `pnpm test:scaffold` packs the engine and creates, installs, builds, tests and starts apps from the templates.
 - `pnpm test:conformance:app` runs the conformance scenarios on the `vite` dev server and on the production build.
+- `pnpm test:adapters [names]` runs the demo e2e against each adapter's production entry (after `pnpm build:adapter-app`;
+  set `BASE_PATH` for both).
+- `pnpm test:sdk` builds `e2e/sdk` and checks the real Sentry and Datadog RUM SDKs (npm, Loader/CDN) and the GTM runtime
+  over 20 client navigations against a local intake (needs network for the CDNs).
+- `pnpm perf:gate` enforces DC-17 (home and guide engine JS before `load` ≤ 8,444 B gzip, CLS ≤ 0.1); `pnpm perf` and
+  `pnpm perf:report` record the report metrics (INP, first action, chunk and server bundle sizes, router navigation,
+  Workers startup proxy).
 - `pnpm format` and `pnpm format:check` apply or verify Prettier formatting.
 
 ## Coding Style & Naming Conventions

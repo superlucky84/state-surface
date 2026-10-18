@@ -28,3 +28,12 @@ The server runs on the `__ADAPTER__` adapter (`server.ts`, `vite.config.ts`). Pa
 `transitions/**/*.ts`, named by their path. Middleware and other request handler options go in an optional
 `surface.server.ts` (`export default { middleware: [...] } satisfies HandlerConfig`); `pnpm dev` and the
 production server both use it.
+
+## Error tracking, RUM and tag managers
+
+Install Sentry, Datadog RUM, GTM and similar tools the way the vendor documents: npm SDKs in an
+optional `client/entry.ts` (it runs on every page before the engine), script snippets in the
+`<head>` of `layouts/Layout.tsx` (pass `nonce={ctx.nonce}` when middleware sets a nonce CSP). Engine
+errors reach them through `reportError`, transitions and router page fetches carry their trace
+headers, client navigations count as views, and server errors go to `onError` in
+`surface.server.ts`.

@@ -207,6 +207,12 @@ Browser state table (per request):
   slot) with `data-pending` until it ends (done, error or abort) and with `data-has-result` once
   its first patch is applied. Marks are counted per anchor, so one request's end does not clear
   another's.
+- View Transitions (DC-06): updates apply immediately. A request marked by
+  `X-Surface-View-Transition`, `data-view-transition`, or a patch that changes a slot declared with
+  `<Slot viewTransition>` (first appearance included) wraps its first such patch in one
+  `startViewTransition()`; later patches of the request apply immediately, in stream order. Without
+  the API or with `prefers-reduced-motion: reduce` everything applies immediately, and reduced
+  motion also skips the `data-just-updated` mark of `data-animate` slots.
 - `error`: when `slot` names a slot on the page, its `html` (server slot) or `props` (client slot)
   is shown there regardless of targets; it is cleared by the next request's baseline. Without an
   error slot nothing is shown; development warns. Both cases call `reportError` (validation errors
