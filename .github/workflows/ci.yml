@@ -125,6 +125,7 @@ jobs:
       - run: pnpm build
       - run: pnpm perf:gate perf/results/gate.json
       - run: pnpm perf
+      - run: pnpm build:adapter-app && pnpm perf:report perf/results/report.json
       - if: always()
         uses: actions/upload-artifact@v4
         with:
