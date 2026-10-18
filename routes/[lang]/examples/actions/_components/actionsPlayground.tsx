@@ -60,7 +60,7 @@ const ActionsPlayground = ({ lastAction, result, processing, lang }: PlaygroundP
             name="message"
             type="text"
             placeholder={ko ? '메시지를 입력하세요...' : 'Type a message...'}
-            class="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
           />
           <button
             type="submit"

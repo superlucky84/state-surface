@@ -46,7 +46,7 @@ export default async function Page(ctx: SurfaceContext) {
             />
           </Slot>
         </div>
-        <article class={`${prose.article} min-w-0 flex-1 space-y-6`}>
+        <article class={`${prose.article} min-w-0 flex-1 space-y-6 break-words`}>
           <h2 class="text-2xl font-semibold tracking-tight text-slate-900">{entry.data.title}</h2>
           <entry.Content components={guideComponents(lang)} />
           <div class="flex flex-wrap items-center gap-3 pt-2">

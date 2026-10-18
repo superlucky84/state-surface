@@ -30,7 +30,7 @@ export default function Home(_ctx: SurfaceContext) {
             <input
               name="name"
               placeholder="Your name"
-              class="flex-1 rounded-md border border-slate-300 px-3 py-2"
+              class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2"
             />
             <button type="submit" class="rounded-md bg-slate-900 px-4 py-2 text-white">
               Greet
