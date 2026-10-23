@@ -11,7 +11,7 @@ import { paramLang } from '../../shared/i18n.js';
 export default defineTransition({
   input: object({ body: text({ min: 1, max: 200 }), lang: optional(text()) }),
   targets: ['actions:comments'],
-  // Re-fill the textarea after a JS-less validation error.
+  // Echo the draft to the JS-less form (the board refills it after a failed submission).
   flash: { input: ['body'] },
   async *handler({ body, lang }, ctx) {
     if (/^\s*error\s*$/i.test(body))

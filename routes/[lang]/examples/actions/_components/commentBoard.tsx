@@ -8,7 +8,8 @@ type BoardData = { lang: string; comments: Comment[]; flash?: Flash };
 const CommentBoardView = ({ lang, comments, flash }: BoardData) => {
   const ko = lang === 'ko';
   const errors = flash?.error?.fieldErrors?.body;
-  const draft = typeof flash?.input?.body === 'string' ? flash.input.body : '';
+  // The flash echoes the field after every JS-less submission: refill it only after a failure.
+  const draft = flash && !flash.ok && typeof flash.input?.body === 'string' ? flash.input.body : '';
   return (
     <section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div>
