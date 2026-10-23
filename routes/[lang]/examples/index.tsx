@@ -10,8 +10,8 @@ export const prerender = true;
 export default async function Page(ctx: SurfaceContext) {
   const content = await examplesContent(pageLang(ctx));
   return (
-    <Layout header={headerProps(ctx, { title: content.title, nav: 'examples' })}>
-      <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
+    <Layout header={headerProps(ctx, { title: content.title, nav: 'examples', showTitle: false })}>
+      <main class="mx-auto w-full max-w-6xl px-4 pb-24 md:px-8">
         <Slot name="examples:list">
           <ExamplesList {...content['examples:list']} />
         </Slot>

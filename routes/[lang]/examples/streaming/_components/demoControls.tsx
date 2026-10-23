@@ -7,15 +7,17 @@ type ControlsProps = {
 };
 
 const DemoControls = ({ description, runLabel, errorLabel, lang }: ControlsProps) => (
-  <section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 class="text-xl font-semibold tracking-tight text-slate-900">Streaming Frame Demo</h2>
-    <p class="text-sm leading-6 text-slate-600">{description}</p>
-    <div class="flex flex-wrap gap-3">
+  <section class="flex h-full flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs md:flex-row md:items-center md:justify-between">
+    <div class="max-w-2xl">
+      <h2 class="text-lg font-semibold tracking-tight text-slate-950">Streaming Frame Demo</h2>
+      <p class="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+    </div>
+    <div class="flex shrink-0 flex-wrap gap-3">
       <button
         type="button"
         data-action="stream-demo"
         data-params={JSON.stringify({ mode: 'full-sequence', lang })}
-        class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+        class="inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-500"
       >
         {runLabel ?? 'Run Full Sequence'}
       </button>
@@ -23,7 +25,7 @@ const DemoControls = ({ description, runLabel, errorLabel, lang }: ControlsProps
         type="button"
         data-action="stream-demo"
         data-params={JSON.stringify({ mode: 'error-demo', lang })}
-        class="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
+        class="inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 transition ring-inset hover:bg-rose-50"
       >
         {errorLabel ?? 'Trigger Error Frame'}
       </button>

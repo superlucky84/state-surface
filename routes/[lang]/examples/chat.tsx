@@ -23,8 +23,9 @@ export default async function Page(ctx: SurfaceContext) {
     <Layout
       header={headerProps(ctx, { title: content.title, nav: 'examples', back: true })}
       variant="chat"
+      width="narrow"
     >
-      <main class="flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-2 self-center pb-4 pt-4 md:pt-6">
+      <main class="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-2 px-4 pt-6 pb-4 md:px-8">
         <Slot
           name="chat:messages"
           mode="server"

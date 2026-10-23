@@ -14,22 +14,26 @@ export default async function Page(ctx: SurfaceContext) {
   const content = await actionsContent(pageLang(ctx));
   return (
     <Layout header={headerProps(ctx, { title: content.title, nav: 'examples', back: true })}>
-      <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
-        <Slot name="actions:playground" mode="server">
+      <main class="mx-auto grid w-full max-w-6xl gap-6 px-4 pt-8 pb-24 md:px-8 lg:grid-cols-5">
+        <Slot name="actions:playground" mode="server" class="min-w-0 lg:col-span-3">
           <ActionsPlayground {...content['actions:playground']} />
         </Slot>
-        <Slot name="actions:log" mode="server">
+        <Slot name="actions:log" mode="server" class="min-w-0 lg:col-span-2">
           <ActionsLog {...content['actions:log']} />
         </Slot>
-        <section class="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 class="text-lg font-semibold text-slate-900">{content.likes.title}</h2>
-          <p class="text-sm text-slate-600">{content.likes.description}</p>
+        <section class="flex min-w-0 flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs lg:col-span-2">
+          <div>
+            <h2 class="text-lg font-semibold tracking-tight text-slate-950">
+              {content.likes.title}
+            </h2>
+            <p class="mt-1 text-sm leading-6 text-slate-600">{content.likes.description}</p>
+          </div>
           <Slot name="actions:likes" mode="server">
             <LikesPanel {...content['actions:likes']} />
           </Slot>
           <LikeButton client:load lang={content['actions:likes'].lang} />
         </section>
-        <Slot name="actions:comments" mode="server">
+        <Slot name="actions:comments" mode="server" class="min-w-0 lg:col-span-3">
           <CommentBoard {...content['actions:comments']} />
         </Slot>
       </main>

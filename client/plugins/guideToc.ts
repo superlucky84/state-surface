@@ -36,7 +36,7 @@ function scheduleScroll(slotEl: Element) {
 
 /** The code of a guide code block without its line numbers. */
 export function codeText(button: Element): string {
-  const code = button.closest('.rounded-lg')?.querySelector('pre code');
+  const code = button.closest('[data-code-block]')?.querySelector('pre code');
   if (!code) return '';
   const copy = code.cloneNode(true) as Element;
   copy.querySelectorAll('.code-ln').forEach(number => number.remove());

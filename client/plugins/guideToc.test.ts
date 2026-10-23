@@ -90,7 +90,7 @@ describe('guideToc plugin', () => {
 describe('guide code copy', () => {
   it('copies the code without line numbers, keeping indentation', async () => {
     document.body.innerHTML = `
-      <div class="rounded-lg">
+      <div data-code-block>
         <button type="button" data-copy-code>Copy</button>
         <pre><code class="language-ts"><span class="code-ln"> 1</span>if (a) {
 <span class="code-ln"> 2</span>  run();

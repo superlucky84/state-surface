@@ -113,11 +113,13 @@ describe('server stream → browser apply', () => {
   it('ui-patch demo applies and resets the slot UI patch', async () => {
     const { surface } = await open('/en/examples/ui-patch');
     const preview = () => document.querySelector('h-state[name="uipatch:preview"]') as HTMLElement;
+    const ssrClass = preview().getAttribute('class');
     await surface.transition('ui-patch-demo', { action: 'theme', theme: 'warning' });
     expect(preview().classList.contains('tone-warning')).toBe(true);
     expect(preview().style.getPropertyValue('--card-accent')).toBe('#f59e0b');
     await surface.transition('ui-patch-demo', { action: 'clear' });
-    expect(preview().getAttribute('class')).toBe('');
+    // Clearing the patch brings back the classes the page rendered on the slot host.
+    expect(preview().getAttribute('class')).toBe(ssrClass);
     expect(preview().style.getPropertyValue('--card-accent')).toBe('');
   });
 });

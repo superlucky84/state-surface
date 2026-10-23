@@ -11,7 +11,7 @@ const ChatInput = ({ placeholder, submitLabel, lang, hint }: ChatInputProps) => 
   <form
     data-action="chat"
     data-pending-targets="chat:messages,chat:current,chat:typing"
-    class="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+    class="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
   >
     <input type="hidden" name="lang" value={lang ?? 'en'} />
     <div class="flex gap-2">
@@ -21,16 +21,16 @@ const ChatInput = ({ placeholder, submitLabel, lang, hint }: ChatInputProps) => 
         type="text"
         placeholder={placeholder ?? 'Type a message...'}
         autocomplete="off"
-        class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+        class="min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15"
       />
       <button
         type="submit"
-        class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+        class="rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-500"
       >
         {submitLabel ?? 'Send'}
       </button>
     </div>
-    {hint && <p class="mt-2 text-xs text-slate-500">{hint}</p>}
+    {hint && <p class="mt-2 px-2 text-xs text-slate-500">{hint}</p>}
   </form>
 );
 

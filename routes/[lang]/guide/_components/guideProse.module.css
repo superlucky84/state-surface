@@ -5,11 +5,11 @@
 @reference "../../../../client/styles.css";
 
 .article :not(pre) > code {
-  @apply rounded bg-slate-100 px-[0.3125rem] py-px font-mono text-[0.8125em] text-slate-900;
+  @apply rounded-md bg-slate-100 px-[0.375rem] py-px font-mono text-[0.8125em] text-slate-800 ring-1 ring-slate-200/70 ring-inset;
 }
 
 .article a:not([class]) {
-  @apply text-sky-600 underline underline-offset-2;
+  @apply font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-2 hover:decoration-indigo-600;
 }
 
 .block > * + * {

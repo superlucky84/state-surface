@@ -25,7 +25,7 @@ const LikeButton = mount<{ lang: string }>((renew, { lang }) => {
         type="button"
         data-testid="like"
         onClick={() => void like.run({ delta: 1, lang })}
-        class="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+        class="rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-rose-600/25 transition hover:bg-rose-500"
       >
         {ko ? '좋아요 +1' : 'Like +1'}
       </button>
@@ -33,7 +33,7 @@ const LikeButton = mount<{ lang: string }>((renew, { lang }) => {
         type="button"
         data-testid="like-invalid"
         onClick={() => void like.run({ delta: 99, lang })}
-        class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 transition ring-inset hover:bg-slate-50"
       >
         {ko ? '+99 (검증 실패)' : '+99 (fails validation)'}
       </button>

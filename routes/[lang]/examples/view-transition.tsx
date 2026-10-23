@@ -12,7 +12,7 @@ export default async function Page(ctx: SurfaceContext) {
   const content = await viewTransitionContent(pageLang(ctx));
   return (
     <Layout header={headerProps(ctx, { title: content.title, nav: 'examples', back: true })}>
-      <main class="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8 pt-4 md:pt-6">
+      <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-24 md:px-8">
         <Slot name="vt:description" mode="server">
           <VTDescription {...content['vt:description']} />
         </Slot>

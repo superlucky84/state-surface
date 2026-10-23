@@ -1,13 +1,27 @@
 title: StateSurface
 hero:
   badge: 상태-레이아웃 매핑 런타임
-  title: StateSurface
+  title: 서버가 소유한 상태를
+  highlight: 페이지로 바로 스트리밍합니다.
   description: 서버가 상태를 소유하고, 클라이언트가 DOM 프로젝션을 담당합니다. 페이지는 MPA, 페이지 내 업데이트는 NDJSON 상태 스트림으로 전달됩니다. Surface, Template, Transition, Action을 정의하면 엔진이 나머지를 처리합니다.
   primaryLabel: 10분 퀵스타트
   primaryHref: /guide/quickstart
   secondaryLabel: 스트리밍 데모
   secondaryHref: /examples/streaming
+  commandLabel: 앱 만들기
+  command: npx create-state-surface my-app
   imageAlt: '다이어그램: transition이 상태를 yield하고 서버가 NDJSON op을 스트리밍하면 <h-state> 슬롯이 제자리에서 갱신됩니다.'
+sections:
+  concepts:
+    eyebrow: 핵심 개념
+    title: 네 가지 조각, 하나의 멘탈 모델
+    description: 페이지는 슬롯을 배치하고, 컴포넌트는 상태를 그리고, transition은 새 상태를 스트리밍하고, 액션은 평범한 HTML에서 transition을 실행합니다.
+    linkLabel: 가이드 읽기
+  features:
+    eyebrow: 라이브 데모
+    title: 슬롯이 갱신되는 모습을 직접 보세요
+    description: 모든 데모는 이 사이트의 페이지입니다. 하나를 열고 서버가 상태를 스트리밍하는 모습을 확인하세요.
+    linkLabel: 데모 열기
 concepts:
   - key: surface
     title: Surface
@@ -35,3 +49,10 @@ features:
   - title: 검색
     description: 폼 기반 액션으로 StateSurface 기능과 개념을 검색하세요.
     href: /examples/search
+cta:
+  title: 10분 만에 첫 페이지 만들기
+  description: 페이지 하나, 컴포넌트 둘, transition 하나. fetch 호출도, 클라이언트 상태도, abort 처리도 필요 없습니다.
+  primaryLabel: 퀵스타트 시작
+  primaryHref: /guide/quickstart
+  secondaryLabel: 예제 둘러보기
+  secondaryHref: /examples

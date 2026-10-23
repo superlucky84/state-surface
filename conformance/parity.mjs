@@ -25,9 +25,13 @@ import { startServer } from '../perf/server.mjs';
  * guides on the 2.0 API, home concepts corrected) and their boot transitions are gone, so they
  * are not compared; neither are `switch-lang` and `guide-load`, which were removed.
  *
- * Stage 10 (MT-14): inputs in flex rows gained the `min-w-0` class so they shrink on narrow
- * screens; that class token is ignored. The documentation audit corrected explanatory texts
- * that described the engine wrongly (`CORRECTED_TEXT`, old → new, applied to the snapshot).
+ * Stage 10: the documentation audit corrected explanatory texts that described the engine
+ * wrongly (`CORRECTED_TEXT`, old → new, applied to the snapshot). The site redesign changed
+ * the presentation, so the documents are compared by behavior: in `<main>`, the sequence of
+ * texts, links, forms, fields, buttons, images, slots and islands with their attributes.
+ * Presentation is ignored: element nesting and other tags, `class`/`style`, decorative SVG
+ * and `aria-hidden` nodes, and symbol-only text (arrows). Head, header and footer are layout
+ * chrome; the bootstrap (slots, boot entries, base path) and the entry script still compare.
  */
 
 /** Stage 10 documentation audit: explanatory texts corrected since the stage 1 snapshot. */
@@ -120,14 +124,6 @@ const stage7 = (node, base) => {
       if (key === 'href') return [key, unprefix(value)];
       if (key === 'value' && attributes.some(([k, v]) => k === 'name' && v === '_redirect'))
         return [key, unprefix(value)];
-      if (key === 'class')
-        return [
-          key,
-          value
-            .split(/\s+/)
-            .filter(token => token !== 'min-w-0')
-            .join(' '),
-        ];
       if (key === 'data-params') {
         const params = JSON.parse(value);
         delete params.lang;
@@ -141,6 +137,44 @@ const stage7 = (node, base) => {
     (children ?? []).map(child => stage7(child, base)).filter(child => child !== undefined),
   ];
 };
+/** Elements that carry behavior; every other element only groups or styles its children. */
+const BEHAVIOR = new Set([
+  'a',
+  'button',
+  'form',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'img',
+  'iframe',
+  'details',
+  'summary',
+  'h-state',
+  'h-island',
+]);
+const PRESENTATION = new Set(['class', 'style']);
+/** Stage 10 redesign: the behavior of a document part, in document order (see above). */
+const behavior = (node, out = []) => {
+  if (typeof node === 'string') {
+    if (/[\p{L}\p{N}]/u.test(node)) out.push(node);
+    return out;
+  }
+  if (!Array.isArray(node)) return out;
+  const [tag, attributes, children] = node;
+  if (tag === 'svg' || attributes.some(([key, value]) => key === 'aria-hidden' && value === 'true'))
+    return out;
+  if (BEHAVIOR.has(tag)) out.push([tag, attributes.filter(([key]) => !PRESENTATION.has(key))]);
+  for (const child of children ?? []) behavior(child, out);
+  return out;
+};
+const mainOf = node =>
+  Array.isArray(node)
+    ? node[0] === 'main'
+      ? node
+      : (node[2] ?? []).map(mainOf).find(Boolean)
+    : undefined;
+
 const snapshot = JSON.parse(await readFile(new URL('./stage1-demo.json', import.meta.url), 'utf8'));
 const server = await startServer(3301);
 let pages = 0;
@@ -163,10 +197,12 @@ try {
       for (const slot of baseline.json.slots ?? [])
         if (!STATIC_SLOTS.has(slot))
           assert.ok(actual.json.slots?.includes(slot), `${variant} ${path}: slot ${slot}`);
+      const main = mainOf(stage7(withoutStage5(actual.tree), actual.json.basePath));
+      assert.ok(main, `${variant} ${path}: <main>`);
       assert.deepEqual(
-        stage7(withoutStage5(actual.tree), actual.json.basePath),
-        stage7(baseline.tree, baseline.json.basePath),
-        `${variant} ${path}: document tree`
+        behavior(main),
+        behavior(mainOf(stage7(baseline.tree, baseline.json.basePath))),
+        `${variant} ${path}: <main> behavior`
       );
       assert.equal(actual.styles.length, baseline.styles.length, `${variant} ${path}: styles`);
       assert.equal(actual.entry, baseline.entry, `${variant} ${path}: entry script`);

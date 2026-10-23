@@ -1,13 +1,27 @@
 title: StateSurface
 hero:
   badge: State-Layout Mapping Runtime
-  title: StateSurface
+  title: 'Server-owned state,'
+  highlight: streamed into your page.
   description: Server owns state. Client owns DOM projection. Pages are MPA, in-page updates come from NDJSON state streams. Define surfaces, templates, transitions, and actions — the engine handles the rest.
   primaryLabel: 10-Min Quickstart
   primaryHref: /guide/quickstart
   secondaryLabel: Try Streaming Demo
   secondaryHref: /examples/streaming
+  commandLabel: Create an app
+  command: npx create-state-surface my-app
   imageAlt: 'Diagram: a transition yields states, the server streams NDJSON ops, and <h-state> slots update in place.'
+sections:
+  concepts:
+    eyebrow: Core concepts
+    title: Four pieces, one mental model
+    description: A page places slots, components render their state, transitions stream new state and actions start them from plain HTML.
+    linkLabel: Read the guide
+  features:
+    eyebrow: Live demos
+    title: Watch the slots update
+    description: Every demo is a page of this site. Open one and see the server stream state into it.
+    linkLabel: Open the demo
 concepts:
   - key: surface
     title: Surface
@@ -35,3 +49,10 @@ features:
   - title: Search
     description: Search StateSurface features and concepts with form-based actions.
     href: /examples/search
+cta:
+  title: Build your first page in 10 minutes
+  description: One page, two components and one transition. No fetch calls, no client-side state, no abort handling.
+  primaryLabel: Start the quickstart
+  primaryHref: /guide/quickstart
+  secondaryLabel: Browse examples
+  secondaryHref: /examples

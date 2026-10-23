@@ -227,13 +227,15 @@ test('streaming displays partial, accumulated, removed and restored output', asy
 test('UI patches apply theme, style-only changes, and reset', async ({ page }) => {
   await ready(page, 'en/examples/ui-patch');
   const preview = slot(page, 'uipatch:preview');
+  const ssrClass = (await preview.getAttribute('class')) ?? '';
   await page.getByRole('button', { name: 'Warning', exact: true }).click();
   await expect(preview).toHaveClass(/tone-warning/);
   await page.getByRole('button', { name: 'Style-Only Apply', exact: true }).click();
   await expect(preview).toHaveClass(/tone-success/);
   await expect(preview).toHaveCSS('--card-accent', '#10b981');
   await page.getByRole('button', { name: 'Reset to Default', exact: true }).click();
-  await expect(preview).toHaveAttribute('class', '');
+  // The reset patch brings back the classes the page rendered on the slot host.
+  await expect(preview).toHaveAttribute('class', ssrClass);
   await expect(preview).toHaveCSS('--card-accent', '');
   await expect(preview).not.toHaveClass(/tone-success/);
 });

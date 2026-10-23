@@ -4,7 +4,7 @@ import { readBoard } from '../../../../../shared/actionsStore.server.js';
 type LikesData = { lang: string; likes: number };
 
 const LikesView = ({ lang, likes }: LikesData) => (
-  <p class="text-3xl font-semibold tabular-nums text-slate-900" data-testid="likes">
+  <p class="text-4xl font-bold tracking-tight text-slate-950 tabular-nums" data-testid="likes">
     {likes}
     <span class="ml-2 text-sm font-normal text-slate-500">
       {lang === 'ko' ? '좋아요' : 'likes'}

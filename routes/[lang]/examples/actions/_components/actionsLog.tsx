@@ -12,31 +12,31 @@ type LogProps = {
 };
 
 function statusBadge(status: string): string {
-  if (status === 'done') return 'bg-green-100 text-green-800 border-green-200';
-  if (status === 'processing') return 'bg-amber-100 text-amber-800 border-amber-200';
-  return 'bg-slate-100 text-slate-800 border-slate-200';
+  if (status === 'done') return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  if (status === 'processing') return 'bg-amber-50 text-amber-700 ring-amber-200';
+  return 'bg-slate-50 text-slate-700 ring-slate-200';
 }
 
 const ActionsLog = ({ entries, lang }: LogProps) => {
   const ko = lang === 'ko';
   return (
-    <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 class="mb-4 text-lg font-semibold text-slate-900">{ko ? '액션 로그' : 'Action Log'}</h3>
+    <section class="h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <h3 class="mb-4 text-base font-semibold text-slate-950">{ko ? '액션 로그' : 'Action Log'}</h3>
       {entries.length === 0 ? (
-        <p class="text-sm text-slate-500">
+        <p class="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm leading-6 text-slate-500">
           {ko
             ? '아직 트리거된 액션이 없습니다. 위의 버튼을 사용해보세요.'
             : 'No actions triggered yet. Try the buttons above.'}
         </p>
       ) : (
-        <ul class="space-y-3">
+        <ul class="space-y-2">
           {entries.map(e => (
             <li
               key={e.id}
-              class="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3"
+              class="flex items-start gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100 ring-inset"
             >
               <span
-                class={`mt-0.5 shrink-0 rounded border px-2 py-0.5 text-xs font-semibold ${statusBadge(e.status)}`}
+                class={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-mono text-[0.6875rem] font-semibold ring-1 ring-inset ${statusBadge(e.status)}`}
               >
                 {e.status.toUpperCase()}
               </span>

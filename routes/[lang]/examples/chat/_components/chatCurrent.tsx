@@ -5,9 +5,9 @@ type ChatCurrentProps = { text?: string };
 // props, so this template receives the text merged so far and renders it directly.
 const ChatCurrent = ({ text }: ChatCurrentProps) => (
   <div class="flex justify-start px-1">
-    <div class="max-w-xs rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm lg:max-w-md">
+    <div class="max-w-xs rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-sm leading-6 text-slate-800 shadow-xs ring-1 ring-indigo-200 lg:max-w-md">
       {text ?? ''}
-      <span class="ml-0.5 inline-block animate-pulse">▋</span>
+      <span class="ml-0.5 inline-block text-indigo-500 animate-pulse">▋</span>
     </div>
   </div>
 );

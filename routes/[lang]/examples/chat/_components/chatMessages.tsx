@@ -10,8 +10,8 @@ const ChatMessage = ({ id, role, text }: Message) => (
     <div
       class={
         role === 'user'
-          ? 'max-w-xs rounded-2xl rounded-br-sm bg-slate-900 px-4 py-2.5 text-sm text-white lg:max-w-md'
-          : 'max-w-xs rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm lg:max-w-md'
+          ? 'max-w-xs rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 text-sm leading-6 text-white shadow-sm shadow-indigo-600/20 lg:max-w-md'
+          : 'max-w-xs rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-sm leading-6 text-slate-800 shadow-xs ring-1 ring-slate-200 lg:max-w-md'
       }
     >
       {text}
@@ -22,7 +22,7 @@ const ChatMessage = ({ id, role, text }: Message) => (
 const ChatMessages = ({ messages, welcomeText }: ChatMessagesProps) => (
   <div
     data-chat-scroll
-    class="flex flex-1 flex-col gap-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4"
+    class="flex flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-inner shadow-slate-900/[0.03] sm:p-5"
   >
     {!messages || messages.length === 0 ? (
       <p class="m-auto text-center text-sm text-slate-400">

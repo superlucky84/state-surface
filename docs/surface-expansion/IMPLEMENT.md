@@ -1396,6 +1396,11 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
   `pnpm perf:gate`.
 - 이번 실행은 클라우드 로컬 머신 결과다. GitHub Actions의 새 잡(adapters·sdk·scaffold 확장·perf 게이트), Firefox·Safari·실기기·
   스크린리더, Cloudflare 실제 배포, 업체 계정 화면은 관측하지 않았다(MANUAL_TEST_CHECKLIST 4장 남은 수동 항목).
+- 데모 사이트 리디자인(단계 10 이후): 고정 반투명 헤더·제목 띠·푸터·오류 토스트(`layouts/Layout.tsx`), 홈 히어로 이미지와
+  섹션·CTA 문구(`content/pages/*/home.yaml`), 예제 목록·데모 패널·가이드 본문(이전/다음 이동). `pnpm test:parity`는 이제
+  `<main>`의 동작(텍스트·링크·폼·필드·버튼·이미지·슬롯·아일랜드와 그 속성, 문서 순서)만 비교하고 중첩·class·style·장식 SVG·
+  `aria-hidden`·기호만 있는 텍스트는 표현으로 보고 무시한다(`conformance/parity.mjs`). class 문자열을 보던 단위·e2e 검사는
+  의미(`aria-current`, 가이드 스크롤 행, UI 패치 해제 후 SSR 클래스 복원)로 바꿨다. 엔진 JS·CLS는 그대로다(`pnpm perf:gate`).
 
 ### 상태
 

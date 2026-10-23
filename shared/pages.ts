@@ -10,6 +10,7 @@ import { localPath, pageLang, type Lang } from './i18n.js';
  */
 
 type Link = { title: string; description: string; href: string };
+export type SectionHeading = { eyebrow: string; title: string; description: string };
 export type Card = {
   id: string;
   title: string;
@@ -25,15 +26,28 @@ export interface PageTexts {
     hero: {
       badge: string;
       title: string;
+      /** Second line of the headline, in the accent gradient. */
+      highlight: string;
       description: string;
       primaryLabel: string;
       primaryHref: string;
       secondaryLabel: string;
       secondaryHref: string;
+      commandLabel: string;
+      command: string;
       imageAlt: string;
     };
+    sections: Record<'concepts' | 'features', SectionHeading & { linkLabel: string }>;
     concepts: Array<Link & { key: string }>;
     features: Link[];
+    cta: {
+      title: string;
+      description: string;
+      primaryLabel: string;
+      primaryHref: string;
+      secondaryLabel: string;
+      secondaryHref: string;
+    };
   };
   examples: {
     title: string;
@@ -82,7 +96,7 @@ const localized = <T extends { href: string }>(lang: Lang, items: T[]) =>
 /** `page:header` props: navigation and language links of the current page (static slot). */
 export function headerProps(
   ctx: SurfaceContext,
-  options: { title: string; nav: HeaderProps['nav']; back?: boolean }
+  options: { title: string; nav: HeaderProps['nav']; back?: boolean; showTitle?: boolean }
 ): HeaderProps {
   const lang = pageLang(ctx);
   const i18n = ctx.i18n!;
@@ -101,7 +115,13 @@ export function headerProps(
       label: locale.toUpperCase(),
       href: i18n.switchHref(locale),
     })),
-    ...(options.back ? { backHref: localPath(lang, '/examples'), backLabel: 'Examples' } : {}),
+    ...(options.back
+      ? {
+          backHref: localPath(lang, '/examples'),
+          backLabel: lang === 'ko' ? '예제 목록' : 'All examples',
+        }
+      : {}),
+    ...(options.showTitle === false ? { showTitle: false } : {}),
   };
 }
 
@@ -114,8 +134,21 @@ export async function homeContent(lang: Lang) {
       primaryHref: localPath(lang, t.hero.primaryHref),
       secondaryHref: localPath(lang, t.hero.secondaryHref),
     },
-    'page:concepts': { concepts: localized(lang, t.concepts) },
-    'page:features': { features: localized(lang, t.features) },
+    sections: t.sections,
+    'page:concepts': {
+      concepts: localized(lang, t.concepts),
+      linkLabel: t.sections.concepts.linkLabel,
+    },
+    'page:features': {
+      features: localized(lang, t.features),
+      linkLabel: t.sections.features.linkLabel,
+    },
+    cta: {
+      ...t.cta,
+      command: t.hero.command,
+      primaryHref: localPath(lang, t.cta.primaryHref),
+      secondaryHref: localPath(lang, t.cta.secondaryHref),
+    },
   };
 }
 

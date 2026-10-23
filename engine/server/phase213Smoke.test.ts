@@ -8,8 +8,7 @@ let app: any;
 function headerLang(html: string): string | undefined {
   const header = /<h-state name="page:header"[^>]*>([\s\S]*?)<\/h-state>/.exec(html)?.[1] ?? '';
   for (const link of header.match(/<a [^>]*hreflang="[^"]+"[^>]*>/g) ?? [])
-    if (link.includes('aria-current="true"') && link.includes('bg-slate-900 text-white'))
-      return /hreflang="([^"]+)"/.exec(link)?.[1];
+    if (link.includes('aria-current="true"')) return /hreflang="([^"]+)"/.exec(link)?.[1];
   return undefined;
 }
 
@@ -24,16 +23,16 @@ describe('phase 2-13 smoke coverage', () => {
   it('guide page renders a mobile-friendly toc layout', async () => {
     const guide = await request(app).get('/en/guide/quickstart');
     expect(guide.status).toBe(200);
-    expect(guide.text).toContain('flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6');
+    // Sidebar beside the article from md up, a sticky table of contents.
+    expect(guide.text).toMatch(/<main class="[^"]*\bflex-col\b[^"]*\bmd:flex-row\b/);
     expect(guide.text).toContain('w-full md:w-56 md:shrink-0');
-    expect(guide.text).toContain('space-y-2 md:sticky md:top-6 md:space-y-1');
-    expect(guide.text).toContain('data-guide-nav-scroll');
-    expect(guide.text).toContain('data-guide-active="true"');
-    expect(guide.text).toContain(
-      '-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:block md:space-y-1 md:overflow-visible md:px-0 md:pb-0'
-    );
-    expect(guide.text).toContain(
-      'inline-flex w-auto whitespace-nowrap rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white md:block md:w-full'
+    expect(guide.text).toMatch(/<nav class="[^"]*\bmd:sticky\b/);
+    // Narrow screens: guides in one horizontally scrolling row; a vertical list from md up.
+    const row = /<div data-guide-nav-scroll="[^"]*" class="([^"]+)"/.exec(guide.text)?.[1] ?? '';
+    expect(row.split(' ')).toEqual(expect.arrayContaining(['flex', 'overflow-x-auto', 'md:block']));
+    const active = /<a data-guide-active="true"[^>]*class="([^"]+)"/.exec(guide.text)?.[1] ?? '';
+    expect(active.split(' ')).toEqual(
+      expect.arrayContaining(['inline-flex', 'whitespace-nowrap', 'md:flex', 'md:w-full'])
     );
   });
 

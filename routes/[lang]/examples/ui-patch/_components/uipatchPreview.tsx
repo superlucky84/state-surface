@@ -8,7 +8,7 @@ const UiPatchPreview = ({ theme, updating, lang }: PreviewProps) => {
   const ko = lang === 'ko';
   return (
     <section
-      class="rounded-2xl border p-6 shadow-sm transition-all duration-300"
+      class="rounded-2xl border-2 p-6 shadow-sm transition-all duration-300"
       style="background-color: var(--card-bg, #f8fafc); border-color: var(--card-accent, #e2e8f0);"
     >
       <div class="flex items-center gap-3">

@@ -5,6 +5,7 @@ import Layout from '../../../layouts/Layout.js';
 import GuideToc from './_components/guideToc.js';
 import { guideComponents } from './_components/guideContent.js';
 import prose from './_components/guideProse.module.css';
+import { Icon } from '../../_shared/components/icons.js';
 import { localPath, pageLang } from '../../../shared/i18n.js';
 import { headerProps, pageText } from '../../../shared/pages.js';
 import { guideToc } from '../../../client/plugins/guideToc.js';
@@ -21,7 +22,10 @@ export async function getStaticPaths() {
   return (await getCollection('guides')).map(entry => ({ lang: entry.lang!, slug: entry.id }));
 }
 
-const CONCEPTS = ['surface', 'template', 'transition', 'action'];
+const LABELS: Record<string, { demo: string; previous: string; next: string; pager: string }> = {
+  en: { demo: 'See it running', previous: 'Previous', next: 'Next', pager: 'Guides' },
+  ko: { demo: '직접 실행해 보기', previous: '이전', next: '다음', pager: '가이드' },
+};
 
 export default async function Page(ctx: SurfaceContext) {
   const lang = pageLang(ctx);
@@ -30,10 +34,20 @@ export default async function Page(ctx: SurfaceContext) {
   const guides = (await getCollection('guides', { lang })).sort(
     (a, b) => a.data.order - b.data.order
   );
+  const index = guides.findIndex(guide => guide.id === entry.id);
+  const previous = guides[index - 1];
+  const next = guides[index + 1];
   const t = await pageText('guide', lang);
+  const labels = LABELS[lang] ?? LABELS.en;
   return (
-    <Layout header={headerProps(ctx, { title: `${t.title}: ${entry.data.title}`, nav: 'guide' })}>
-      <main class="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-8 pt-4 md:flex-row md:gap-8 md:pt-6">
+    <Layout
+      header={headerProps(ctx, {
+        title: `${t.title}: ${entry.data.title}`,
+        nav: 'guide',
+        showTitle: false,
+      })}
+    >
+      <main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-6 pb-24 md:flex-row md:gap-12 md:px-8 md:pt-12">
         <div class="w-full md:w-56 md:shrink-0">
           <Slot name="guide:toc">
             <GuideToc
@@ -46,37 +60,69 @@ export default async function Page(ctx: SurfaceContext) {
             />
           </Slot>
         </div>
-        <article class={`${prose.article} min-w-0 flex-1 space-y-6 break-words`}>
-          <h2 class="text-2xl font-semibold tracking-tight text-slate-900">{entry.data.title}</h2>
-          <entry.Content components={guideComponents(lang)} />
-          <div class="flex flex-wrap items-center gap-3 pt-2">
-            {entry.data.demoHref && entry.data.demoLabel && (
-              <a
-                href={localPath(lang, entry.data.demoHref)}
-                class="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+        <article class={`${prose.article} min-w-0 flex-1 break-words lg:max-w-3xl`}>
+          <div class="border-b border-slate-200 pb-8">
+            <p class="text-sm font-semibold text-indigo-600">{t.title}</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight break-keep text-slate-950 sm:text-4xl">
+              {entry.data.title}
+            </h1>
+          </div>
+          <div class="mt-10 space-y-14">
+            <entry.Content components={guideComponents(lang)} />
+          </div>
+          {entry.data.demoHref && entry.data.demoLabel && (
+            <a
+              href={localPath(lang, entry.data.demoHref)}
+              class="group relative mt-14 flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-slate-950 p-6 transition hover:shadow-xl hover:shadow-indigo-950/20"
+            >
+              <span
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-0 bg-[radial-gradient(28rem_12rem_at_0%_0%,rgb(99_102_241/0.45),transparent_70%)]"
+              />
+              <span class="relative">
+                <span class="block text-sm font-medium text-indigo-200">{labels.demo}</span>
+                <span class="mt-1 block text-lg font-semibold text-white">
+                  {entry.data.demoLabel}
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                class="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-slate-950 transition group-hover:translate-x-0.5"
               >
-                {entry.data.demoLabel}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-3.5 w-3.5"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M3 7h8M7 3l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
+                <Icon name="arrowRight" class="h-4 w-4" />
+              </span>
+            </a>
+          )}
+          <nav aria-label={labels.pager} class="mt-10 grid gap-4 sm:grid-cols-2">
+            {previous && (
+              <a
+                href={localPath(lang, `/guide/${previous.id}`)}
+                class="group rounded-xl border border-slate-200 p-4 transition hover:border-indigo-300 hover:bg-indigo-50/40"
+              >
+                <span class="flex items-center gap-1 text-xs font-medium text-slate-500">
+                  <Icon name="arrowLeft" class="h-3.5 w-3.5" />
+                  {labels.previous}
+                </span>
+                <span class="mt-1 block font-semibold text-slate-900 group-hover:text-indigo-700">
+                  {previous.data.title}
+                </span>
               </a>
             )}
-            {CONCEPTS.filter(slug => slug !== entry.id).map(slug => (
+            {next && (
               <a
-                href={localPath(lang, `/guide/${slug}`)}
-                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                href={localPath(lang, `/guide/${next.id}`)}
+                class="group rounded-xl border border-slate-200 p-4 text-right transition hover:border-indigo-300 hover:bg-indigo-50/40 sm:col-start-2"
               >
-                {slug.charAt(0).toUpperCase() + slug.slice(1)} Guide
+                <span class="flex items-center justify-end gap-1 text-xs font-medium text-slate-500">
+                  {labels.next}
+                  <Icon name="arrowRight" class="h-3.5 w-3.5" />
+                </span>
+                <span class="mt-1 block font-semibold text-slate-900 group-hover:text-indigo-700">
+                  {next.data.title}
+                </span>
               </a>
-            ))}
-          </div>
+            )}
+          </nav>
         </article>
       </main>
     </Layout>
