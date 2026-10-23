@@ -87,7 +87,7 @@ features:
       - removed
       - merge
   - title: Hydration
-    description: Client slots and islands hydrate per <h-state> root from the __SURFACE__ snapshot.
+    description: Client slots hydrate on their <h-state>, islands on their <h-island>, from the props in the __SURFACE__ bootstrap.
     href: /guide/template
     tags:
       - hydration
@@ -95,8 +95,8 @@ features:
       - hash
       - boundary
   - title: Abort Previous
-    description: Starting a new transition cancels the previous in-flight stream.
-    href: /examples/streaming
+    description: "A new action aborts in-flight requests of the same transition and those whose targets overlap; disjoint targets run in parallel, mode: 'queue' runs in order."
+    href: /examples/chat
     tags:
       - abort
       - cancel

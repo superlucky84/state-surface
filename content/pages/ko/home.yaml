@@ -11,7 +11,7 @@ hero:
 concepts:
   - key: surface
     title: Surface
-    description: 페이지는 <Slot> 경계를 배치하는 TSX 함수입니다. 각 슬롯은 transition이 갱신하는 <h-state> 앵커가 되고, 나머지는 정적 HTML입니다.
+    description: 페이지는 <Slot> 경계를 배치하는 TSX 함수입니다. 각 슬롯은 <h-state> 앵커가 되며, mode="server"나 client:* 지시자가 있는 슬롯을 transition이 갱신합니다.
     href: /guide/surface
   - key: template
     title: Template
@@ -19,7 +19,7 @@ concepts:
     href: /guide/template
   - key: transition
     title: Transition
-    description: 서버 측 async generator가 상태 프레임을 yield합니다. Full 프레임은 전체 UI 상태를 선언하고, Partial 프레임은 변경사항을 점진적으로 병합합니다.
+    description: 서버 측 async generator가 상태 프레임을 yield합니다. Full 프레임은 transition targets의 전체 상태를 정하고, Partial 프레임은 선택한 슬롯을 점진적으로 갱신합니다.
     href: /guide/transition
   - key: action
     title: Action

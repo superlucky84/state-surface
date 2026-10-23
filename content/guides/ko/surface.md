@@ -25,7 +25,7 @@ Surface = 인테리어 전의 건물 뼈대 공사. 방 배치를 정하고 벽�
 
 - Slot 없는 페이지 마크업: 레이아웃, 내비게이션, 제목, 푸터 — 사용자가 페이지에 머무는 동안 변하지 않는 모든 것. 서버 HTML일 뿐이며 JavaScript를 보내지 않습니다.
 - `mode="server"`: transition이 바꾸는 콘텐츠의 기본 선택입니다. 서버가 컴포넌트를 다시 렌더링해 HTML을 보내고, `swap="morph"`는 입력값과 포커스를 유지합니다.
-- `client:load`, `client:idle`, `client:visible`, `client:media="(…)"`, `client:only`: 브라우저에서 hydrate되어 로컬 상태를 유지하고 props를 받는 Lithent 컴포넌트입니다. 브라우저 상태나 API가 필요한 영역에만 사용하세요.
+- `client:load`, `client:idle`, `client:visible`, `client:media="(…)"`, `client:only`: 브라우저에서 hydrate되어(`client:only`는 SSR을 건너뛰고 `fallback`을 보여 준 뒤 활성화 시 렌더링) 로컬 상태를 유지하고 props를 받는 Lithent 컴포넌트입니다. 브라우저 상태나 API가 필요한 영역에만 사용하세요.
 - mode도 지시자도 없으면 **static**입니다. 한 번만 렌더링되는 이름 붙은 영역이며 프레임으로 바꿀 수 없습니다.
 - `fallback`과 함께 쓰는 `server:defer`는 느린 server 슬롯을 페이지 이후에 불러옵니다. `capability="rich"` 또는 `capability="unsafe"`는 슬롯 안에서 Markdown이나 raw HTML을 허용합니다(기본은 strict).
 - 페이지 옵션은 named export입니다: `plugins`(Template 가이드 참고), 정적 HTML을 위한 `prerender`와 `getStaticPaths`.
@@ -35,7 +35,7 @@ Surface = 인테리어 전의 건물 뼈대 공사. 방 배치를 정하고 벽�
 :::sequence
 1. `routes/dashboard.tsx`를 만듭니다. 파일 경로가 곧 URL(`/dashboard`)입니다. `[id].tsx` 세그먼트는 `ctx.params`가 되고, `_`로 시작하는 파일과 폴더는 페이지가 아닙니다.
 2. `async function Page(ctx: SurfaceContext)`를 default export하고 첫 화면에 필요한 데이터(`ctx.params`, `ctx.url`, 데이터베이스)를 await합니다.
-3. `<html>`, `<head>`, `<body>`를 렌더링하는 `layouts/Layout.tsx` 같은 레이아웃으로 문서를 반환합니다. doctype, 스타일시트, bootstrap JSON, 스크립트는 엔진이 추가합니다.
+3. `<html>`, `<head>`, `<body>`를 렌더링하는 `layouts/Layout.tsx` 같은 레이아웃으로 문서를 반환합니다. doctype과 스타일시트는 엔진이 추가하고, bootstrap JSON과 엔진 스크립트는 페이지에 필요할 때만 추가합니다.
 4. 바뀔 수 있는 영역마다 `<Slot name="ns:name">`으로 감싸고, import한 컴포넌트 엘리먼트 정확히 하나를 자식으로 둡니다. 그 엘리먼트의 props가 초기 슬롯 상태입니다. 처음에 비어 있는 슬롯은 `component={X}`를 씁니다.
 5. 슬롯마다 모드를 고릅니다: `mode="server"`, `client:*` 지시자, 또는 정적 콘텐츠라면 아무것도 붙이지 않습니다.
 6. 로드 직후 데이터를 스트리밍하려면 `<Boot transition="…" />`를 두거나 템플릿에 액션을 연결하고, 이 슬롯 이름들로 `states`를 보내는 transition을 작성합니다.
@@ -176,7 +176,7 @@ function Dashboard() {
 ```
 
 :::callout{kind="tip"}
-기본은 패턴 A입니다. 정적 제목, 구분선, 장식 요소는 HTML에 포함되어 절대 재렌더링되지 않고, server 슬롯은 컴포넌트 코드를 보내지 않습니다. 패턴 B의 client 슬롯이나 아일랜드는 로컬 상태나 브라우저 API가 필요한 곳에만 쓰세요. server 슬롯 안에 둔 아일랜드는 그 슬롯이 다시 렌더링될 때마다 새로 만들어집니다.
+기본은 패턴 A입니다. 정적 제목, 구분선, 장식 요소는 HTML에 포함되어 절대 재렌더링되지 않고, server 슬롯은 컴포넌트 코드를 보내지 않습니다. 패턴 B의 client 슬롯이나 아일랜드는 로컬 상태나 브라우저 API가 필요한 곳에만 쓰세요. 기본 `swap="replace"`에서는 server 슬롯 안의 아일랜드가 슬롯이 다시 렌더링될 때마다 새로 만들어지고, `swap="morph"`에서는 props(또는 `resetKey` 값)가 같으면 인스턴스가 유지됩니다.
 :::
 
 ## 실행 시퀀스 {#sequence}
@@ -185,8 +185,8 @@ function Dashboard() {
 1. `GET /dashboard` — 서버가 `routes/dashboard.tsx`를 찾고 미들웨어를 실행합니다.
 2. 페이지 함수가 `ctx`와 함께 실행되어 트리를 반환하고, 엔진이 그 안의 Slot, 아일랜드, `<Boot>`를 수집합니다.
 3. 페이지에 있는 server 컴포넌트의 `load` 단계를 병렬로 기다린 뒤, 트리를 HTML로 렌더링합니다. 각 슬롯은 `<h-state name="…">` 호스트 안에 들어갑니다.
-4. 엔진이 doctype, 스타일시트, `__SURFACE__` bootstrap JSON을 추가하고 — 페이지에 필요할 때만 — 엔진 스크립트를 추가합니다.
-5. 브라우저가 완성된 페이지를 표시합니다(MPA). client 슬롯은 각자의 시점에 snapshot props로 hydrate되고, 지연 슬롯을 가져오며, `<Boot>` transition이 시작됩니다.
+4. 엔진이 doctype과 스타일시트를 추가하고, 페이지에 엔진이 필요하거나(client 컴포넌트, 액션, `<Boot>`, 지연 슬롯, 플러그인, `<ClientRouter>`) `client/entry.ts`가 있을 때만 `__SURFACE__` bootstrap JSON과 엔진 스크립트를 추가합니다.
+5. 브라우저가 완성된 페이지를 표시합니다(MPA). client 슬롯은 각자의 시점에 snapshot props로 hydrate되고(`client:only`는 렌더링), 지연 슬롯을 가져오며, `<Boot>` transition이 시작됩니다.
 :::
 
 ## 흔한 실수 {#mistakes}

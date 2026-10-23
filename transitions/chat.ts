@@ -10,40 +10,40 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const BOT_RESPONSES: Record<string, { en: string; ko: string }> = {
   surface: {
-    en: 'A Surface is the page shell — plain HTML strings that declare h-state anchors and static layout. Surfaces define where dynamic content can appear without containing any business content themselves.',
-    ko: 'Surface는 페이지 셸입니다 — h-state 앵커와 정적 레이아웃을 선언하는 순수 HTML 문자열. Surface는 동적 콘텐츠가 나타날 위치를 정의하며, 비즈니스 콘텐츠를 직접 포함하지는 않습니다.',
+    en: 'A Surface is a TSX page function that places <Slot> boundaries. Each slot renders an <h-state> anchor, and the rest is layout the server renders. Surfaces define where state appears; the components inside the slots render it.',
+    ko: 'Surface는 <Slot> 경계를 배치하는 TSX 페이지 함수입니다. 각 슬롯은 <h-state> 앵커로 렌더링되고 나머지는 서버가 렌더링하는 레이아웃입니다. Surface는 상태가 나타날 위치를 정하고, 슬롯 안의 컴포넌트가 그 상태를 렌더링합니다.',
   },
   template: {
     en: 'A Template is a TSX projection component that renders inside an h-state anchor. Templates receive data from server state frames and are stateless by default — server state drives all content.',
     ko: 'Template은 h-state 앵커 안에서 렌더링되는 TSX 프로젝션 컴포넌트입니다. 서버 상태 프레임에서 데이터를 받으며 기본적으로 무상태입니다 — 서버 상태가 모든 콘텐츠를 결정합니다.',
   },
   transition: {
-    en: 'A Transition is a server-side async generator that yields state frames. Full frames replace all UI state; partial frames merge changes progressively via NDJSON streaming over HTTP POST.',
-    ko: 'Transition은 상태 프레임을 yield하는 서버 측 async generator입니다. Full 프레임은 전체 UI 상태를 교체하고, Partial 프레임은 HTTP POST를 통한 NDJSON 스트리밍으로 변경사항을 점진적으로 병합합니다.',
+    en: 'A Transition is a server-side async generator that yields state frames. Full frames replace the state of the transition targets (other slots stay); partial frames update selected slots progressively, streamed as NDJSON over HTTP POST.',
+    ko: 'Transition은 상태 프레임을 yield하는 서버 측 async generator입니다. Full 프레임은 transition targets의 상태를 교체하고(나머지 슬롯은 그대로), Partial 프레임은 선택한 슬롯을 점진적으로 갱신하며, HTTP POST 위 NDJSON으로 스트리밍됩니다.',
   },
   action: {
-    en: 'An Action is a declarative trigger via data-action attributes. No JS event wiring needed — the engine handles event delegation, pending states, and the abort-previous concurrency policy automatically.',
-    ko: 'Action은 data-action 속성을 통한 선언적 트리거입니다. JS 이벤트 바인딩이 불필요합니다 — 엔진이 이벤트 위임, pending 상태, abort-previous 동시성 정책을 자동 처리합니다.',
+    en: 'An Action is a declarative trigger via data-action attributes. No JS event wiring needed — the engine handles event delegation, pending states and target-aware concurrency (the same action or overlapping targets abort, disjoint targets run in parallel) automatically.',
+    ko: 'Action은 data-action 속성을 통한 선언적 트리거입니다. JS 이벤트 바인딩이 불필요합니다 — 엔진이 이벤트 위임, pending 상태, targets 기반 동시성(같은 액션·겹치는 targets는 취소, 겹치지 않으면 병렬)을 자동 처리합니다.',
   },
   streaming: {
-    en: 'StateSurface streams state as NDJSON over HTTP POST. The server yields frames one by one as data becomes available, and the client applies them progressively — no WebSockets, no special protocol.',
-    ko: 'StateSurface는 HTTP POST를 통한 NDJSON으로 상태를 스트리밍합니다. 서버가 데이터가 준비되는 대로 프레임을 하나씩 yield하면 클라이언트가 점진적으로 적용합니다 — WebSocket 없이, 특별한 프로토콜 없이.',
+    en: 'StateSurface streams per-slot updates as NDJSON over HTTP POST. The transition yields frames as data becomes available, the server turns them into patch ops (HTML for server slots, props for client slots), and the browser applies them progressively — no WebSockets.',
+    ko: 'StateSurface는 HTTP POST 위 NDJSON으로 슬롯별 갱신을 스트리밍합니다. transition이 데이터가 준비되는 대로 프레임을 yield하면 서버가 patch op(server 슬롯은 HTML, client 슬롯은 props)로 바꾸고, 브라우저가 점진적으로 적용합니다 — WebSocket 없이.',
   },
   hydration: {
-    en: 'Hydration in StateSurface is per h-state root, not full-page. The client hydrates each SSR anchor from its initial snapshot, then applies streamed updates.',
-    ko: 'StateSurface의 하이드레이션은 전체 페이지가 아닌 h-state 루트별로 이루어집니다. 클라이언트는 각 SSR 앵커를 초기 스냅샷으로 하이드레이션한 뒤 스트리밍 갱신을 적용합니다.',
+    en: 'Hydration in StateSurface is per root, not full-page. Only client slots and islands hydrate, each on its own <h-state> or <h-island> from the props in __SURFACE__; static and server slots ship no component JS, and server slots are updated with server HTML.',
+    ko: 'StateSurface의 하이드레이션은 전체 페이지가 아닌 루트별로 이루어집니다. client 슬롯과 아일랜드만 각자의 <h-state> 또는 <h-island>에서 __SURFACE__ props로 하이드레이션하고, static·server 슬롯은 컴포넌트 JS가 없으며 server 슬롯은 서버 HTML로 갱신됩니다.',
   },
   abort: {
-    en: 'The abort-previous policy means starting a new transition immediately cancels any in-flight stream. In this chatbot, sending a new message while the bot is responding cancels the current generation.',
-    ko: 'abort-previous 정책은 새 transition을 시작하면 진행 중인 스트림을 즉시 취소함을 의미합니다. 이 챗봇에서 봇이 응답하는 동안 새 메시지를 보내면 현재 생성이 취소됩니다.',
+    en: 'The abort-previous policy: a new action aborts in-flight requests of the same transition and those whose targets overlap; disjoint targets run in parallel. In this chatbot, sending a new message while the bot is responding cancels the current generation.',
+    ko: 'abort-previous 정책: 새 액션은 같은 transition과 targets가 겹치는 진행 중 요청을 취소하고, targets가 겹치지 않으면 병렬로 실행합니다. 이 챗봇에서 봇이 응답하는 동안 새 메시지를 보내면 현재 생성이 취소됩니다.',
   },
   ndjson: {
-    en: 'NDJSON (Newline-Delimited JSON) is the wire format for state frames. Each line is a complete JSON object. The client parses lines as they arrive, enabling true streaming without buffering the full response.',
-    ko: 'NDJSON(줄바꿈 구분 JSON)은 상태 프레임의 전송 형식입니다. 각 줄이 완전한 JSON 객체입니다. 클라이언트는 줄이 도착하는 대로 파싱하여 전체 응답을 버퍼링하지 않고 진정한 스트리밍을 실현합니다.',
+    en: 'NDJSON (Newline-Delimited JSON) is the wire format: per-slot patch ops, then done or error. Each line is a complete JSON object. The client parses lines as they arrive, enabling true streaming without buffering the full response.',
+    ko: 'NDJSON(줄바꿈 구분 JSON)은 전송 형식입니다: 슬롯별 patch op, 마지막에 done 또는 error. 각 줄이 완전한 JSON 객체입니다. 클라이언트는 줄이 도착하는 대로 파싱하여 전체 응답을 버퍼링하지 않고 진정한 스트리밍을 실현합니다.',
   },
   accumulate: {
-    en: 'The accumulate frame is a third frame type alongside full and partial. The server sends only delta data; the runtime stacks it into activeStates (arrays concat, strings concat). Templates stay pure functions — no local state needed.',
-    ko: 'accumulate 프레임은 full/partial과 함께하는 세 번째 프레임 타입입니다. 서버가 delta만 전송하면 런타임이 activeStates에 누적합니다(배열 concat, 문자열 concat). 템플릿은 순수 함수로 유지됩니다 — 로컬 state 불필요.',
+    en: 'The accumulate frame is a third frame type alongside full and partial. The request reducer on the server merges each delta (arrays concat, strings concat); a server slot is rendered again to HTML, a client slot gets a merge op the browser folds into its props. Templates stay pure functions — no local state needed.',
+    ko: 'accumulate 프레임은 full/partial과 함께하는 세 번째 프레임 타입입니다. 서버의 요청 리듀서가 delta를 병합하고(배열·문자열 concat), server 슬롯은 HTML로 다시 렌더되며 client 슬롯은 브라우저가 props에 합치는 merge op을 받습니다. 템플릿은 순수 함수로 유지됩니다 — 로컬 state 불필요.',
   },
 };
 

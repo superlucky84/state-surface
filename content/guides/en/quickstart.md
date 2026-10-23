@@ -29,7 +29,7 @@ The 4 files: a page (Surface) with one `<Slot>`, two components (the search form
 
 ## Before you start {#prereqs}
 
-- Node.js 20.19+ and pnpm (`node --version`, `pnpm --version`).
+- Node.js 20.19+ or 22.12+ and pnpm (`node --version`, `pnpm --version`).
 - Basic TypeScript and JSX help, but are not required.
 - If you have used React or Vue, the components will look familiar right away.
 
@@ -83,7 +83,7 @@ export default async function Page() {
 - The slot's single child is its initial state: the child's props **are** the slot state. Here `query=""` renders the empty hint.
 
 :::callout{kind="info"}
-Only `<Slot>` is StateSurface-specific; the rest is plain JSX you control. The engine adds the doctype, `client/styles.css`, the `__SURFACE__` bootstrap JSON and the engine script — the script only because the page uses `data-action`. In a real app the `<html>` shell moves into `layouts/Layout.tsx`.
+Only `<Slot>` is StateSurface-specific; the rest is plain JSX you control. The engine adds the doctype, `client/styles.css`, the `__SURFACE__` bootstrap JSON and the engine script — those two only because the page uses `data-action`. In a real app the `<html>` shell moves into `layouts/Layout.tsx`.
 :::
 
 :::callout{kind="tip"}
@@ -196,7 +196,7 @@ export default defineTransition({
 - A slot's state is the complete props object of its component. A partial frame replaces `books:results` as a whole, which is why frame 2 repeats `query`.
 
 :::callout{kind="tip"}
-Never yield `{ type: 'done' }` or an error frame. Return to finish; throw to fail. A `TransitionError` (from `state-surface/server`) message is shown in the `system:error` slot that `layouts/Layout.tsx` provides.
+Never yield `{ type: 'done' }` or an error frame. Return to finish; throw to fail. A `TransitionError` (from `state-surface/server`) message is shown in the page's `system:error` slot, which the scaffold's `layouts/Layout.tsx` renders. This standalone `/books` page has none yet: until it uses the layout, the message only appears in the Network response (and as a development warning in the console).
 :::
 
 :::callout{kind="info"}
@@ -224,8 +224,9 @@ The params arrive untyped here (`Record<string, unknown>`). Add `input` with any
     ▼
 [ Browser: apply ops ]
     │  swap the HTML inside <h-state name="books:results">
+    │  first patch applied → data-has-result set
     ▼
-[ Finished: data-pending removed, data-has-result set ]
+[ Finished: data-pending and data-has-result removed ]
 ```
 
 :::

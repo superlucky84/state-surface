@@ -39,7 +39,7 @@ A patch has three optional fields: `classAdd` and `classRemove` (arrays of class
 3. In a full frame, put `ui: { 'app:card': { classAdd, classRemove, cssVars } }` next to `states`. A full frame sets the UI of every target: a target without an entry is cleared.
 4. For a change of looks only, yield a partial frame with `full: false`, `states: {}`, `uiChanged: ['app:card']` and the `ui` entry. Nothing is rendered.
 5. To clear a slot's patch, send `ui: { 'app:card': null }` (listed in `uiChanged` in a partial frame), or leave the slot out of a full frame's `ui`.
-6. The browser applies the patch after the slot's content, on the `<h-state>` element itself: it undoes the previous patch's `classAdd` and `cssVars`, then removes `classRemove`, adds `classAdd` and sets `cssVars`.
+6. The browser applies the patch after the slot's content, on the `<h-state>` element itself: it first undoes the previous patch (removes the classes it added, puts back the classes it removed, restores the variables it set), then removes `classRemove`, adds `classAdd` and sets `cssVars`.
 :::
 
 ## Minimal example {#example}
@@ -134,7 +134,7 @@ yield { type: 'state', states: { 'app:card': props }, ui: { 'app:card': patch } 
 browser: <h-state name="app:card">
   ├─ 1. html → swap the content                  // props for a client slot
   └─ 2. ui   → patch the element itself
-       ├─ undo(previous)                         // its classAdd and its cssVars
+       ├─ undo(previous)                         // drop its classAdd, restore classRemove and cssVars
        ├─ classRemove → classList.remove(...)
        ├─ classAdd    → classList.add(...)
        └─ cssVars     → style.setProperty(...)
@@ -188,10 +188,9 @@ export default async function Page(ctx: SurfaceContext) {
 ```
 
 :::callout{kind="note"}
-Patches stack on top of these attributes. Replacing or clearing a patch undoes only what that patch did, by name — its `classAdd` classes and its `cssVars` — so the SSR class stays. Keep in mind:
+Patches stack on top of these attributes. Replacing or clearing a patch undoes exactly what it changed on the element: the classes it added go (a class that was already there, like an SSR class, does not count as added and stays), the classes it removed come back, and the variables it set return to their previous values. The host always shows its SSR classes and style plus the current patch. Keep in mind:
 
-- A class removed with `classRemove` (say the SSR `tone-warning`) is not put back when the patch is cleared — let each patch remove the other tones and add its own, as above.
-- A patch class or variable with the same name as an SSR one leaves together with the patch.
+- Removing an SSR class (say `tone-warning`) with `classRemove` lasts only as long as the patch: clearing the patch brings it back. Let each patch remove the other tones and add its own, as above.
 - A `<Boot>` transition's `ui` arrives after the page is shown — fine for live data, a visible flash for a first paint.
 - To keep a choice across reloads, store it on the server (for example a cookie the transition sets before its first frame) and render it on the `<Slot>`.
 :::
@@ -208,7 +207,7 @@ Every full frame resets the UI of its targets. A full frame without `ui` clears 
 - Partial frames list every patched slot in `uiChanged`, and every `uiChanged` key has an entry in `ui`.
 - Each entry is the slot's whole patch — repeat the classes and variables that should stay.
 - Class names are single tokens of `A-Z a-z 0-9 _ : / [ ] . -`: `['badge', 'is-new']`, not `['badge is-new']`. Tailwind arbitrary values with `#`, `(` or `%` fail — pass colors and sizes through `cssVars`.
-- `cssVars` keys start with `--`, and values contain none of `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`.
+- `cssVars` keys are `--` followed by letters, digits, `_` or `-`, and values contain none of `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`.
 - The patched slot is in the transition's `targets` and is not static.
 - In a full frame, a patched target also needs a `states` entry — a target missing from `states` is removed, patch included.
 - Clear a patch with `null`, not by sending the opposite classes.
@@ -238,7 +237,7 @@ Render the initial classes as host attributes on the `<Slot>` in the page functi
 
 ## Next: try it live {#next}
 
-Open the [UI Patch demo](/en/examples/ui-patch): the tone buttons send a full frame with `ui`, the style-only button sends a partial frame with `uiChanged`, and the reset button clears the patch with a full frame whose `ui` is empty — the preview card changes its looks while its template stays as it is.
+Open the [UI Patch demo](/en/examples/ui-patch): the tone buttons send a full frame with `ui`, then a partial `changed` frame that keeps the patch. The style-only button starts with a full frame without `ui` (every stream starts with one, so the card is rendered again and its patch cleared), then sends a partial frame with `uiChanged` that only patches the `<h-state>`. The reset button clears the patch with a full frame whose `ui` is empty.
 
 - [Transition guide](/en/guide/transition) — how full, partial and accumulate frames work together.
 - [Accumulate guide](/en/guide/accumulate) — streaming patterns, and why `ui` is not allowed there.

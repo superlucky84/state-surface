@@ -13,8 +13,8 @@ const UiPatchControls = ({ currentTheme, lang }: ControlsProps) => {
         </h2>
         <p class="mt-1 text-sm text-slate-600">
           {ko
-            ? 'classAdd/classRemove/cssVars를 사용하여 h-state 엘리먼트의 외형을 변경할 수 있습니다.'
-            : 'Change the appearance of h-state elements using classAdd, classRemove, and cssVars without re-rendering templates.'}
+            ? 'classAdd/classRemove/cssVars로 h-state 엘리먼트의 외형을 바꿉니다 — UI 패치 자체는 템플릿을 다시 렌더링하지 않습니다.'
+            : 'Change the appearance of h-state elements with classAdd, classRemove and cssVars. A UI patch itself does not re-render the template.'}
         </p>
       </div>
 
@@ -58,8 +58,8 @@ const UiPatchControls = ({ currentTheme, lang }: ControlsProps) => {
         </h3>
         <p class="text-xs text-slate-500">
           {ko
-            ? '상태 변경 없이 오직 UI 패치만을 전송합니다. 템플릿은 재렌더되지 않습니다.'
-            : 'Sends only a UI patch without state changes. The template is not re-rendered.'}
+            ? '먼저 full 프레임(모든 스트림의 첫 프레임: 카드를 다시 렌더하고 패치를 지움)을 보낸 뒤, 렌더링 없이 h-state 엘리먼트만 바꾸는 UI 전용 partial 프레임을 보냅니다.'
+            : 'Starts with a full frame (every stream does: it renders the card again and clears its patch), then sends a UI-only partial frame that changes just the h-state element, without rendering.'}
         </p>
         <div class="flex flex-wrap gap-2">
           <button

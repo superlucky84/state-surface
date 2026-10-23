@@ -39,7 +39,7 @@ UI Patch는 transition이 슬롯의 외형을 바꾸게 해 줍니다 — 슬롯
 3. full 프레임에서 `states` 옆에 `ui: { 'app:card': { classAdd, classRemove, cssVars } }`를 둡니다. full 프레임은 모든 target의 UI를 설정합니다: 항목이 없는 target은 초기화됩니다.
 4. 외형만 바꿀 때는 `full: false`, `states: {}`, `uiChanged: ['app:card']`와 `ui` 항목이 있는 partial 프레임을 yield합니다. 아무것도 렌더링되지 않습니다.
 5. 슬롯의 패치를 초기화하려면 `ui: { 'app:card': null }`을 보내거나(partial 프레임이면 `uiChanged`에 포함), full 프레임의 `ui`에서 그 슬롯을 뺍니다.
-6. 브라우저는 슬롯 콘텐츠를 반영한 뒤 `<h-state>` 엘리먼트 자체에 패치를 적용합니다: 이전 패치의 `classAdd`와 `cssVars`를 되돌리고, `classRemove`를 제거하고, `classAdd`를 추가하고, `cssVars`를 설정합니다.
+6. 브라우저는 슬롯 콘텐츠를 반영한 뒤 `<h-state>` 엘리먼트 자체에 패치를 적용합니다: 먼저 이전 패치를 되돌리고(추가한 클래스 제거, 제거한 클래스 복원, 설정한 변수 복원), `classRemove`를 제거하고, `classAdd`를 추가하고, `cssVars`를 설정합니다.
 :::
 
 ## 최소 예제 {#example}
@@ -134,7 +134,7 @@ yield { type: 'state', states: { 'app:card': props }, ui: { 'app:card': patch } 
 browser: <h-state name="app:card">
   ├─ 1. html → swap the content                  // client 슬롯이면 props
   └─ 2. ui   → patch the element itself
-       ├─ undo(previous)                         // 이전 패치의 classAdd와 cssVars
+       ├─ undo(previous)                         // classAdd 제거, classRemove·cssVars 복원
        ├─ classRemove → classList.remove(...)
        ├─ classAdd    → classList.add(...)
        └─ cssVars     → style.setProperty(...)
@@ -188,10 +188,9 @@ export default async function Page(ctx: SurfaceContext) {
 ```
 
 :::callout{kind="note"}
-패치는 이 속성들 위에 겹쳐집니다. 패치를 교체하거나 초기화하면 그 패치가 한 일만 이름 기준으로 되돌립니다 — 그 `classAdd` 클래스와 `cssVars` — 그래서 SSR 클래스는 남습니다. 기억할 점:
+패치는 이 속성들 위에 겹쳐집니다. 패치를 교체하거나 초기화하면 그 패치가 엘리먼트에서 바꾼 것만 정확히 되돌립니다: 추가한 클래스는 제거되고(SSR 클래스처럼 이미 있던 클래스는 추가로 치지 않아 남습니다), 제거한 클래스는 돌아오며, 설정한 변수는 이전 값으로 복원됩니다. 호스트에는 항상 SSR 클래스와 스타일에 현재 패치만 더해집니다. 기억할 점:
 
-- `classRemove`로 제거한 클래스(예: SSR의 `tone-warning`)는 패치를 초기화해도 돌아오지 않습니다 — 위 예제처럼 각 패치가 다른 톤을 제거하고 자기 톤을 추가하게 하세요.
-- SSR과 같은 이름의 패치 클래스나 변수는 패치와 함께 사라집니다.
+- SSR 클래스(예: `tone-warning`)를 `classRemove`로 지운 효과는 패치가 있는 동안만입니다: 패치를 초기화하면 돌아옵니다. 위 예제처럼 각 패치가 다른 톤을 제거하고 자기 톤을 추가하게 하세요.
 - `<Boot>` transition의 `ui`는 페이지가 표시된 뒤에 도착합니다 — 실시간 데이터에는 괜찮지만 첫 페인트에는 깜빡임이 보입니다.
 - 새로고침 후에도 선택을 유지하려면 서버에 저장하고(예: transition이 첫 프레임 전에 설정하는 쿠키) `<Slot>`에 렌더링하세요.
 :::
@@ -208,7 +207,7 @@ accumulate 프레임(`accumulate: true`)에는 `ui`를 넣을 수 없습니다: 
 - partial 프레임은 패치하는 모든 슬롯을 `uiChanged`에 나열하고, `uiChanged`의 모든 키는 `ui`에 항목이 있습니다.
 - 각 항목은 슬롯의 전체 패치입니다 — 유지할 클래스와 변수도 다시 적습니다.
 - 클래스 이름은 `A-Z a-z 0-9 _ : / [ ] . -`로 된 단일 토큰입니다: `['badge is-new']`가 아니라 `['badge', 'is-new']`. `#`, `(`, `%`가 들어간 Tailwind 임의 값은 실패합니다 — 색상과 크기는 `cssVars`로 전달합니다.
-- `cssVars` 키는 `--`로 시작하고, 값에는 `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`이 없습니다.
+- `cssVars` 키는 `--` 뒤에 영문자·숫자·`_`·`-`가 오고, 값에는 `;` `{` `}` `\` `url(` `image-set(` `src(` `expression(`이 없습니다.
 - 패치하는 슬롯은 transition의 `targets`에 있고 static이 아닙니다.
 - full 프레임에서 패치하는 target에는 `states` 항목도 필요합니다 — `states`에 없는 target은 패치와 함께 제거됩니다.
 - 패치 초기화는 반대 클래스를 보내는 대신 `null`로 합니다.
@@ -238,7 +237,7 @@ partial 프레임에서는 `ui` 옆에 `uiChanged: ['app:card']`를 추가하세
 
 ## 다음: 직접 실습 {#next}
 
-[UI 패치 데모](/ko/examples/ui-patch)를 열어 보세요: 톤 버튼은 `ui`가 있는 full 프레임을, 스타일 전용 버튼은 `uiChanged`가 있는 partial 프레임을 보내고, 초기화 버튼은 `ui`가 빈 full 프레임으로 패치를 지웁니다 — 프리뷰 카드의 template은 그대로인 채 외형만 바뀝니다.
+[UI 패치 데모](/ko/examples/ui-patch)를 열어 보세요: 톤 버튼은 `ui`가 있는 full 프레임에 이어 패치를 유지하는 `changed` partial 프레임을 보냅니다. 스타일 전용 버튼은 `ui` 없는 full 프레임(모든 스트림의 첫 프레임이라 카드가 다시 렌더되고 패치가 지워짐)으로 시작해 `<h-state>`만 바꾸는 `uiChanged` partial 프레임을 보냅니다. 초기화 버튼은 `ui`가 빈 full 프레임으로 패치를 지웁니다.
 
 - [Transition 가이드](/ko/guide/transition) — full, partial, accumulate 프레임이 함께 동작하는 방식.
 - [Accumulate 가이드](/ko/guide/accumulate) — 스트리밍 패턴과 그곳에서 `ui`가 허용되지 않는 이유.

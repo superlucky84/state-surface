@@ -1,8 +1,8 @@
 type ChatCurrentProps = { text?: string };
 
 // Renders the bot message currently being streamed.
-// The runtime accumulates text in activeStates via accumulate frames —
-// this template receives the already-merged text and renders it directly.
+// Accumulate frames reach this client slot as `merge` ops; the browser folds them into the
+// props, so this template receives the text merged so far and renders it directly.
 const ChatCurrent = ({ text }: ChatCurrentProps) => (
   <div class="flex justify-start px-1">
     <div class="max-w-xs rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm lg:max-w-md">

@@ -1,7 +1,7 @@
 title: View Transition 데모
 description:
   title: View Transition Name 모핑
-  description: 카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. 뒤로가기를 누르면 역방향 모핑이 일어납니다.
+  description: 카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. '갤러리로 돌아가기'를 누르면 역방향 모핑이 일어납니다.
 cards:
   - id: alpha
     title: Alpha

@@ -177,7 +177,7 @@ import { defineTransition } from 'state-surface/server';
 export default defineTransition({
   input: z.object({ postId: z.string(), body: z.string().min(1) }), // any Standard Schema
   targets: ['comments:list'],
-  flash: { input: ['body'] }, // echo the draft back after a JS-less validation error
+  flash: { input: ['body'] }, // echo these fields back after a JS-less submission (success or error)
   async *handler({ postId, body }, ctx) {
     await db.addComment(postId, body);
     yield { type: 'state', states: { 'comments:list': { postId } } };
@@ -189,7 +189,7 @@ const flash = await ctx.flash('comments/add'); // { ok, error?, input? } or unde
 const form = (
   <form method="post" action={actionUrl('comments/add')}>
     <input type="hidden" name="postId" value={ctx.params.id} />
-    <textarea name="body">{String(flash?.input?.body ?? '')}</textarea>
+    <textarea name="body">{flash && !flash.ok ? String(flash.input?.body ?? '') : ''}</textarea>
     {flash?.error && <p role="alert">{flash.error.message}</p>}
     <button type="submit">Post</button>
   </form>
@@ -211,7 +211,7 @@ const form = (
 :::callout{kind="info"}
 Concurrency is decided by the `targets` you declare in `defineTransition`:
 
-- Same name again → the earlier request is aborted (typing fast into a search form is safe).
+- Same name again → the earlier request is aborted (submitting a search repeatedly is safe — only the latest result lands).
 - Overlapping targets → the earlier request is aborted; disjoint targets → both run (a like while a slow search loads).
 - No `targets` → the action overlaps every slot: it aborts everything and anything aborts it (development warns once).
 - `mode: 'queue'` → requests of that name run one after another (every click on a like button counts).
@@ -220,7 +220,7 @@ Concurrency is decided by the `targets` you declare in `defineTransition`:
 ## Common mistakes {#mistakes}
 
 :::warning
-`data-params` must be a JSON **object** with double-quoted keys and strings. `data-params="{query: 'foo'}"` does not parse: the action still runs, but with `{}` as its params (in debug mode, `?debug=1`, the console shows the parse error). Write `data-params='{"query":"foo"}'`, or `data-params={JSON.stringify({ query })}` for values computed in the template.
+`data-params` must be a JSON **object** with double-quoted keys and strings. `data-params="{query: 'foo'}"` does not parse: the action still runs without the `data-params` values (a button sends `{}`, a form only its fields) (in debug mode, `?debug=1`, the console shows the parse error). Write `data-params='{"query":"foo"}'`, or `data-params={JSON.stringify({ query })}` for values computed in the template.
 :::
 
 :::checklist
@@ -236,7 +236,7 @@ Concurrency is decided by the `targets` you declare in `defineTransition`:
 
 ## Debugging checklist {#debug}
 
-:::debug{symptom="A click does nothing — no request appears in the Network tab." cause="The attribute is misspelled (data-transition, action), a component handler called preventDefault() on the event, or the element sits in a shadow root that the document listener cannot see into."}
+:::debug{symptom="A click does nothing — no request appears in the Network tab." cause="The attribute is misspelled (data-transition, action), a component handler called preventDefault() on the event, or the element sits in a shadow root that the document listener cannot see into. Or the element was rendered only in the browser (for example by a client:only island) on a page without a server-rendered action: the engine then never starts — use useAction in that component."}
 Inspect the element: `data-action` must be on it or on an ancestor. A handler that calls `preventDefault()` keeps the event on purpose — create a `useAction(renew, 'name')` handle in that component and call its `run()` from the handler instead.
 :::
 

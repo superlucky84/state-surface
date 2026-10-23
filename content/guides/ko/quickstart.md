@@ -29,7 +29,7 @@ demoLabel: 검색 데모 보기
 
 ## 시작 전 확인 {#prereqs}
 
-- Node.js 20.19 이상, pnpm 설치 확인 (`node --version`, `pnpm --version`).
+- Node.js 20.19 이상 또는 22.12 이상, pnpm 설치 확인 (`node --version`, `pnpm --version`).
 - TypeScript와 JSX 기초 문법을 알면 좋지만 필수는 아닙니다.
 - React나 Vue를 써본 적 있다면 컴포넌트가 바로 익숙할 것입니다.
 
@@ -83,7 +83,7 @@ export default async function Page() {
 - 슬롯의 유일한 자식이 초기 상태입니다. 자식의 props가 **곧** 슬롯 상태입니다. 여기서는 `query=""`가 빈 안내 문구를 렌더링합니다.
 
 :::callout{kind="info"}
-StateSurface 고유 부분은 `<Slot>`뿐이고 나머지는 직접 제어하는 평범한 JSX입니다. doctype, `client/styles.css`, `__SURFACE__` 부트스트랩 JSON, 엔진 스크립트는 엔진이 추가합니다 — 스크립트는 페이지가 `data-action`을 쓰기 때문에만 들어갑니다. 실제 앱에서는 `<html>` 뼈대를 `layouts/Layout.tsx`로 옮깁니다.
+StateSurface 고유 부분은 `<Slot>`뿐이고 나머지는 직접 제어하는 평범한 JSX입니다. doctype, `client/styles.css`, `__SURFACE__` 부트스트랩 JSON, 엔진 스크립트는 엔진이 추가합니다 — 부트스트랩 JSON과 엔진 스크립트는 페이지가 `data-action`을 쓰기 때문에만 들어갑니다. 실제 앱에서는 `<html>` 뼈대를 `layouts/Layout.tsx`로 옮깁니다.
 :::
 
 :::callout{kind="tip"}
@@ -196,7 +196,7 @@ export default defineTransition({
 - 슬롯 상태는 컴포넌트의 props 객체 전체입니다. partial 프레임도 `books:results`를 통째로 교체하므로 프레임 2에서 `query`를 다시 보냅니다.
 
 :::callout{kind="tip"}
-`{ type: 'done' }`이나 error 프레임을 yield하지 마세요. 끝내려면 반환하고, 실패하려면 throw합니다. `TransitionError`(`state-surface/server`)의 메시지는 `layouts/Layout.tsx`가 제공하는 `system:error` 슬롯에 표시됩니다.
+`{ type: 'done' }`이나 error 프레임을 yield하지 마세요. 끝내려면 반환하고, 실패하려면 throw합니다. `TransitionError`(`state-surface/server`)의 메시지는 페이지의 `system:error` 슬롯에 표시되며, 스캐폴드의 `layouts/Layout.tsx`가 이 슬롯을 렌더링합니다. 독립 페이지인 `/books`에는 아직 이 슬롯이 없으므로, 레이아웃을 쓰기 전까지는 Network 응답(개발 모드에서는 콘솔 경고)에서만 보입니다.
 :::
 
 :::callout{kind="info"}
@@ -224,8 +224,9 @@ export default defineTransition({
     ▼
 [ 브라우저: op 적용 ]
     │  <h-state name="books:results"> 안의 HTML 교체
+    │  첫 patch 적용 → data-has-result 설정
     ▼
-[ 완료: data-pending 제거, data-has-result 설정 ]
+[ 완료: data-pending, data-has-result 제거 ]
 ```
 
 :::

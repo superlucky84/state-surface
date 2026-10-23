@@ -78,14 +78,14 @@ describe('POST /transition/chat — server history, client merge streaming', () 
     const text = merges
       .map(op => (op as unknown as { merge: { text: string } }).merge.text)
       .join('');
-    expect(text).toContain('A Surface is the page shell');
+    expect(text).toContain('A Surface is a TSX page function');
 
     // Final patch: re-rendered history with the bot reply, bubble and typing removed.
     const last = rest.at(-1)!;
     expect(last.ops).toContainEqual({ slot: 'chat:current', remove: true });
     expect(last.ops).toContainEqual({ slot: 'chat:typing', remove: true });
     expect((last.ops.find(op => op.slot === 'chat:messages') as { html: string }).html).toContain(
-      'A Surface is the page shell'
+      'A Surface is a TSX page function'
     );
     expect(decodeFrames(res.text).at(-1)).toEqual({ type: 'done' });
 
@@ -94,9 +94,9 @@ describe('POST /transition/chat — server history, client merge streaming', () 
     const nextHistory = patches(next.text)[0].ops.find(op => op.slot === 'chat:messages') as {
       html: string;
     };
-    expect(nextHistory.html).toContain('A Surface is the page shell');
+    expect(nextHistory.html).toContain('A Surface is a TSX page function');
     const page = await request(app).get('/en/examples/chat').set('Cookie', cookie!);
-    expect(page.text).toContain('A Surface is the page shell');
+    expect(page.text).toContain('A Surface is a TSX page function');
   }, 30000);
 
   it('Korean language: typing and bot response in Korean', async () => {
@@ -124,6 +124,6 @@ describe('POST /transition/chat — server history, client merge streaming', () 
       .filter(op => 'merge' in op)
       .map(op => (op as unknown as { merge: { text: string } }).merge.text)
       .join('');
-    expect(text).toContain('A Surface is the page shell');
+    expect(text).toContain('A Surface is a TSX page function');
   }, 30000);
 });

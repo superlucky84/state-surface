@@ -7,7 +7,7 @@ demoLabel: Actions Playground
 
 ## TL;DR {#tldr}
 
-A Template is the component inside a `<Slot>`. Its props **are** the slot state: the page passes the first props, and transitions send new ones under `states['slot:name']`. It doesn't fetch data or manage server state — it renders what it receives. In a server slot it runs on the server for every update; in a client slot it runs in the browser with Lithent.
+A Template is the component inside a `<Slot>`. Its props **are** the slot state: the page passes the first props, and transitions send new ones under `states['slot:name']`. It doesn't fetch data or manage server state — it renders what it receives. In a server slot it runs on the server for every update; in a client slot it is rendered once on the server (unless `client:only`), then hydrated and updated in the browser by Lithent.
 
 ## Mental model {#analogy}
 
@@ -93,18 +93,18 @@ function StockPrice({ symbol }: { symbol: string }) {
       .then(d => { setData(d); setLoading(false); })
       .catch(e => {
         if (e.name === 'AbortError') return;
-        // ⚠️ BUG: setState after unmount if component removed during fetch
+        // ⚠️ every data component repeats this fetch, abort, loading and error handling
         setError(e.message);
         setLoading(false);
       });
 
     return () => controller.abort();
-    // ⚠️ BUG: AbortError shown briefly as error on fast symbol switches
+    // ⚠️ forget the cleanup or the AbortError check and fast switches show stale data or errors
   }, [symbol]);
 
   if (loading) return <div className="animate-pulse h-20 bg-slate-100 rounded-xl" />;
   if (error) return <div className="text-red-600">{error}</div>;
-  // ⚠️ BUG: Race condition — fast symbol changes can show stale data
+  // ⚠️ plus an /api/stock endpoint to build and keep in sync with this component
   return (
     <div className="rounded-xl border p-4">
       <span className="text-sm text-slate-500">{symbol}</span>
@@ -236,20 +236,26 @@ Put utilities in the markup and give a component its own `*.module.css` file for
 import s from './Card.module.css';
 
 export default function Card({ title }: { title: string }) {
-  return <section class={`${s.card} rounded-lg p-4`}>{title}</section>;
+  return (
+    <section class={`${s.card} rounded-lg p-4`}>
+      <div class={s.body}>{title}</div>
+    </section>
+  );
 }
 ```
 
-```css label="Card.module.css — @apply needs @reference to the app CSS"
-@reference "../../client/styles.css";
+```css label="Card.module.css — @apply needs @reference to the app CSS (path relative to this file)"
+/* routes/dashboard/_components/Card.module.css */
+@reference "../../../client/styles.css";
 
 .card {
   container-type: inline-size;
   @apply shadow-sm;
 }
 
+/* A container query matches ancestors, not the container itself: lay out the child. */
 @container (min-width: 32rem) {
-  .card {
+  .body {
     @apply grid grid-cols-2 gap-4;
   }
 }

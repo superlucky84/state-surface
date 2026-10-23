@@ -99,7 +99,7 @@ features:
       - merge
       - 프레임
   - title: Hydration
-    description: client 슬롯과 아일랜드는 __SURFACE__ 스냅샷으로 <h-state> 루트별 하이드레이션.
+    description: client 슬롯은 <h-state>, 아일랜드는 <h-island>에서 __SURFACE__ props로 하이드레이션.
     href: /guide/template
     tags:
       - hydration
@@ -108,8 +108,8 @@ features:
       - boundary
       - 하이드레이션
   - title: Abort Previous
-    description: 새 transition을 시작하면 진행 중인 이전 스트림을 취소.
-    href: /examples/streaming
+    description: "새 액션은 같은 transition과 targets가 겹치는 진행 중 요청을 취소합니다. targets가 겹치지 않으면 병렬, mode: 'queue'는 순서대로 실행."
+    href: /examples/chat
     tags:
       - abort
       - cancel

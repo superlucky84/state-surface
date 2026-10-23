@@ -177,7 +177,7 @@ import { defineTransition } from 'state-surface/server';
 export default defineTransition({
   input: z.object({ postId: z.string(), body: z.string().min(1) }), // 어떤 Standard Schema든 가능
   targets: ['comments:list'],
-  flash: { input: ['body'] }, // JS 없는 제출이 검증에 실패하면 입력값을 되돌려 줌
+  flash: { input: ['body'] }, // JS 없는 제출 후(성공·실패 모두) 이 필드 값을 되돌려 줌
   async *handler({ postId, body }, ctx) {
     await db.addComment(postId, body);
     yield { type: 'state', states: { 'comments:list': { postId } } };
@@ -189,7 +189,7 @@ const flash = await ctx.flash('comments/add'); // { ok, error?, input? } 또는 
 const form = (
   <form method="post" action={actionUrl('comments/add')}>
     <input type="hidden" name="postId" value={ctx.params.id} />
-    <textarea name="body">{String(flash?.input?.body ?? '')}</textarea>
+    <textarea name="body">{flash && !flash.ok ? String(flash.input?.body ?? '') : ''}</textarea>
     {flash?.error && <p role="alert">{flash.error.message}</p>}
     <button type="submit">Post</button>
   </form>
@@ -211,7 +211,7 @@ const form = (
 :::callout{kind="info"}
 동시성은 `defineTransition`에 선언한 `targets`로 결정됩니다:
 
-- 같은 이름을 다시 실행 → 이전 요청을 abort합니다(검색 폼에 빠르게 입력해도 안전).
+- 같은 이름을 다시 실행 → 이전 요청을 abort합니다(검색을 연달아 제출해도 안전 — 마지막 결과만 반영).
 - targets가 겹침 → 이전 요청을 abort합니다. targets가 겹치지 않음 → 둘 다 실행합니다(느린 검색 중에 좋아요).
 - `targets` 없음 → 모든 슬롯과 겹치는 것으로 봅니다: 모든 요청을 abort하고, 어떤 요청이든 이 요청을 abort합니다(개발 모드에서 한 번 경고).
 - `mode: 'queue'` → 같은 이름의 요청을 순서대로 하나씩 실행합니다(좋아요 버튼의 클릭이 모두 반영됨).
@@ -220,7 +220,7 @@ const form = (
 ## 흔한 실수 {#mistakes}
 
 :::warning
-`data-params`는 키와 문자열을 큰따옴표로 감싼 JSON **객체**여야 합니다. `data-params="{query: 'foo'}"`는 파싱되지 않습니다: 액션은 실행되지만 params가 `{}`가 됩니다(디버그 모드 `?debug=1`에서는 콘솔에 파싱 에러가 표시됩니다). `data-params='{"query":"foo"}'`로 쓰거나, template에서 계산한 값이라면 `data-params={JSON.stringify({ query })}`를 사용하세요.
+`data-params`는 키와 문자열을 큰따옴표로 감싼 JSON **객체**여야 합니다. `data-params="{query: 'foo'}"`는 파싱되지 않습니다: 액션은 실행되지만 `data-params` 값은 빠집니다(버튼은 `{}`, 폼은 필드 값만 전송)(디버그 모드 `?debug=1`에서는 콘솔에 파싱 에러가 표시됩니다). `data-params='{"query":"foo"}'`로 쓰거나, template에서 계산한 값이라면 `data-params={JSON.stringify({ query })}`를 사용하세요.
 :::
 
 :::checklist
@@ -236,7 +236,7 @@ const form = (
 
 ## 디버깅 체크리스트 {#debug}
 
-:::debug{symptom="클릭해도 아무 반응이 없습니다 — Network 탭에 요청이 나타나지 않습니다." cause="속성 이름 오타(data-transition, action), 컴포넌트 핸들러가 이벤트에 preventDefault()를 호출함, 또는 document 리스너가 들여다볼 수 없는 shadow root 안에 요소가 있음."}
+:::debug{symptom="클릭해도 아무 반응이 없습니다 — Network 탭에 요청이 나타나지 않습니다." cause="속성 이름 오타(data-transition, action), 컴포넌트 핸들러가 이벤트에 preventDefault()를 호출함, 또는 document 리스너가 들여다볼 수 없는 shadow root 안에 요소가 있음. 또는 요소가 브라우저에서만 렌더링되었고(예: client:only 아일랜드) 페이지에 서버 렌더링된 액션이 없어 엔진이 시작되지 않음 — 그 컴포넌트에서는 useAction을 사용하세요."}
 요소를 검사하세요: `data-action`이 그 요소나 조상에 있어야 합니다. `preventDefault()`를 호출하는 핸들러는 의도적으로 이벤트를 가져가는 것입니다 — 그 컴포넌트에서 `useAction(renew, 'name')` 핸들을 만들고 핸들러에서 `run()`을 호출하세요.
 :::
 

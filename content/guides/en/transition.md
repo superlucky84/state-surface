@@ -114,7 +114,7 @@ export default async function Page() {
 - ✓ Yield order is the UX timeline: skeleton → cached → live, guaranteed by one stream.
 - ✓ No race between cached and live results — the server decides the order.
 - ✓ A new search aborts the running one; the server stops its generator and aborts `ctx.signal`.
-- ✓ Both slots carry `data-pending` while it runs and `data-has-result` after the first frame.
+- ✓ Both slots carry `data-pending` while it runs, and `data-has-result` from its first applied result until it ends.
 - ✓ Server slots render on the server, so the page ships no JavaScript for these components.
 :::
 
@@ -210,7 +210,7 @@ export default defineTransition({
 });
 ```
 
-You describe slot state; the engine decides what travels. A server slot (`mode="server"`) is rendered on the server and sent as HTML. A client slot (`client:*`) receives its new props, or only the delta as a `merge` op for accumulate frames. One frame becomes at most one patch, so slots that change together appear together.
+You describe slot state; the engine decides what travels. A server slot (`mode="server"`) is rendered on the server and sent as HTML. A client slot (`client:*`) receives its new props, or only the delta as a `merge` op for accumulate frames. One frame becomes at most one patch, so slots that change together appear together — except a server slot rendered again within 33 ms of its previous render, which follows in the next patch.
 
 :::callout{kind="note"}
 Slot state lives for one request. Every request starts empty, and the server never trusts state sent by the browser — read what you need from your database again. The server stays stateless, so it behaves the same on one instance, many instances or Workers.
@@ -228,7 +228,7 @@ Rule of thumb: a full frame to set the baseline, partial frames for selective up
 - Without `targets`, the slots of the first full frame become the targets on the server, but the browser cannot know them in advance: the action overlaps every slot, so it aborts — and is aborted by — every other action. Development warns once.
 - `mode: 'queue'` — requests of this transition run one after another instead of aborting each other.
 - `input` — a Standard Schema (zod, valibot, arktype, …) for the params. Invalid params never reach the handler: the response is 422 with `kind: 'validation'` and `fieldErrors`, shown in the error slot. Form bodies become objects first (a repeated name becomes an array), and the handler receives the parsed, typed value.
-- `flash: { input: ['body'] }` — for forms without JavaScript. `<form method="post" action={actionUrl('comments/add')}>` runs the transition and redirects back with a 303; the next page reads the result once with `ctx.flash('comments/add')`, and the listed fields come back after a validation error. With JavaScript, the engine streams the same transition instead.
+- `flash: { input: ['body'] }` — fields to echo back to forms without JavaScript. Any transition works as `<form method="post" action={actionUrl('comments/add')}>`: it runs the transition and redirects back with a 303, and the next page reads the result once with `await ctx.flash('comments/add')`. The listed fields come back in its `input` (never files), so the form can be refilled after an error. With JavaScript, the engine streams the same transition instead.
 - `viewTransition: true` — wraps the action's first visible change in a View Transition.
 
 ```ts label="Typed input, declared targets, queued requests"
@@ -250,7 +250,7 @@ export default defineTransition({
 ```
 
 :::callout{kind="tip"}
-The build writes `.state-surface/actions.d.ts`, so `useAction(renew, 'like')`, `<Boot>` and `actionUrl()` check transition names and params against `input`. The browser side — `data-action`, pending marks and results — is in the [Action guide](/en/guide/action).
+The build writes `.state-surface/actions.d.ts`, so `useAction(renew, 'like')` and `<Boot>` check transition names and params against `input`, and `actionUrl()` checks the name. The browser side — `data-action`, pending marks and results — is in the [Action guide](/en/guide/action).
 :::
 
 ## Animation presets {#animation}
@@ -287,11 +287,11 @@ h-state[data-animate="rotate"][data-just-updated] {
 ```
 
 :::callout{kind="info"}
-The animation is CSS only, and the presets are plain CSS in the app's `client/styles.css`. The engine sets `data-just-updated` each time it applies new content to a slot (and removes it on `animationend`), and `data-pending` while a request that targets the slot runs. A custom preset only needs to target `h-state[data-animate="name"][data-just-updated]`. With `prefers-reduced-motion: reduce` the engine does not set `data-just-updated`, and the presets keep only the pending dimming, without movement.
+The animation is CSS only: the engine sets attributes, and the presets are plain CSS in the demo's `client/styles.css` (the `demo` template includes them; copy the `h-state[data-animate…]` rules into your own `client/styles.css` otherwise). The engine sets `data-just-updated` each time it applies new content to a slot (and removes it on `animationend`), and `data-pending` while a request that targets the slot runs. A custom preset only needs to target `h-state[data-animate="name"][data-just-updated]`. With `prefers-reduced-motion: reduce` the engine does not set `data-just-updated`, and the presets keep only the pending dimming, without movement.
 :::
 
 :::callout{kind="tip"}
-To morph elements between two states, opt into the View Transition API instead: `viewTransition: true` on `defineTransition`, `data-view-transition` on the action element, or `<Slot viewTransition>`. There is one View Transition per action, on its first patch, and it is skipped for reduced motion.
+To morph elements between two states, opt into the View Transition API instead: `viewTransition: true` on `defineTransition`, `data-view-transition` on the action element, or `<Slot viewTransition>`. There is one View Transition per action — on its first patch, or with `<Slot viewTransition>` on the first patch that changes that slot — and it is skipped for reduced motion or without the API.
 :::
 
 ## Execution sequence {#sequence}
@@ -301,8 +301,8 @@ To morph elements between two states, opt into the View Transition API instead: 
 2. The server checks the build (409 reloads the page) and validates `input` (422 stops here; the handler never runs).
 3. The first frame is full and sets the baseline of every target (the declared `targets`, or else the slots of this frame). The request reducer applies it and projects each target: server slots render to `html` ops, client slots get `props` ops, all in one `patch` with `reset: true`.
 4. Each later frame becomes one patch with ops for the slots it touches: `remove` ops for removed slots, `merge` ops for accumulate deltas on client slots, and server slot renders coalesced to at most one per 33 ms.
-5. The browser reads the NDJSON lines as they arrive, coalesces queued ops once per animation frame and applies them per `<h-state>`. The targets get `data-has-result` after the first patch.
-6. The handler returns → the engine sends `done` and `data-pending` is cleared. The handler throws → an `error` frame renders the `system:error` slot.
+5. The browser reads the NDJSON lines as they arrive, coalesces queued ops once per animation frame and applies them per `<h-state>`. The targets get `data-has-result` once the first patch is applied.
+6. The handler returns → the engine sends `done`, and `data-pending` and `data-has-result` are removed. The handler throws → an `error` frame renders the `system:error` slot.
 :::
 
 :::diagram{label="From yield to DOM"}
@@ -326,7 +326,7 @@ browser: coalesce per animation frame → DOM per <h-state>
 ## Common mistakes {#mistakes}
 
 :::warning
-Every request starts with a full frame. A partial or accumulate frame first is a protocol violation: development throws with the transition name and frame number, and production sends an error frame and ends the request.
+Every request starts with a full frame. A partial or accumulate frame first is a protocol violation: the request ends with an error frame, whose message names the transition and the frame number in development (the server also logs the stack) and reads `Transition failed` in production.
 
 There is no `done` or `error` frame to yield either. Return to finish, throw to fail.
 :::
@@ -361,7 +361,7 @@ Use a partial frame (`full: false` with `changed`) to update some targets, or re
 :::
 
 :::debug{symptom="In production the error slot shows Transition failed instead of my message." cause="A plain Error was thrown. Outside development only TransitionError messages reach users."}
-Throw `new TransitionError('…')` for messages users may see. Also make sure the layout renders the `system:error` slot — without it nothing is shown, and development warns.
+Throw `new TransitionError('…')` for messages users may see. Also make sure the layout renders `system:error` as a server or client slot (`<Slot name="system:error" mode="server" component={…} />`) — without it, or with a static one, nothing is shown, and development warns.
 :::
 
 :::debug{symptom="Clicking one button cancels an unrelated action." cause="One of the two transitions declares no targets, so it overlaps every slot."}

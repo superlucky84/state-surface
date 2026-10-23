@@ -11,7 +11,7 @@ hero:
 concepts:
   - key: surface
     title: Surface
-    description: Pages are TSX functions that place <Slot> boundaries. Each slot renders an <h-state> anchor that transitions update; the rest of the page is static HTML.
+    description: Pages are TSX functions that place <Slot> boundaries. Each slot renders an <h-state> anchor; slots with mode="server" or a client:* directive are the ones transitions update.
     href: /guide/surface
   - key: template
     title: Template
@@ -19,7 +19,7 @@ concepts:
     href: /guide/template
   - key: transition
     title: Transition
-    description: Server-side async generators that yield state frames. Full frames declare complete UI state; partial frames merge changes progressively.
+    description: Server-side async generators that yield state frames. Full frames set the complete state of the transition's targets; partial frames update selected slots progressively.
     href: /guide/transition
   - key: action
     title: Action

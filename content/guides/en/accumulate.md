@@ -86,9 +86,12 @@ export default defineTransition({
 ```
 
 ```tsx label="routes/chat.tsx (excerpt) and the client component"
-// routes/chat.tsx: the bubble is a client slot, so deltas arrive as `merge` ops
+// routes/chat.tsx: the history comes from the server store (const history = await readHistory());
+// the bubble is a client slot, so deltas arrive as `merge` ops
 <main>
-  <Slot name="chat:messages" mode="server" component={ChatMessages} />
+  <Slot name="chat:messages" mode="server">
+    <ChatMessages messages={history} />
+  </Slot>
   <Slot name="chat:current" client:load component={ChatCurrent} />
   <Slot name="chat:typing" mode="server" component={ChatTyping} />
 </main>
@@ -140,7 +143,7 @@ function Chat() {
       answer += decoder.decode(value);
       setCurrent(answer);
     }
-    // ⚠️ BUG: an abort throws above — the half-finished bubble is never cleared
+    // ⚠️ BUG: an abort rejects reader.read() — an unhandled rejection, and the partial answer is lost
     setMessages(list => [...list, { role: 'bot', text: answer }]);
     setCurrent('');
     // ⚠️ BUG: the history lives only in this tab — a reload loses it
@@ -188,7 +191,7 @@ Yield only the delta (`text: token`). Keep the running total in a local variable
 Move the streaming part to a client slot (`client:load`) so that deltas travel as `merge` ops, and keep the finished history in a server slot.
 :::
 
-:::debug{symptom="A frame fails with: accumulate frame must not include removed." cause="One frame combines accumulate: true with removed (or ui, or reset)."}
+:::debug{symptom='In development a frame fails with: Accumulate frame must not include "removed" (production shows "Transition failed").' cause="One frame combines accumulate: true with removed (or ui, or reset)."}
 Split it: yield the accumulate frame, then a separate partial frame (`full: false`) with `removed` or `uiChanged`.
 :::
 

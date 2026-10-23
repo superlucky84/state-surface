@@ -25,7 +25,7 @@ Only the page function may be `async`. Layouts and components render synchronous
 
 - Page markup without a Slot: layout, navigation, headings, footers — anything that stays the same while the user is on the page. It is server HTML only and ships no JavaScript.
 - `mode="server"`: the default for content a transition changes. The server re-renders the component and sends HTML; `swap="morph"` keeps typed input and focus.
-- `client:load`, `client:idle`, `client:visible`, `client:media="(…)"` or `client:only`: a Lithent component that hydrates in the browser, keeps local state and receives props. Use it only where the region needs browser state or APIs.
+- `client:load`, `client:idle`, `client:visible`, `client:media="(…)"` or `client:only`: a Lithent component that hydrates in the browser (`client:only` skips SSR, shows `fallback` and renders on activation), keeps local state and receives props. Use it only where the region needs browser state or APIs.
 - No mode and no directive means **static**: a named region rendered once, which frames cannot change.
 - `server:defer` with a `fallback` loads a slow server slot after the page; `capability="rich"` or `capability="unsafe"` allows Markdown or raw HTML inside a slot (strict by default).
 - Page options are named exports: `plugins` (see the Template guide), `prerender` and `getStaticPaths` for static HTML.
@@ -35,7 +35,7 @@ Only the page function may be `async`. Layouts and components render synchronous
 :::sequence
 1. Create `routes/dashboard.tsx`: the file path is the URL (`/dashboard`). `[id].tsx` segments become `ctx.params`, and files or folders starting with `_` are not pages.
 2. Default-export `async function Page(ctx: SurfaceContext)` and await what the first paint needs (`ctx.params`, `ctx.url`, your database).
-3. Return the document through a layout such as `layouts/Layout.tsx`, which renders `<html>`, `<head>` and `<body>`; the engine adds the doctype, stylesheets, bootstrap JSON and scripts.
+3. Return the document through a layout such as `layouts/Layout.tsx`, which renders `<html>`, `<head>` and `<body>`; the engine adds the doctype and stylesheets, and the bootstrap JSON and engine script when the page needs them.
 4. Wrap each region that may change in `<Slot name="ns:name">` with exactly one imported component element as its child; that element’s props are the initial slot state. Use `component={X}` for a slot that starts empty.
 5. Pick the mode of every slot: `mode="server"`, a `client:*` directive, or nothing for static content.
 6. Stream data right after load with `<Boot transition="…" />` or bind actions in your templates, then write the transition that sends `states` for these slot names.
@@ -176,7 +176,7 @@ function Dashboard() {
 ```
 
 :::callout{kind="tip"}
-Pattern A is the default: static headings, dividers and decorations are baked into the HTML and never re-render, and server slots ship no component code. Use Pattern B’s client slot or island only where local state or browser APIs are needed. An island placed inside a server slot is recreated whenever that slot is re-rendered.
+Pattern A is the default: static headings, dividers and decorations are baked into the HTML and never re-render, and server slots ship no component code. Use Pattern B’s client slot or island only where local state or browser APIs are needed. With the default `swap="replace"`, an island inside a server slot is recreated whenever that slot is re-rendered; with `swap="morph"` it keeps its instance when its props (or its `resetKey` values) are unchanged.
 :::
 
 ## Execution sequence {#sequence}
@@ -185,8 +185,8 @@ Pattern A is the default: static headings, dividers and decorations are baked in
 1. `GET /dashboard` — the server matches `routes/dashboard.tsx` and runs the middleware.
 2. The page function runs with `ctx` and returns the tree; the engine collects its Slots, islands and `<Boot>` elements.
 3. The `load` steps of the page’s server components are awaited in parallel, then the tree renders to HTML, each slot inside an `<h-state name="…">` host.
-4. The engine adds the doctype, stylesheets, the `__SURFACE__` bootstrap JSON and — only if the page needs it — the engine script.
-5. The browser shows the complete page (MPA). Client slots hydrate at their own timing from the snapshot props, deferred slots are fetched and `<Boot>` transitions start.
+4. The engine adds the doctype and stylesheets and, only if the page needs the engine (client components, actions, `<Boot>`, deferred slots, plugins, `<ClientRouter>`) or has `client/entry.ts`, the `__SURFACE__` bootstrap JSON and the engine script.
+5. The browser shows the complete page (MPA). Client slots hydrate at their own timing from the snapshot props (`client:only` ones render), deferred slots are fetched and `<Boot>` transitions start.
 :::
 
 ## Common mistakes {#mistakes}

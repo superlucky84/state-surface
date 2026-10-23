@@ -26,8 +26,37 @@ import { startServer } from '../perf/server.mjs';
  * are not compared; neither are `switch-lang` and `guide-load`, which were removed.
  *
  * Stage 10 (MT-14): inputs in flex rows gained the `min-w-0` class so they shrink on narrow
- * screens; that class token is ignored.
+ * screens; that class token is ignored. The documentation audit corrected explanatory texts
+ * that described the engine wrongly (`CORRECTED_TEXT`, old → new, applied to the snapshot).
  */
+
+/** Stage 10 documentation audit: explanatory texts corrected since the stage 1 snapshot. */
+const CORRECTED_TEXT = new Map([
+  [
+    'Click a card to see the element morph smoothly into a detail view via view-transition-name. Press back for reverse morphing.',
+    'Click a card to see the element morph smoothly into a detail view via view-transition-name. Press "Back to Gallery" for the reverse morph.',
+  ],
+  [
+    '카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. 뒤로가기를 누르면 역방향 모핑이 일어납니다.',
+    "카드를 클릭하면 view-transition-name으로 연결된 요소가 상세 뷰로 부드럽게 모핑됩니다. '갤러리로 돌아가기'를 누르면 역방향 모핑이 일어납니다.",
+  ],
+  [
+    'Change the appearance of h-state elements using classAdd, classRemove, and cssVars without re-rendering templates.',
+    'Change the appearance of h-state elements with classAdd, classRemove and cssVars. A UI patch itself does not re-render the template.',
+  ],
+  [
+    'Sends only a UI patch without state changes. The template is not re-rendered.',
+    'Starts with a full frame (every stream does: it renders the card again and clears its patch), then sends a UI-only partial frame that changes just the h-state element, without rendering.',
+  ],
+  [
+    'classAdd/classRemove/cssVars를 사용하여 h-state 엘리먼트의 외형을 변경할 수 있습니다.',
+    'classAdd/classRemove/cssVars로 h-state 엘리먼트의 외형을 바꿉니다 — UI 패치 자체는 템플릿을 다시 렌더링하지 않습니다.',
+  ],
+  [
+    '상태 변경 없이 오직 UI 패치만을 전송합니다. 템플릿은 재렌더되지 않습니다.',
+    '먼저 full 프레임(모든 스트림의 첫 프레임: 카드를 다시 렌더하고 패치를 지움)을 보낸 뒤, 렌더링 없이 h-state 엘리먼트만 바꾸는 UI 전용 partial 프레임을 보냅니다.',
+  ],
+]);
 
 /** Stage 5 additions to the actions page, removed from the current tree before comparing. */
 const STAGE5_SLOTS = new Set(['actions:likes', 'actions:comments']);
@@ -69,6 +98,7 @@ const STATIC_SLOTS = new Set(['page:header', 'examples:list']);
 
 /** Stage 7 normalization, applied to both trees (see the allowed differences above). */
 const stage7 = (node, base) => {
+  if (typeof node === 'string') return CORRECTED_TEXT.get(node) ?? node;
   if (!Array.isArray(node)) return node;
   const [tag, attributes, children] = node;
   if (slotName(node) === 'page:header') return undefined;

@@ -66,8 +66,8 @@ type TransitionResult = {
 } | void;
 ```
 
-Rules (violations: development throws with the transition name and frame number, production
-sends an `error` frame and ends the request):
+Rules (a violation ends the request with an `error` frame; its message names the transition and
+the frame number in development, where the server also logs the stack, and is generic in production):
 
 - The first state frame is **full**. Partial or accumulate first is invalid.
 - There is **no `done`** in the authoring layer: when the handler returns, the engine sends it.

@@ -7,7 +7,7 @@ demoLabel: 액션 플레이그라운드
 
 ## TL;DR {#tldr}
 
-Template은 `<Slot>` 안에 들어가는 컴포넌트입니다. 그 props가 **곧** 슬롯 상태입니다. 페이지가 첫 props를 넘기고, transition은 `states['slot:name']`으로 새 props를 보냅니다. 데이터를 직접 가져오거나 서버 상태를 관리하지 않고, 받은 것을 그릴 뿐입니다. server 슬롯에서는 갱신마다 서버에서 실행되고, client 슬롯에서는 브라우저에서 Lithent로 실행됩니다.
+Template은 `<Slot>` 안에 들어가는 컴포넌트입니다. 그 props가 **곧** 슬롯 상태입니다. 페이지가 첫 props를 넘기고, transition은 `states['slot:name']`으로 새 props를 보냅니다. 데이터를 직접 가져오거나 서버 상태를 관리하지 않고, 받은 것을 그릴 뿐입니다. server 슬롯에서는 갱신마다 서버에서 실행되고, client 슬롯에서는 서버에서 한 번 렌더링된 뒤(`client:only` 제외) 브라우저에서 Lithent로 hydration·갱신됩니다.
 
 ## 비유로 이해하기 {#analogy}
 
@@ -93,18 +93,18 @@ function StockPrice({ symbol }: { symbol: string }) {
       .then(d => { setData(d); setLoading(false); })
       .catch(e => {
         if (e.name === 'AbortError') return;
-        // ⚠️ BUG: fetch 중 컴포넌트 제거 시 unmount 후 setState 호출
+        // ⚠️ 데이터 컴포넌트마다 이 fetch·abort·로딩·에러 처리를 반복
         setError(e.message);
         setLoading(false);
       });
 
     return () => controller.abort();
-    // ⚠️ BUG: 빠른 symbol 전환 시 AbortError가 잠깐 에러로 표시됨
+    // ⚠️ cleanup이나 AbortError 검사를 빠뜨리면 빠른 전환 시 이전 데이터나 에러가 보임
   }, [symbol]);
 
   if (loading) return <div className="animate-pulse h-20 bg-slate-100 rounded-xl" />;
   if (error) return <div className="text-red-600">{error}</div>;
-  // ⚠️ BUG: 레이스 컨디션 — 빠른 symbol 전환 시 이전 데이터 표시 가능
+  // ⚠️ 게다가 이 컴포넌트와 맞춰 유지할 /api/stock 엔드포인트도 필요
   return (
     <div className="rounded-xl border p-4">
       <span className="text-sm text-slate-500">{symbol}</span>
@@ -236,20 +236,26 @@ mount 시점에 구조 분해하지 말고 반환한 렌더 함수 안에서 `pr
 import s from './Card.module.css';
 
 export default function Card({ title }: { title: string }) {
-  return <section class={`${s.card} rounded-lg p-4`}>{title}</section>;
+  return (
+    <section class={`${s.card} rounded-lg p-4`}>
+      <div class={s.body}>{title}</div>
+    </section>
+  );
 }
 ```
 
-```css label="Card.module.css — @apply는 앱 CSS를 @reference로 참조"
-@reference "../../client/styles.css";
+```css label="Card.module.css — @apply는 앱 CSS를 @reference로 참조(이 파일 기준 상대 경로)"
+/* routes/dashboard/_components/Card.module.css */
+@reference "../../../client/styles.css";
 
 .card {
   container-type: inline-size;
   @apply shadow-sm;
 }
 
+/* 컨테이너 쿼리는 자기 자신이 아니라 조상을 기준으로 함: 자식을 배치 */
 @container (min-width: 32rem) {
-  .card {
+  .body {
     @apply grid grid-cols-2 gap-4;
   }
 }

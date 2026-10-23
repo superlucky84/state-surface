@@ -86,9 +86,12 @@ export default defineTransition({
 ```
 
 ```tsx label="routes/chat.tsx (발췌)와 client 컴포넌트"
-// routes/chat.tsx: 말풍선은 client 슬롯이라 delta가 `merge` op로 도착
+// routes/chat.tsx: 기록은 서버 저장소에서 렌더(const history = await readHistory());
+// 말풍선은 client 슬롯이라 delta가 `merge` op로 도착
 <main>
-  <Slot name="chat:messages" mode="server" component={ChatMessages} />
+  <Slot name="chat:messages" mode="server">
+    <ChatMessages messages={history} />
+  </Slot>
   <Slot name="chat:current" client:load component={ChatCurrent} />
   <Slot name="chat:typing" mode="server" component={ChatTyping} />
 </main>
@@ -140,7 +143,7 @@ function Chat() {
       answer += decoder.decode(value);
       setCurrent(answer);
     }
-    // ⚠️ BUG: abort되면 위에서 throw — 반쯤 쓰인 말풍선이 지워지지 않음
+    // ⚠️ BUG: abort되면 reader.read()가 reject — 처리되지 않은 rejection, 쓰다 만 응답은 사라짐
     setMessages(list => [...list, { role: 'bot', text: answer }]);
     setCurrent('');
     // ⚠️ BUG: 기록이 이 탭에만 있음 — 새로고침하면 사라짐
@@ -188,7 +191,7 @@ delta만 yield하세요(`text: token`). 마지막에 전체 텍스트가 필요�
 스트리밍 부분을 client 슬롯(`client:load`)으로 옮겨 delta가 `merge` op로 전송되게 하고, 완성된 기록은 server 슬롯에 두세요.
 :::
 
-:::debug{symptom="프레임이 실패합니다: accumulate frame must not include removed." cause="한 프레임에 accumulate: true와 removed(또는 ui, reset)가 함께 있습니다."}
+:::debug{symptom='개발 모드에서 프레임이 실패합니다: Accumulate frame must not include "removed" (프로덕션에서는 "Transition failed").' cause="한 프레임에 accumulate: true와 removed(또는 ui, reset)가 함께 있습니다."}
 나누세요: accumulate 프레임을 yield한 뒤, `removed`나 `uiChanged`를 담은 별도의 partial 프레임(`full: false`)을 yield하세요.
 :::
 
