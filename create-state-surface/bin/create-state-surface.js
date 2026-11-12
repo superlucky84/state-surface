@@ -15,7 +15,7 @@ import {
 } from '../lib/create.js';
 
 const REPO = 'superlucky84/state-surface';
-// The templates of the release this CLI belongs to: a fixed commit (the 0.2.0 release commit), not
+// The templates of the release this CLI belongs to: a fixed commit (the 0.2.1 release commit), not
 // a moving branch, so later changes on main cannot break the apps this version creates. Update it
 // with each release (a release tag or commit SHA).
 const TEMPLATE_REF = '19974460398a9607f13656097d9a387e453c4e2e';
@@ -36,7 +36,7 @@ Options:
   --no-git         Skip git init
 
 Environment:
-  STATE_SURFACE_VERSION   state-surface dependency (default ^0.2.0; a file: path works)
+  STATE_SURFACE_VERSION   state-surface dependency (default ^0.2.1; a file: path works)
 
 Example:
   npx create-state-surface my-app --template demo --adapter node
@@ -142,7 +142,7 @@ try {
     template,
     adapter,
     source,
-    version: process.env.STATE_SURFACE_VERSION ?? '^0.2.0',
+    version: process.env.STATE_SURFACE_VERSION ?? '^0.2.1',
     git: options.git,
   });
   console.log(`Project created (${template} template, ${adapter} adapter).`);

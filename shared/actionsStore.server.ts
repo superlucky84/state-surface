@@ -7,6 +7,8 @@ type Board = { comments: Comment[]; likes: number };
  * Demo store for the actions example (comments and likes). The server keeps no slot state
  * between requests (DC-10); transitions and server components read this source instead. A
  * real app would use a database; this keeps a small in-memory map per session cookie.
+ * The map lives in this process: run the demo as one process (several pm2 cluster workers or
+ * replicas would each keep their own copy).
  */
 const sessions = new Map<string, Board>();
 const MAX_SESSIONS = 500;

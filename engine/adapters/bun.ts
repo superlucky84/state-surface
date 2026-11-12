@@ -2,7 +2,7 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
 import { createImageService } from '../images/service.js';
-import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
+import { assetPath, assetHeaders, checkBasePath, withOrigin, type Adapter } from './types.js';
 
 declare const Bun: {
   env: Record<string, string | undefined>;
@@ -38,7 +38,13 @@ export function bun(options: { staticDir?: string } = {}): Adapter {
   };
 }
 export function serve(
-  options: HandlerOptions & { port?: number; staticDir?: string; env?: Record<string, unknown> }
+  options: HandlerOptions & {
+    port?: number;
+    staticDir?: string;
+    /** Public origin behind a TLS-terminating proxy (e.g. https://example.com). */
+    origin?: string;
+    env?: Record<string, unknown>;
+  }
 ) {
   checkBasePath(options.manifest.basePath, options.env ?? Bun.env);
   const adapter = bun(options);
@@ -54,7 +60,10 @@ export function serve(
     port: options.port ?? Number(env.PORT ?? 3000),
     async fetch(request) {
       const file = assetPath(request, base);
-      return (file ? await adapter.readStatic(file) : null) ?? handler.fetch(request, { env });
+      return (
+        (file ? await adapter.readStatic(file) : null) ??
+        handler.fetch(withOrigin(request, options.origin), { env })
+      );
     },
   });
 }

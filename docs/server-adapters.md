@@ -68,9 +68,35 @@ user generators must cooperate with ctx.signal to stop awaited external operatio
 
 Express is an optional peer. Mount `surface()` before express.json(), urlencoded()
 or any other middleware that consumes the request body. Mount at the application
-root and use handler BASE_PATH for subpaths. Node/Express infer the URL origin from
-the TLS socket and Host; behind TLS termination configure a trusted public `origin`
-on the adapter rather than trusting arbitrary forwarded headers.
+root and use handler BASE_PATH for subpaths.
+
+### Behind a TLS-terminating proxy
+
+Node, Express, Bun and Deno infer the request origin from the socket and Host, so behind
+nginx or a load balancer that terminates TLS they see `http://<host>`. Browsers send
+`Origin: https://<host>` and every POST (actions, transitions, deferred slots) answers
+`403 Cross-origin POST forbidden`. Pass the public origin to the adapter instead of
+trusting forwarded headers: `serve({ ...handler, manifest, origin })` (Node, Bun, Deno) or
+`surface({ ...handler, manifest, origin })` (Express). Generated apps read it from `ORIGIN`
+(`ORIGIN=https://example.com`; empty means unset). When a POST fails only on the scheme
+(`https://x` against `http://x`) the handler logs one warning per process that names this
+option. Workers already see the public URL.
+
+### Several processes or instances
+
+The engine keeps no per-user state between requests, so any number of processes can serve
+one app. Two things are shared by configuration:
+
+- **Root secret.** Deferred slot tokens and flash cookies use `SURFACE_SECRET`, else a
+  random secret made by each build. Deploy one build to every instance, or set the same
+  `SURFACE_SECRET` (32+ bytes) everywhere when servers build separately; otherwise an
+  instance cannot read tokens another one issued. Rotate with `SURFACE_SECRET_PREVIOUS`.
+- **Application state.** Sessions, carts or chat history kept in a module-level `Map`
+  live in one process. Keep them in a shared store (a database, Redis). The demo's stores
+  are in-memory and expect one process.
+
+During a rolling deploy instances of different builds answer `409` to each other's
+pages, which reload the document.
 
 Node/Bun/Deno static directories default to `dist/client`. Adapters serve asset paths
 under BASE_PATH, enforce the static-root boundary, and set MIME and hashed-asset

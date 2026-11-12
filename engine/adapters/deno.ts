@@ -1,6 +1,6 @@
 import { createHandler, type HandlerOptions } from '../server/core/handler.js';
 import { createImageService } from '../images/service.js';
-import { assetPath, assetHeaders, checkBasePath, type Adapter } from './types.js';
+import { assetPath, assetHeaders, checkBasePath, withOrigin, type Adapter } from './types.js';
 
 declare const Deno: {
   readFile(path: string): Promise<Uint8Array>;
@@ -37,7 +37,13 @@ export function deno(options: { staticDir?: string } = {}): Adapter {
   };
 }
 export function serve(
-  options: HandlerOptions & { port?: number; staticDir?: string; env?: Record<string, unknown> }
+  options: HandlerOptions & {
+    port?: number;
+    staticDir?: string;
+    /** Public origin behind a TLS-terminating proxy (e.g. https://example.com). */
+    origin?: string;
+    env?: Record<string, unknown>;
+  }
 ) {
   const env = options.env ?? Deno.env.toObject();
   checkBasePath(options.manifest.basePath, env);
@@ -51,6 +57,9 @@ export function serve(
   const base = options.basePath ?? options.manifest.basePath ?? '';
   return Deno.serve({ port: options.port ?? Number(env.PORT ?? 3000) }, async request => {
     const file = assetPath(request, base);
-    return (file ? await adapter.readStatic(file) : null) ?? handler.fetch(request, { env });
+    return (
+      (file ? await adapter.readStatic(file) : null) ??
+      handler.fetch(withOrigin(request, options.origin), { env })
+    );
   });
 }

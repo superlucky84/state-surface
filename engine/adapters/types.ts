@@ -18,6 +18,23 @@ export function checkBasePath(built: string | undefined, env: Record<string, unk
         'URLs and prerendered HTML are fixed at build time. Rebuild with the same BASE_PATH.'
     );
 }
+/**
+ * Behind a TLS-terminating proxy the runtime sees `http://<host>`: `origin` (the public origin,
+ * e.g. https://example.com) replaces the request URL's origin so the POST origin check and
+ * absolute URLs match what browsers use. Forwarded headers are not trusted. Empty → unchanged.
+ */
+export function withOrigin(request: Request, origin: string | undefined): Request {
+  if (!origin) return request;
+  const url = new URL(request.url);
+  const body = ['GET', 'HEAD'].includes(request.method) ? undefined : request.body;
+  return new Request(new URL(url.pathname + url.search, origin), {
+    method: request.method,
+    headers: request.headers,
+    body,
+    signal: request.signal,
+    ...(body ? { duplex: 'half' } : {}),
+  } as RequestInit);
+}
 export const contentType = (path: string) =>
   ({
     js: 'application/javascript; charset=utf-8',

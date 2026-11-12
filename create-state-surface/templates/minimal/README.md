@@ -29,6 +29,10 @@ The server runs on the `__ADAPTER__` adapter (`server.ts`, `vite.config.ts`). Pa
 `surface.server.ts` (`export default { middleware: [...] } satisfies HandlerConfig`); `pnpm dev` and the
 production server both use it.
 
+Behind a proxy that terminates TLS (nginx, a load balancer), set `ORIGIN` to the public origin
+(`ORIGIN=https://example.com`, see `.env.example`): POST requests are checked against it, and actions
+answer 403 without it. Several instances share one build or the same `SURFACE_SECRET`.
+
 ## Error tracking, RUM and tag managers
 
 Install Sentry, Datadog RUM, GTM and similar tools the way the vendor documents: npm SDKs in an

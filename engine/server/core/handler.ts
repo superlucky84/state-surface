@@ -98,6 +98,15 @@ class HttpError extends Error {
     super(message);
   }
 }
+/** `https://x` against `http://x`: the request reached the app through a TLS proxy. */
+function sameHostOtherScheme(origin: string, url: URL) {
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname === url.hostname && parsed.protocol !== url.protocol;
+  } catch {
+    return false;
+  }
+}
 function decodeSegment(value: string) {
   try {
     return decodeURIComponent(value);
@@ -273,6 +282,8 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
     );
   };
   const warn = (message: string) => options.logger?.warn(message);
+  // One hint per process when a POST looks like a TLS proxy without a configured origin.
+  let proxyHinted = false;
   const secrets = (ctx: SurfaceContext): SecretSource => {
     const env = (name: string) =>
       typeof ctx.env[name] === 'string' ? (ctx.env[name] as string) : undefined;
@@ -402,8 +413,17 @@ export function createHandler(options: HandlerOptions): SurfaceHandler {
             origin
               ? origin !== ctx.url.origin && !options.security?.allowedOrigins?.includes(origin)
               : site !== null && site !== 'same-origin' && site !== 'none'
-          )
+          ) {
+            if (origin && !proxyHinted && sameHostOtherScheme(origin, ctx.url)) {
+              proxyHinted = true;
+              warn(
+                `POST Origin ${origin} does not match the server origin ${ctx.url.origin}: behind a ` +
+                  'TLS-terminating proxy pass the public origin to the adapter (`origin`, e.g. ' +
+                  'ORIGIN in the environment).'
+              );
+            }
             throw new HttpError(403, 'Cross-origin POST forbidden');
+          }
         }
         const buildMatches = () => request.headers.get('x-surface-build') === buildId;
         const mismatch = () =>

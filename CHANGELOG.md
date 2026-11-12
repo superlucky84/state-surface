@@ -7,6 +7,25 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-12
+
+Deployment fixes found on the demo server (nginx TLS termination, pm2 cluster).
+
+### Added
+
+- Bun and Deno `serve({ origin })`: the public origin behind a TLS-terminating proxy, as Node and
+  Express already accept.
+- The handler logs one warning per process when a POST fails only on the scheme (`https://x` against
+  `http://x`), naming the adapter `origin` option.
+- Generated apps pass `origin: process.env.ORIGIN` on the node, express, bun and deno adapters;
+  `.env.example` documents `ORIGIN` and `SURFACE_SECRET`.
+- `docs/server-adapters.md`: deploying behind a TLS-terminating proxy and on several processes or
+  instances. The demo README and stores note that the demo's in-memory stores expect one process.
+
+### Changed
+
+- `create-state-surface` 0.2.1 creates apps with `state-surface@^0.2.1` from the 0.2.1 release commit.
+
 ## [0.2.0] - 2026-11-12
 
 StateSurface 2.0 (plan and records: `docs/surface-expansion/`). Breaking: 0.1.x apps move by
@@ -82,6 +101,7 @@ flash, viewTransition })`, Standard Schema validation (422 field errors) and tar
 - MIT license and core README documentation.
 - CI workflow for formatting and tests.
 
-[Unreleased]: https://github.com/superlucky84/state-surface/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/superlucky84/state-surface/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/superlucky84/state-surface/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/superlucky84/state-surface/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/superlucky84/state-surface/releases/tag/v0.1.0

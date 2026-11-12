@@ -6,6 +6,8 @@ export type Message = { id: string; role: 'user' | 'bot'; text: string };
  * Demo conversation store. The server is stateless per request (DC-10): every transition
  * starts from an empty slot state and reads what it needs from a server source. A real app
  * would use a database; this demo keeps a small in-memory map keyed by a session cookie.
+ * The map lives in this process: run the demo as one process (several pm2 cluster workers or
+ * replicas would each keep their own copy).
  */
 const sessions = new Map<string, Message[]>();
 const MAX_SESSIONS = 500;

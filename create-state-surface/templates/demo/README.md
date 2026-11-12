@@ -22,11 +22,13 @@ cp .env.example .env
 
 Available variables:
 
-| Variable              | Default      | Description                               |
-| --------------------- | ------------ | ----------------------------------------- |
-| `PORT`                | `3000`       | Server listen port                        |
-| `BASE_PATH`           | _(empty)_    | Mount app under a sub-path (e.g. `/demo`) |
-| `SURFACE_IMAGE_CACHE` | _(temp dir)_ | Disk cache for resized remote images      |
+| Variable              | Default       | Description                                                               |
+| --------------------- | ------------- | ------------------------------------------------------------------------- |
+| `PORT`                | `3000`        | Server listen port                                                        |
+| `BASE_PATH`           | _(empty)_     | Mount app under a sub-path (e.g. `/demo`)                                 |
+| `SURFACE_IMAGE_CACHE` | _(temp dir)_  | Disk cache for resized remote images                                      |
+| `ORIGIN`              | _(unset)_     | Public origin behind a TLS-terminating proxy (e.g. `https://example.com`) |
+| `SURFACE_SECRET`      | _(per build)_ | Root secret (32+ bytes) shared by instances that build separately         |
 
 `.env` is loaded automatically by `pnpm dev` and `pnpm start` via Node.js `--env-file-if-exists`. No extra dependencies needed.
 
@@ -40,6 +42,18 @@ pnpm start          # Run production server
 pnpm test           # Run tests (Vitest, tests/)
 pnpm format         # Format with Prettier
 ```
+
+## Deploying
+
+- **Behind a proxy that terminates TLS** (nginx, a load balancer), set `ORIGIN` to the public origin,
+  e.g. `ORIGIN=https://example.com`. The server checks the `Origin` of every POST against its own
+  origin; without `ORIGIN` it sees `http://…` and actions answer `403 Cross-origin POST forbidden`.
+- **Run the demo as one process.** The likes, comments and chat examples keep their data in memory
+  (`shared/actionsStore.server.ts`, `shared/chatHistory.server.ts`). Several processes (pm2 cluster,
+  replicas) each hold their own copy, so counts skip and messages come and go between requests. A real
+  app keeps such state in a shared store (a database, Redis).
+- **Several instances:** deploy one build to all of them, or set the same `SURFACE_SECRET` everywhere
+  (deferred slots and flash cookies are signed with it).
 
 ## Project Structure
 

@@ -95,7 +95,7 @@ export function createProject(options) {
         substitute(fs.readFileSync(path.join(templateDir, 'package.json.template'), 'utf8'), {
           name,
           adapter,
-          version: options.version ?? '^0.2.0',
+          version: options.version ?? '^0.2.1',
         })
       ),
       adapterPackage
