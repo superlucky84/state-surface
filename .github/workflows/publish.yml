@@ -1,0 +1,60 @@
+name: Publish
+
+# npm Trusted Publishing (OIDC): no npm token. On npmjs.com, `state-surface` and
+# `create-state-surface` each name this repository and this file (publish.yml) as their trusted
+# publisher. Run it from the Actions tab (workflow_dispatch) or by publishing a GitHub release.
+# Versions already on npm are skipped, so a second run publishes nothing.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing (provenance included)
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - name: Update npm
+        run: npm install -g npm@11
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: |
+          pnpm format:check
+          pnpm check
+          pnpm test
+
+      # The engine first: apps created by the new CLI depend on its version. `prepack` builds lib/.
+      - name: Publish (state-surface, then create-state-surface)
+        run: |
+          for dir in . create-state-surface; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+              echo "$name@$version is already on npm: skipped"
+            else
+              (cd "$dir" && npm publish --access public)
+            fi
+          done

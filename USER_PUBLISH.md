@@ -8,6 +8,23 @@
 
 ---
 
+## 권장: GitHub Actions(Trusted Publishing)로 배포
+
+토큰 없이 `.github/workflows/publish.yml`이 npm에 배포한다(OIDC, provenance 포함).
+
+1. 최초 1회, npmjs.com에서 두 패키지 각각: Settings → Trusted Publisher → GitHub Actions
+   - Organization or user: `superlucky84`, Repository: `state-surface`
+   - Workflow filename: `publish.yml`, Environment: 비움
+2. 아래 2)~3)의 버전·CLI 기본값·`TEMPLATE_REF`를 맞춰 main에 반영한다.
+3. GitHub Actions 탭 → Publish → Run workflow(main), 또는 GitHub Release를 publish한다.
+   검증(format·check·test) 뒤 `state-surface` → `create-state-surface` 순서로 배포하고, 이미 npm에 있는
+   버전은 건너뛴다.
+4. 5) 배포 후 검증을 실행한다.
+
+로컬에서 직접 배포할 때는 아래 절차를 따른다.
+
+---
+
 ## 0) 사전 조건
 
 - Node.js `>=20`
