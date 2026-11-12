@@ -15,8 +15,10 @@ import {
 } from '../lib/create.js';
 
 const REPO = 'superlucky84/state-surface';
-const BRANCH = 'main';
-const TARBALL_URL = `https://github.com/${REPO}/tarball/${BRANCH}`;
+// The templates of the release this CLI belongs to: a tag, not a moving branch, so later changes
+// on main cannot break the apps this version creates. Update it with each release.
+const TEMPLATE_REF = 'v0.2.0';
+const TARBALL_URL = `https://github.com/${REPO}/tarball/${TEMPLATE_REF}`;
 
 function printHelp() {
   console.log(`create-state-surface
@@ -28,11 +30,12 @@ Options:
   --template, -t   minimal (default): one page with static markup, a server slot,
                    a client island and a transition. demo: the showcase site.
   --adapter, -a    ${ADAPTERS.join(' | ')} (asked when omitted; default node)
-  --source <dir>   Use templates from a local state-surface checkout instead of GitHub
+  --source <dir>   Use templates from a local state-surface checkout instead of the
+                   release tag on GitHub
   --no-git         Skip git init
 
 Environment:
-  STATE_SURFACE_VERSION   state-surface dependency (default ^0.1.0; a file: path works)
+  STATE_SURFACE_VERSION   state-surface dependency (default ^0.2.0; a file: path works)
 
 Example:
   npx create-state-surface my-app --template demo --adapter node
@@ -138,7 +141,7 @@ try {
     template,
     adapter,
     source,
-    version: process.env.STATE_SURFACE_VERSION ?? '^0.1.0',
+    version: process.env.STATE_SURFACE_VERSION ?? '^0.2.0',
     git: options.git,
   });
   console.log(`Project created (${template} template, ${adapter} adapter).`);

@@ -7,9 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-StateSurface 2.0 (plan and records: `docs/surface-expansion/`). Release pending the manual checks in
-`docs/surface-expansion/MANUAL_TEST_CHECKLIST.md` (real devices, Firefox and Safari, screen readers,
-a real Workers deployment, vendor accounts).
+## [0.2.0] - 2026-11-12
+
+StateSurface 2.0 (plan and records: `docs/surface-expansion/`). Breaking: 0.1.x apps move by
+following `MIGRATION.md`. Released with the automated checks passing; the manual checks in
+`docs/surface-expansion/MANUAL_TEST_CHECKLIST.md` §4 (real devices, Firefox and Safari, screen readers,
+a real Workers deployment, vendor accounts) are still open.
 
 ### Added
 
@@ -28,7 +31,8 @@ flash, viewTransition })`, Standard Schema validation (422 field errors) and tar
 - Adapters for Node, Express, Bun, Deno and Cloudflare Workers on one Web Request/Response core,
   `surface.server.ts` handler options shared by dev and production, `state-surface check`.
 - CSS Modules per page and per island, source-located build diagnostics, runtime trace (`onTrace`).
-- `create-state-surface` minimal and demo templates with an adapter choice.
+- `create-state-surface` 0.2.0: minimal and demo templates with an adapter choice; new apps depend on
+  `state-surface` `^0.2.0`.
 - Verification: conformance scenarios on five runtimes and on dev/prod, hardening suites (fuzz,
   malicious input, races, parallel SSR, limits), demo e2e on every adapter at `/` and `BASE_PATH=/demo`,
   browser e2e on generated apps, View Transition and BFCache e2e, real Sentry/Datadog RUM/GTM e2e,
@@ -78,5 +82,6 @@ flash, viewTransition })`, Standard Schema validation (422 field errors) and tar
 - MIT license and core README documentation.
 - CI workflow for formatting and tests.
 
-[Unreleased]: https://github.com/superlucky84/state-surface/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/superlucky84/state-surface/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/superlucky84/state-surface/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/superlucky84/state-surface/releases/tag/v0.1.0

@@ -55,3 +55,6 @@ perf/results/
 # The engine's build-time compiler/discovery code is tracked source.
 !engine/build/
 !engine/build/**
+
+# create-state-surface's CLI code is tracked source (its bin imports ../lib/create.js).
+!create-state-surface/lib/

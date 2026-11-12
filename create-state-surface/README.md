@@ -40,7 +40,7 @@ my-app/                      # minimal
 | `--adapter`, `-a`       | `node` (default), `express`, `bun`, `deno` or `cloudflare`; asked when omitted     |
 | `--source <dir>`        | Use the templates of a local state-surface checkout instead of downloading them    |
 | `--no-git`              | Skip `git init`                                                                    |
-| `STATE_SURFACE_VERSION` | Environment: the `state-surface` dependency (default `^0.1.0`; `file:` paths work) |
+| `STATE_SURFACE_VERSION` | Environment: the `state-surface` dependency (default `^0.2.0`; `file:` paths work) |
 
 The adapter sets `server.ts`, the adapter in `vite.config.ts` and the `start` script (Bun, Deno),
 adds `express` for Express, and `wrangler.jsonc` with `deploy` for Cloudflare Workers.
@@ -49,7 +49,8 @@ adds `express` for Express, and `wrangler.jsonc` with `deploy` for Cloudflare Wo
 
 Templates live in the StateSurface repository under `create-state-surface/templates/`
 (`base/`, `minimal/`, `demo/`, `adapters/<name>/`); the demo template uses the repository's own
-showcase files. The CLI downloads the repository tarball (or reads `--source`), copies the base,
+showcase files. The CLI downloads the repository tarball of its release tag (`v0.2.0` for this
+version, so later changes on `main` do not affect it) or reads `--source`, copies the base,
 template and adapter files, fills in `package.json` and initializes git. CI creates the apps,
 installs the packed engine, builds, tests and starts them (`pnpm test:scaffold`).
 

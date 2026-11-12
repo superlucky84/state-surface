@@ -12,7 +12,7 @@ This document defines how existing StateSurface projects should be updated.
 
 ### v0.1.x
 
-Current baseline release line.
+The 1.0 API line (`createApp`, template registry).
 
 No migration steps yet beyond standard dependency update:
 
@@ -22,9 +22,11 @@ pnpm test
 pnpm build
 ```
 
-### v2.0 (unreleased)
+### v0.2.0 (StateSurface 2.0)
 
-2.0 replaces the 1.0 APIs without a compatibility layer (see `CHANGELOG.md`).
+0.2.0 replaces the 1.0 APIs without a compatibility layer (see `CHANGELOG.md`). `pnpm up state-surface`
+stays on 0.1.x (`^0.1.0` does not include 0.2.0): move the app as described below and depend on
+`state-surface@^0.2.0`.
 
 #### What changed
 

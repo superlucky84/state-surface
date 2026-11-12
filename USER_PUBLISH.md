@@ -71,10 +71,10 @@ npm view create-state-surface version
 필요 시 버전 업데이트:
 
 ```bash
-# 예시: 0.1.1로 올릴 때
-npm version 0.1.1 --no-git-tag-version
+# 예시: 0.2.1로 올릴 때
+npm version 0.2.1 --no-git-tag-version
 cd create-state-surface
-npm version 0.1.1 --no-git-tag-version
+npm version 0.2.1 --no-git-tag-version
 cd ..
 ```
 
@@ -87,20 +87,24 @@ cd ..
 `create-state-surface`는 템플릿의 `state-surface` 버전을 기본값으로 주입합니다.
 아래 값이 이번 릴리스 라인과 맞는지 확인하세요.
 
-확인 대상 파일:
+확인 대상 파일(세 곳이 같은 값이어야 함):
 
-- `create-state-surface/bin/create-state-surface.js`
-- `const runtimeVersion = process.env.STATE_SURFACE_VERSION ?? '^0.1.0';`
+- `create-state-surface/bin/create-state-surface.js`: `process.env.STATE_SURFACE_VERSION ?? '^0.2.0'`와 도움말
+- `create-state-surface/lib/create.js`: `options.version ?? '^0.2.0'`
+- `create-state-surface/README.md`: `STATE_SURFACE_VERSION` 기본값 설명
 
 예:
 
-- `state-surface@0.1.x` 릴리스 라인: `^0.1.0` 유지 가능
-- `state-surface@0.2.0` 릴리스 라인: 기본값을 `^0.2.0`로 변경 권장
+- `create-state-surface/bin/create-state-surface.js`: `TEMPLATE_REF` — CLI가 템플릿을 내려받는 Git 태그
+  (예: `v0.2.0`). 이 태그가 GitHub에 push된 뒤에 CLI를 publish해야 한다(없으면 `npx` 실행이 404로 실패).
+
+- `state-surface@0.2.x` 릴리스 라인: `^0.2.0` 유지
+- `state-surface@0.3.0` 릴리스 라인: 기본값을 `^0.3.0`로 변경 (0.x의 `^`는 두 번째 자리를 넘지 않음)
 
 검사 명령:
 
 ```bash
-rg -n "runtimeVersion|STATE_SURFACE_VERSION" create-state-surface/bin/create-state-surface.js
+rg -n "STATE_SURFACE_VERSION|options.version \\?\\?|\\^0\\.[0-9]+\\.0" create-state-surface/bin create-state-surface/lib create-state-surface/README.md
 ```
 
 ---
@@ -170,7 +174,7 @@ rm -rf ss-publish-smoke-versioned
 STATE_SURFACE_VERSION=<방금_배포한_버전_or_tag> npx create-state-surface@latest ss-publish-smoke-versioned
 ```
 
-예: `STATE_SURFACE_VERSION=0.1.1`
+예: `STATE_SURFACE_VERSION=0.2.0`
 
 ---
 
@@ -219,12 +223,12 @@ pnpm build
 - [ ] `/tmp` 신규 스캐폴딩 검증 통과
 - [ ] 기존 프로젝트 `pnpm up state-surface` 검증 통과
 - [ ] `CHANGELOG.md` / 릴리스 노트 정리 완료
-- [ ] Git 태그 생성 (예: `v0.1.0`) 및 푸시 완료
+- [ ] Git 태그 생성 (예: `v0.2.0`) 및 푸시 완료
 
 태그 예시:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 

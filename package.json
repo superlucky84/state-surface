@@ -1,6 +1,6 @@
 {
   "name": "state-surface",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A state-layout mapping runtime for MPA pages with NDJSON streaming updates",
   "type": "module",
   "types": "./lib/index.d.ts",
