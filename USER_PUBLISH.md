@@ -95,8 +95,9 @@ cd ..
 
 예:
 
-- `create-state-surface/bin/create-state-surface.js`: `TEMPLATE_REF` — CLI가 템플릿을 내려받는 Git 태그
-  (예: `v0.2.0`). 이 태그가 GitHub에 push된 뒤에 CLI를 publish해야 한다(없으면 `npx` 실행이 404로 실패).
+- `create-state-surface/bin/create-state-surface.js`: `TEMPLATE_REF` — CLI가 템플릿을 내려받는 Git 태그 또는
+  커밋 SHA(0.2.0은 릴리스 커밋 SHA). 그 ref가 GitHub에 push된 뒤에 CLI를 publish해야 한다(없으면 `npx` 실행이
+  404로 실패). 브랜치 이름은 쓰지 않는다: 브랜치가 움직이면 이미 배포된 CLI가 깨진다.
 
 - `state-surface@0.2.x` 릴리스 라인: `^0.2.0` 유지
 - `state-surface@0.3.0` 릴리스 라인: 기본값을 `^0.3.0`로 변경 (0.x의 `^`는 두 번째 자리를 넘지 않음)

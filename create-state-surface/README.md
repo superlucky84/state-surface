@@ -49,8 +49,8 @@ adds `express` for Express, and `wrangler.jsonc` with `deploy` for Cloudflare Wo
 
 Templates live in the StateSurface repository under `create-state-surface/templates/`
 (`base/`, `minimal/`, `demo/`, `adapters/<name>/`); the demo template uses the repository's own
-showcase files. The CLI downloads the repository tarball of its release tag (`v0.2.0` for this
-version, so later changes on `main` do not affect it) or reads `--source`, copies the base,
+showcase files. The CLI downloads the repository tarball of its release commit (the 0.2.0 release
+commit for this version, so later changes on `main` do not affect it) or reads `--source`, copies the base,
 template and adapter files, fills in `package.json` and initializes git. CI creates the apps,
 installs the packed engine, builds, tests and starts them (`pnpm test:scaffold`).
 

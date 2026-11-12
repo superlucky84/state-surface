@@ -15,9 +15,10 @@ import {
 } from '../lib/create.js';
 
 const REPO = 'superlucky84/state-surface';
-// The templates of the release this CLI belongs to: a tag, not a moving branch, so later changes
-// on main cannot break the apps this version creates. Update it with each release.
-const TEMPLATE_REF = 'v0.2.0';
+// The templates of the release this CLI belongs to: a fixed commit (the 0.2.0 release commit), not
+// a moving branch, so later changes on main cannot break the apps this version creates. Update it
+// with each release (a release tag or commit SHA).
+const TEMPLATE_REF = '19974460398a9607f13656097d9a387e453c4e2e';
 const TARBALL_URL = `https://github.com/${REPO}/tarball/${TEMPLATE_REF}`;
 
 function printHelp() {
