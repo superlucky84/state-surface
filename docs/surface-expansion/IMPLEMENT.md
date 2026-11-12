@@ -1405,6 +1405,10 @@ production 빌드를 모든 어댑터·조건에서 끝까지 검증하고 성�
 ### 상태
 
 - **완료**: 단계 0~10. IC-01~IC-10 결정. 자동 검증과 성능 게이트 통과.
+- **배포**: `state-surface` 0.2.0과 `create-state-surface` 0.2.0을 npm에 배포했다(2026-11-12,
+  `.github/workflows/publish.yml`, Trusted Publishing·provenance). CLI는 템플릿을 0.2.0 릴리스 커밋(`1997446`)에서
+  받는다. 배포 후 `npx create-state-surface@0.2.0`으로 만든 앱이 npm의 엔진으로 설치·빌드·테스트·check·start를
+  통과했다. 아래 수동 항목은 배포 후에도 남아 있다.
 - **다음**: MANUAL_TEST_CHECKLIST 4장의 수동 항목(실기기·Firefox·Safari·스크린리더·Workers 실제 배포·업체 계정·사람 관찰)을
   실행해 릴리스를 판정한다(현재 보류).
 - **블로커**: 자동 검증 범위에서 없음. 로더 gzip 2,869 B(2KB 목표)와 라우터 4,813 B(4KB 예산)는 보고 지표로 남는다. idiomorph 파싱의 media 문서
