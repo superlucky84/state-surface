@@ -31,7 +31,15 @@ async function start(mode, port) {
     mode === 'dev'
       ? [
           process.execPath,
-          [path.resolve('node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort'],
+          // 127.0.0.1, where the scenarios connect: `localhost` can resolve to ::1 only (CI runners).
+          [
+            path.resolve('node_modules/vite/bin/vite.js'),
+            '--host',
+            '127.0.0.1',
+            '--port',
+            String(port),
+            '--strictPort',
+          ],
         ]
       : [process.execPath, ['dist/server.js']];
   let logs = '';

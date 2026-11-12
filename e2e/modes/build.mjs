@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 import { build } from 'vite';
 
 /**
@@ -94,7 +95,8 @@ try {
   failure = error;
 }
 assert.ok(failure, 'client build reaching server-only modules must fail');
-const message = String(failure.message);
+// CI terminals get colored errors: compare the text without the color codes.
+const message = stripVTControlCharacters(String(failure.message));
 assert.match(
   message,
   /^\[state-surface\] \S+\/broken\/lib\/fmt\.ts:1:1: Server-only modules are reachable from the browser bundle/
