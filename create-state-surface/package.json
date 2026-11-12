@@ -4,13 +4,18 @@
   "description": "Scaffold a new StateSurface project",
   "type": "module",
   "bin": {
-    "create-state-surface": "./bin/create-state-surface.js"
+    "create-state-surface": "bin/create-state-surface.js"
   },
   "files": [
     "bin",
     "lib/create.js",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superlucky84/state-surface.git",
+    "directory": "create-state-surface"
+  },
   "publishConfig": {
     "access": "public"
   },
